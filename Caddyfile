@@ -3,7 +3,11 @@
 		output file /srv/logs/caddy-access.log
 	}
 
-	@htmx header HX-Request true
+	@htmx {
+		method GET
+		path /
+		header HX-Request true
+	}
 	log_skip @htmx
 
 	@stats path /stats/* /ws

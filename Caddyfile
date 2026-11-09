@@ -1,9 +1,12 @@
 {$DOMAIN:localhost} {
 	log {
-		output file /logs/caddy-access.log
+		output file /srv/logs/caddy-access.log
 	}
 
-	@stats path /stats/* /ws/*
+	@htmx header HX-Request true
+	log_skip @htmx
+
+	@stats path /stats/* /ws
 	basic_auth @stats {
 		admin {$STATS_PASSWORD_HASH}
 	}
@@ -14,10 +17,8 @@
 		templates
 		file_server
 	}
-	handle /ws/access {
-		reverse_proxy goaccess:443 {
-			transport http
-		}
+	handle /ws {
+		reverse_proxy goaccess:7890
 	}
 	handle {
 		reverse_proxy icecast:8000 {

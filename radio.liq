@@ -1,5 +1,5 @@
 enable_autocue_metadata()
-live = blank.strip(input.harbor("live", port=8005, password=environment.get("PASSWORD")))
+live = blank.strip(input.harbor("live", port=8005, password=environment.get("LIVE_PASSWORD")))
 music = crossfade(amplify(1., playlist(mode="randomize", reload_mode="watch", "/music")))
 fade = fun (a, b) -> add(normalize=false, [fade.out(a), fade.in(b)])
 radio = mksafe(fallback(track_sensitive=false, transitions=[fade, fade], [live, music]))

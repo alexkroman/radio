@@ -6,7 +6,7 @@ A small internet radio station built from stock open-source parts with almost no
 - **Icecast** serves the stream.
 - **Caddy** provides HTTPS and the player page (Pico.css, htmx, icecast-metadata-player).
 - **GoAccess** provides listener stats with countries.
-- **autoheal** restarts any service whose health check fails.
+- **Docker** restarts any service that crashes.
 
 ## Setup
 
@@ -27,7 +27,7 @@ Open <https://localhost/>. On localhost your browser warns about the certificate
 | `docker compose up -d`         | Start (or apply config changes)                      |
 | `docker compose down`          | Stop (`down -v` also deletes stats and history!)     |
 | `docker compose logs -f`       | Follow logs (Ctrl-C stops watching, not the station) |
-| `docker compose ps`            | Show services and their health                       |
+| `docker compose ps`            | Show which services are running                      |
 | `docker compose restart caddy` | Pick up edits to `Caddyfile` or `index.html`         |
 
 Add or remove files in `music/` any time; they're picked up without a restart. Anything ffmpeg can decode works.
@@ -51,7 +51,6 @@ Settings → Server → Add: type **Icecast**, address = your server, port **800
 ```sh
 ./check.sh                 # linters and formatters (runs on every commit via pre-commit)
 ./check.sh --fix           # reformat YAML, HTML and Markdown first
-./check.sh --integration   # also boot the core stack on spare ports and test it (~15 s)
 ```
 
 Run `pre-commit install` once after cloning to enable the commit hook.

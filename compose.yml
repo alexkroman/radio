@@ -8,9 +8,9 @@ services:
         'c=$$(sed ''s|<!-- <playlistlog>playlist.log</playlistlog> -->|<playlistlog>playlist.log</playlistlog>|'' /etc/icecast.xml) && echo "$$c" > /etc/icecast.xml && exec icecast -c /etc/icecast.xml',
       ]
     environment:
-      ICECAST_SOURCE_PASSWORD: ${PASSWORD:-hackme}
-      ICECAST_ADMIN_PASSWORD: ${PASSWORD:-hackme}
-      ICECAST_RELAY_PASSWORD: ${PASSWORD:-hackme}
+      ICECAST_SOURCE_PASSWORD: ${PASSWORD:?Set PASSWORD in .env}
+      ICECAST_ADMIN_PASSWORD: ${PASSWORD:?Set PASSWORD in .env}
+      ICECAST_RELAY_PASSWORD: ${PASSWORD:?Set PASSWORD in .env}
     volumes:
       - logs:/var/log/icecast
       - stats:/usr/share/icecast/web/stats
@@ -33,7 +33,7 @@ services:
     command: ["/radio.liq"]
     ports: ["8005:8005"]
     environment:
-      PASSWORD: ${PASSWORD:-hackme}
+      PASSWORD: ${PASSWORD:?Set PASSWORD in .env}
     volumes:
       - ./radio.liq:/radio.liq:ro
       - ./music:/music:ro
@@ -91,7 +91,9 @@ services:
   caddy:
     image: caddy:2
     ports: ["80:80", "443:443"]
-    environment: [DOMAIN, STATS_PASSWORD_HASH]
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+      STATS_PASSWORD_HASH: ${STATS_PASSWORD_HASH:?Set STATS_PASSWORD_HASH in .env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./index.html:/srv/index.html:ro

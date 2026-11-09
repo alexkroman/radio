@@ -8,9 +8,10 @@ prettier() { docker run --rm -v "$PWD:/w" -w /w -e npm_config_update_notifier=fa
 # ./check.sh --fix reformats the YAML and HTML files in place first.
 [ "${1:-}" = "--fix" ] && prettier --write
 
-run "compose.yml: compose schema" docker compose config -q
+run "compose.yml: compose schema" env PASSWORD=x STATS_PASSWORD_HASH=x docker compose config -q
 run "compose.yml: yamllint" docker run --rm -v "$PWD:/data:ro" cytopia/yamllint -d relaxed compose.yml .pre-commit-config.yaml
-run "Caddyfile: validate" docker run --rm -v "$PWD/Caddyfile:/c:ro" caddy:2 sh -c 'caddy adapt --config /c --validate >/dev/null'
+# shellcheck disable=SC2016  # $(...) must expand inside the container
+run "Caddyfile: validate" docker run --rm -v "$PWD/Caddyfile:/c:ro" caddy:2 sh -c 'STATS_PASSWORD_HASH=$(caddy hash-password --plaintext check) caddy adapt --config /c --validate >/dev/null'
 run "Caddyfile: format" docker run --rm -v "$PWD/Caddyfile:/c:ro" caddy:2 sh -c 'caddy fmt /c | diff -u /c -'
 run "radio.liq: liquidsoap --check" docker run --rm -v "$PWD/radio.liq:/r.liq:ro" savonet/liquidsoap:v2.3.3 --check /r.liq
 run "YAML + HTML: prettier" prettier --check

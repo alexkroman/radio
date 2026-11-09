@@ -5,7 +5,7 @@
 
 	@stats path /stats/* /ws/*
 	basic_auth @stats {
-		admin {$STATS_PASSWORD_HASH:$2a$14$j/JlFcLTpqB1sZZ5K/IrXO.XkoNBW7I5Z9cdNuWRtn6TP0jRQFmMC}
+		admin {$STATS_PASSWORD_HASH}
 	}
 
 	handle / {

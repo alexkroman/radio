@@ -24,36 +24,40 @@
       <h1>Radio</h1>
       <p>Listen live</p>
     </hgroup>
+    {{$log := list}}{{if fileExists "/logs/playlist.log"}}{{$log = readFile
+    "/logs/playlist.log" | trim | splitList "\n" | reverse}}{{end}}
     <article>
-      <header><button id="play">▶ Play</button></header>
-      <section
+      <header>Now playing</header>
+      <div
         id="np"
         hx-get="/"
         hx-select="#np"
+        hx-select-oob="#history"
         hx-swap="outerHTML"
         hx-trigger="every 15s"
       >
-        {{if fileExists "/logs/playlist.log"}} {{$log := include
-        "/logs/playlist.log" | trim | splitList "\n" | reverse}}
-        <small>Now playing</small>
-        <h2 id="now">{{index (index $log 0 | splitList "|") 3 | html}}</h2>
-        <h3>Recently played</h3>
-        <table class="striped">
-          {{range $i, $line := $log}}{{if and $i (lt $i 21)}}{{$f := splitList
-          "|" $line}}
-          <tr>
-            <td style="width: 1%; white-space: nowrap">
-              <small
-                >{{index $f 0 | toDate "02/Jan/2006:15:04:05 -0700" | date
-                "15:04"}} UTC</small
-              >
-            </td>
-            <td>{{index $f 3 | html}}</td>
-          </tr>
-          {{end}}{{end}}
-        </table>
-        {{end}}
-      </section>
+        <h2 id="now">
+          {{if $log}}{{index (index $log 0 | splitList "|") 3 | html}}{{end}}
+        </h2>
+      </div>
+      <footer><button id="play">▶ Play</button></footer>
+    </article>
+    <article id="history">
+      <header>Recently played</header>
+      <table class="striped">
+        {{range $i, $line := $log}}{{if and $i (lt $i 21)}}{{$f := splitList "|"
+        $line}}
+        <tr>
+          <td style="width: 1%; white-space: nowrap">
+            <small
+              >{{index $f 0 | toDate "02/Jan/2006:15:04:05 -0700" | date
+              "15:04"}} UTC</small
+            >
+          </td>
+          <td>{{index $f 3 | html}}</td>
+        </tr>
+        {{end}}{{end}}
+      </table>
     </article>
   </main>
   <script>

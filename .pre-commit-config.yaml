@@ -1,9 +1,46 @@
+# Node for the prettier hook (pinned for reproducibility).
+default_language_version:
+  node: 22.12.0
+
 repos:
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.9.10
+    hooks:
+      - id: prettier
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+        args: [-d, relaxed]
+
   - repo: local
     hooks:
-      - id: check
-        name: check.sh
-        entry: ./check.sh
+      - id: liquidsoap
+        name: liquidsoap --check
+        language: docker_image
+        entry: savonet/liquidsoap:v2.3.3 --check
+        files: \.liq$
+
+      - id: caddy-fmt
+        name: caddy fmt
+        language: docker_image
+        entry: caddy:2.11.9 caddy fmt --diff
+        files: ^Caddyfile$
+
+      - id: caddy-validate
+        name: caddy validate
+        language: docker_image
+        # Caddyfile needs a password hash at load time; generate a throwaway one.
+        # Root so validation can create the (throwaway) log directory.
+        entry: --user 0:0 --entrypoint sh caddy:2.11.9 -c
+        args:
+          - STATS_PASSWORD_HASH=$(caddy hash-password --plaintext check) caddy adapt --validate --config "$0" > /dev/null
+        files: ^Caddyfile$
+
+      - id: compose
+        name: docker compose config
         language: system
+        entry: docker compose --env-file .env.example config -q
+        files: ^(compose\.yml|\.env\.example)$
         pass_filenames: false
-        always_run: true

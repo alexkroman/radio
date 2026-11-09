@@ -48,9 +48,9 @@ Settings → Server → Add: type **Icecast**, address = your server, port **800
 
 ## Checks
 
-```sh
-./check.sh                 # linters and formatters (runs on every commit via pre-commit)
-./check.sh --fix           # reformat YAML, HTML and Markdown first
-```
+Linters and formatters run through [pre-commit](https://pre-commit.com) (see `.pre-commit-config.yaml`); Prettier fixes formatting itself.
 
-Run `pre-commit install` once after cloning to enable the commit hook.
+```sh
+pre-commit install          # once after cloning: run the checks on every commit
+pre-commit run --all-files  # run them by hand
+```

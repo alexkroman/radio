@@ -32,10 +32,10 @@
       color: var(--pico-muted-color);
     }
     .muted,
-    td:first-child {
+    .time {
       color: var(--pico-muted-color);
     }
-    td:first-child {
+    .time {
       width: 1%;
       white-space: nowrap;
       font-variant-numeric: tabular-nums;
@@ -57,24 +57,27 @@
         hx-select-oob="#history"
         hx-swap="outerHTML"
         hx-trigger="every 15s, refresh"
+        hx-sync="this:replace"
       >
-        {{if $log}}{{$s := index (index $log 0 | splitList "|") 3 | splitn " - "
-        2}}
+        {{if $log}}{{$f := index $log 0 | splitList "|"}}{{if ge (len $f)
+        4}}{{$s := index $f 3 | splitn " - " 2}}
         <hgroup>
           <h2>{{if $s._1}}{{$s._1 | html}}{{else}}{{$s._0 | html}}{{end}}</h2>
-          <p>{{if $s._1}}{{$s._0 | html}}{{end}}</p>
+          {{if $s._1}}
+          <p>{{$s._0 | html}}</p>
+          {{end}}
         </hgroup>
-        {{end}}
+        {{end}}{{end}}
       </div>
       <button id="play">▶ Play</button>
     </article>
     <article id="history">
       <small class="label">Recently played · times in UTC</small>
       <table class="striped">
-        {{range $i, $line := $log}}{{if and $i (lt $i 21)}}{{$f := splitList "|"
-        $line}}{{$s := index $f 3 | splitn " - " 2}}
+        {{range $i, $line := $log}}{{$f := splitList "|" $line}}{{if and $i (lt
+        $i 21) (ge (len $f) 4)}}{{$s := index $f 3 | splitn " - " 2}}
         <tr>
-          <td>
+          <td class="time">
             {{index $f 0 | toDate "02/Jan/2006:15:04:05 -0700" | date "15:04"}}
           </td>
           <td>

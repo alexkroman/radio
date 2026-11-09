@@ -1,0 +1,27 @@
+{$DOMAIN:localhost} {
+	log {
+		output file /logs/caddy-access.log
+	}
+
+	@stats path /stats/* /ws/*
+	basic_auth @stats {
+		admin {$STATS_PASSWORD_HASH:$2a$14$j/JlFcLTpqB1sZZ5K/IrXO.XkoNBW7I5Z9cdNuWRtn6TP0jRQFmMC}
+	}
+
+	handle / {
+		root * /srv
+		rewrite * /index.html
+		templates
+		file_server
+	}
+	handle /ws/access {
+		reverse_proxy goaccess:443 {
+			transport http
+		}
+	}
+	handle {
+		reverse_proxy icecast:8000 {
+			flush_interval -1
+		}
+	}
+}

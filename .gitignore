@@ -1,0 +1,4 @@
+music/*
+!music/.gitkeep
+.env
+root.crt

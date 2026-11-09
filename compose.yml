@@ -1,0 +1,135 @@
+services:
+  icecast:
+    image: libretime/icecast:2.4.4
+    command:
+      [
+        "sh",
+        "-c",
+        'c=$$(sed ''s|<!-- <playlistlog>playlist.log</playlistlog> -->|<playlistlog>playlist.log</playlistlog>|'' /etc/icecast.xml) && echo "$$c" > /etc/icecast.xml && exec icecast -c /etc/icecast.xml',
+      ]
+    environment:
+      ICECAST_SOURCE_PASSWORD: ${PASSWORD:-hackme}
+      ICECAST_ADMIN_PASSWORD: ${PASSWORD:-hackme}
+      ICECAST_RELAY_PASSWORD: ${PASSWORD:-hackme}
+    volumes:
+      - logs:/var/log/icecast
+      - stats:/usr/share/icecast/web/stats
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "exec 3<>/dev/tcp/localhost/8000 && printf 'GET /status-json.xsl HTTP/1.0\\r\\n\\r\\n' >&3 && timeout 5 cat <&3 | grep -q icestats",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  liquidsoap:
+    image: savonet/liquidsoap:v2.3.3
+    command: ["/radio.liq"]
+    ports: ["8005:8005"]
+    environment:
+      PASSWORD: ${PASSWORD:-hackme}
+    volumes:
+      - ./radio.liq:/radio.liq:ro
+      - ./music:/music:ro
+    depends_on: [icecast]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "exec 3<>/dev/tcp/icecast/8000 && printf 'GET /status-json.xsl HTTP/1.0\\r\\n\\r\\n' >&3 && timeout 5 cat <&3 | grep -q '/stream\"'",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  goaccess:
+    image: allinurl/goaccess
+    command:
+      - /logs/caddy-access.log
+      - -o
+      - /stats/index.html
+      - --real-time-html
+      - --port=443
+      - --ws-url=wss://${DOMAIN:-localhost}:443/ws/access
+      - --log-format=CADDY
+      - --persist
+      - --restore
+      - --db-path=/db
+      - --geoip-database=/geo/city.mmdb
+      - --ignore-panel=REQUESTS_STATIC
+      - --ignore-panel=NOT_FOUND
+      - --ignore-panel=REFERRERS
+      - --ignore-panel=REFERRING_SITES
+      - --ignore-panel=ASN
+      - --ignore-panel=UTM_CAMPAIGNS
+    volumes:
+      - logs:/logs:ro
+      - stats:/stats
+      - db-access:/db
+      - geo:/geo:ro
+    depends_on:
+      caddy: { condition: service_started }
+      geoip: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 443"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports: ["80:80", "443:443"]
+    environment: [DOMAIN, STATS_PASSWORD_HASH]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./index.html:/srv/index.html:ro
+      - logs:/logs
+      - logs:/srv/logs:ro
+      - caddy:/data
+    depends_on: [icecast]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  autoheal:
+    image: willfarrell/autoheal
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: all
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+  geoip:
+    image: curlimages/curl
+    user: root
+    entrypoint:
+      [
+        "sh",
+        "-c",
+        "curl -fsSL https://download.db-ip.com/free/dbip-city-lite-$$(date +%Y-%m).mmdb.gz | gunzip > /geo/new.mmdb && mv /geo/new.mmdb /geo/city.mmdb; test -s /geo/city.mmdb",
+      ]
+    volumes:
+      - geo:/geo
+
+volumes:
+  caddy: {}
+  geo: {}
+  db-access: {}
+  logs: {}
+  stats: {}

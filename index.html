@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Radio</title>
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.1.1/css/pico.jade.min.css"
+    integrity="sha384-9eWBRFENYDQF0oSd2bdDvnE6+jPkxkGjSXpeEJVzODxNnyhyd3wh5T+/3KJ+NHOo"
+    crossorigin="anonymous"
+  />
+  <script
+    src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.11/dist/htmx.min.js"
+    integrity="sha384-2OatzQy1H+Zd/IIrjr1TcuDGqLXeHhbooAyJY1KdQMKnr4LZ22k31GBLdYKHmVjg"
+    crossorigin="anonymous"
+  ></script>
+  <script
+    src="https://cdn.jsdelivr.net/npm/icecast-metadata-player@1.17.13/build/icecast-metadata-player-1.17.13.main.min.js"
+    integrity="sha384-WJeDd43x/ZugoWK7M6wkWXUpeIZqo0PdckhsTpv7amhOdGEzbIhUs6hbPSJcpEWl"
+    crossorigin="anonymous"
+  ></script>
+  <main class="container" style="max-width: 40rem">
+    <hgroup>
+      <h1>Radio</h1>
+      <p>Listen live</p>
+    </hgroup>
+    <article>
+      <header><button id="play">▶ Play</button></header>
+      <section
+        id="np"
+        hx-get="/"
+        hx-select="#np"
+        hx-swap="outerHTML"
+        hx-trigger="every 15s"
+      >
+        {{if fileExists "/logs/playlist.log"}} {{$log := include
+        "/logs/playlist.log" | trim | splitList "\n" | reverse}}
+        <small>Now playing</small>
+        <h2 id="now">{{index (index $log 0 | splitList "|") 3 | html}}</h2>
+        <h3>Recently played</h3>
+        <table class="striped">
+          {{range $i, $line := $log}}{{if and $i (lt $i 21)}}{{$f := splitList
+          "|" $line}}
+          <tr>
+            <td style="width: 1%; white-space: nowrap">
+              <small
+                >{{index $f 0 | toDate "02/Jan/2006:15:04:05 -0700" | date
+                "15:04"}} UTC</small
+              >
+            </td>
+            <td>{{index $f 3 | html}}</td>
+          </tr>
+          {{end}}{{end}}
+        </table>
+        {{end}}
+      </section>
+    </article>
+  </main>
+  <script>
+    const button = document.getElementById("play");
+    const player = new IcecastMetadataPlayer("/stream", {
+      retryTimeout: 120,
+      onMetadata: (m) =>
+        (document.getElementById("now").textContent = m.StreamTitle),
+      onPlay: () => (button.textContent = "■ Stop"),
+      onStop: () => (button.textContent = "▶ Play"),
+    });
+    button.onclick = () =>
+      player.state === "stopped" ? player.play() : player.stop();
+  </script>
+</html>

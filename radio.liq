@@ -1,0 +1,6 @@
+enable_autocue_metadata()
+live = blank.strip(input.harbor("live", port=8005, password=environment.get("PASSWORD")))
+music = crossfade(amplify(1., playlist(mode="randomize", reload_mode="watch", "/music")))
+fade = fun (a, b) -> add(normalize=false, [fade.out(a), fade.in(b)])
+radio = mksafe(fallback(track_sensitive=false, transitions=[fade, fade], [live, music]))
+output.icecast(%mp3(bitrate=128), host="icecast", password=environment.get("PASSWORD"), mount="stream", radio)

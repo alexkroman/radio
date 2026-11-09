@@ -1,7 +1,11 @@
-{$DOMAIN:localhost} {
+(access_log) {
 	log {
 		output file /srv/logs/caddy-access.log
 	}
+}
+
+{$DOMAIN:localhost} {
+	import access_log
 
 	@htmx {
 		method GET
@@ -25,8 +29,19 @@
 		reverse_proxy goaccess:7890
 	}
 	handle {
-		reverse_proxy icecast:8000 {
-			flush_interval -1
-		}
+		reverse_proxy icecast:8000
+	}
+}
+
+# Plain HTTP for devices on the home network that can't verify the certificate
+# (without a real DOMAIN, Caddy's localhost certificate isn't trusted by e.g. a WiiM):
+# only the stream; everything else goes to HTTPS.
+http:// {
+	import access_log
+	handle /stream {
+		reverse_proxy icecast:8000
+	}
+	handle {
+		redir https://{host}{uri} permanent
 	}
 }

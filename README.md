@@ -34,18 +34,17 @@ Add or remove files in `music/` any time; they're picked up without a restart. A
 
 ## Where things are
 
-| URL                                  | What's there                         |
-| ------------------------------------ | ------------------------------------ |
-| `https://localhost/`                 | Player, now playing, history         |
-| `https://localhost/stream`           | The stream for apps and VLC          |
-| `https://localhost/stats/index.html` | Listener stats, `admin` / `PASSWORD` |
-| `https://localhost/admin/`           | Icecast admin, `admin` / `PASSWORD`  |
+| URL                                  | What's there                                                                                                                           |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `https://localhost/`                 | Player, now playing, history                                                                                                           |
+| `https://localhost/stream`           | The stream for apps and VLC                                                                                                            |
+| `http://<this machine's IP>/stream`  | Same stream over plain HTTP, for devices on your network that can't verify the certificate (e.g. a WiiM: Browse → Open Network Stream) |
+| `https://localhost/stats/index.html` | Listener stats, `admin` / `PASSWORD`                                                                                                   |
+| `https://localhost/admin/`           | Icecast admin, `admin` / `PASSWORD`                                                                                                    |
 
 ## Going live with BUTT
 
 Settings → Server → Add: type **Icecast**, address = your server, port **8005**, mountpoint **live**, user **source**, password = `LIVE_PASSWORD`. Press play to take over (after a ~12 s buffer) and stop to fade back to the playlist. If you go silent for 20 s, the playlist takes over until you're audible again.
-
-`LIVE_PASSWORD` is sent unencrypted, so keep it different from `PASSWORD` and only give it to DJs.
 
 ## Checks
 

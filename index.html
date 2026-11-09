@@ -70,6 +70,12 @@
         {{end}}{{end}}
       </div>
       <button id="play">▶ Play</button>
+      <p>
+        <small class="muted"
+          >Listen in VLC, a WiiM or any radio app:
+          <a href="/stream">https://{{.Req.Host | html}}/stream</a></small
+        >
+      </p>
     </article>
     <article id="history">
       <small class="label">Recently played · times in UTC</small>

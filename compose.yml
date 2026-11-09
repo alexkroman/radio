@@ -67,7 +67,7 @@ services:
       - -o
       - /stats/index.html
       - --real-time-html
-      - --ws-url=wss://${DOMAIN:-localhost}:443/ws
+      - --ws-url=wss://${DOMAIN:-localhost}:${HTTPS_PORT:-443}/ws
       - --log-format=CADDY
       - --persist
       - --restore
@@ -93,7 +93,7 @@ services:
 
   caddy:
     <<: *watched
-    image: caddy:2
+    image: caddy:2.11.9
     command:
       [
         "sh",
@@ -129,7 +129,7 @@ services:
       [
         "sh",
         "-c",
-        "for m in $$(date +%Y-%m) $$(date -d @$$(($$(date +%s) - 2678400)) +%Y-%m); do curl -fsSL https://download.db-ip.com/free/dbip-city-lite-$$m.mmdb.gz | gunzip > /geo/new.mmdb && mv /geo/new.mmdb /geo/city.mmdb && break; done; test -s /geo/city.mmdb",
+        '[ -n "$$(find /geo/city.mmdb -mtime -30 2>/dev/null)" ] || for m in $$(date +%Y-%m) $$(date -d @$$(($$(date +%s) - 2678400)) +%Y-%m); do curl -fsSL https://download.db-ip.com/free/dbip-city-lite-$$m.mmdb.gz | gunzip > /geo/new.mmdb && mv /geo/new.mmdb /geo/city.mmdb && break; done; test -s /geo/city.mmdb',
       ]
     volumes:
       - geo:/geo

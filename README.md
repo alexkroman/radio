@@ -78,7 +78,7 @@ npm run build       # esbuild → dist/ (the Docker image does this too)
 
 CI (`.github/workflows/ci.yml`, GitHub Actions) runs `pre-commit run --all-files` and `npm run e2e` on every push to `main` and every pull request.
 
-Linters and formatters run through [pre-commit](https://pre-commit.com) (see `.pre-commit-config.yaml`): Prettier, ESLint and `caddy fmt` fix formatting themselves, so just re-stage and commit again; `tsc` type-checks. The TypeScript checks need `npm ci`; the Liquidsoap and Caddy checks run in Docker, so Docker must be running.
+Linters and formatters run through [pre-commit](https://pre-commit.com) (see `.pre-commit-config.yaml`): Prettier, ESLint and `caddy fmt` fix formatting themselves, so just re-stage and commit again; `tsc` type-checks. [actionlint](https://github.com/rhysd/actionlint) and [zizmor](https://docs.zizmor.sh) check the GitHub Actions workflow (actions are pinned to commit SHAs). The TypeScript checks need `npm ci`; the Liquidsoap and Caddy checks run in Docker, so Docker must be running.
 
 ```sh
 pre-commit install          # once after cloning: run the checks on every commit

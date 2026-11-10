@@ -23,6 +23,20 @@ repos:
       - id: yamllint
         args: [-d, relaxed]
 
+  # GitHub Actions workflows: actionlint (syntax, expressions, shellcheck of
+  # run: steps) and zizmor (security: permissions, injection, pinning...).
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint-docker
+
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.32.0
+    hooks:
+      - id: zizmor
+        # Offline: same results locally and in CI, no GitHub token needed.
+        args: [--offline]
+
   - repo: local
     hooks:
       # TypeScript checks use the project's node_modules (npm ci first).

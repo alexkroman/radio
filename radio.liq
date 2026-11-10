@@ -20,9 +20,22 @@ def artist_not_recent(r) =
   else true end
 end
 
+# Shows: each shows/<slug>.md plays music/<slug>/. Its front matter may set
+# `when:` as Liquidsoap time terms joined by " and " (e.g. "1w-5w and 6h-10h",
+# 1w = Monday, hours in TZ). Shows with more terms win; no `when:` = any time.
+# Edits to shows/ need `docker compose restart liquidsoap`.
 # Loudness: autocue measures each track and sets liq_amplify (gain to reach
 # -14 LUFS); amplify applies it via its default override="liq_amplify".
-music = crossfade(duration=12., fade_in=6., fade_out=6., amplify(1., playlist(mode="randomize", reload_mode="watch", check_next=fun(r) -> not string.contains(suffix=".gitkeep", request.uri(r)) and artist_not_recent(r), "/music")))
+def show(f) =
+  s = file.contents(f)
+  m = regexp(flags=["m"], "^when:[ \\t]*(.*?)[ \\t]*$").exec(s)
+  terms = list.filter(fun(x) -> x != "", string.split(separator=" and ", list.assoc(default="", 1, m)))
+  preds = list.map(time.predicate, terms)
+  dir = "/music/#{path.remove_extension(path.basename(f))}"
+  (list.length(terms), ({list.for_all(fun(p) -> p(), preds)}, amplify(1., playlist(mode="randomize", reload_mode="watch", check_next=fun(r) -> not string.contains(suffix=".gitkeep", request.uri(r)) and artist_not_recent(r), dir))))
+end
+shows = list.sort(fun(a, b) -> fst(b) - fst(a), list.map(show, file.ls(absolute=true, pattern="*.md", "/shows")))
+music = crossfade(duration=12., fade_in=6., fade_out=6., switch(list.map(snd, shows)))
 fade = fun (a, b) -> add(normalize=false, [fade.out(a), fade.in(b)])
 # Limiter catches peaks from tracks autocue boosted and crossfade overlaps.
 radio = limit(mksafe(fallback(track_sensitive=false, transitions=[fade, fade], [live, music])))

@@ -5,6 +5,9 @@
 #     (icecast / liquidsoap / curl_user) and join the shared app group (GID
 #     10001) so they can reach the shared volumes and bind-mounted dirs.
 #   - caddy runs as a dedicated non-root UID:GID 10001:10001.
+#   - admin runs as the node image's non-root `node` user.
+# Only Caddy (443) and Liquidsoap's live input (8005) are published; Icecast
+# and the admin app are reachable only through Caddy.
 # The one-shot `init` service runs as root once at startup to set ownership on
 # the named volumes and bind-mounted dirs to the app UID/GID, then exits. It is
 # the only root container and holds only the capabilities needed to chown.
@@ -69,15 +72,30 @@ services:
     command: ["/radio.liq"]
     ports: ["8005:8005"]
     environment:
+      TZ: ${TZ:-UTC}
       PASSWORD: *password
       LIVE_PASSWORD: ${LIVE_PASSWORD:?Set LIVE_PASSWORD in .env}
     volumes:
       - ./radio.liq:/radio.liq:ro
+      - ./shows:/shows:ro
       - ./music:/music:ro
       - ./covers:/covers
     depends_on:
       init: { condition: service_completed_successfully }
       icecast: { condition: service_started }
+
+  admin:
+    <<: *hardening
+    group_add: ["10001"]
+    restart: unless-stopped
+    build: ./admin
+    environment:
+      TZ: ${TZ:-UTC}
+    volumes:
+      - ./logs:/logs:ro
+      - ./music:/music:ro
+    depends_on:
+      init: { condition: service_completed_successfully }
 
   ddns:
     <<: *hardening
@@ -105,14 +123,13 @@ services:
       [
         "sh",
         "-c",
-        'export STATS_PASSWORD_HASH="$$(caddy hash-password --plaintext "$$STATS_PASSWORD")" && exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile',
+        'export ADMIN_PASSWORD_HASH="$$(caddy hash-password --plaintext "$$ADMIN_PASSWORD")" && exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile',
       ]
     ports: ["443:443"]
     environment:
       DOMAIN: ${DOMAIN:-localhost}
-      # Stats page only — distinct from the Icecast PASSWORD, so this read-only
-      # credential can't unlock Icecast admin. Caddy never sees PASSWORD.
-      STATS_PASSWORD: ${STATS_PASSWORD:?Set STATS_PASSWORD in .env}
+      # Admin site only — distinct from the Icecast PASSWORD, which Caddy never sees.
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       # Keep Caddy's config/data under the writable /data volume (non-root).
       XDG_CONFIG_HOME: /data
     volumes:
@@ -124,6 +141,7 @@ services:
     depends_on:
       init: { condition: service_completed_successfully }
       icecast: { condition: service_started }
+      admin: { condition: service_started }
 
 volumes:
   caddy: {}

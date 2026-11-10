@@ -20,9 +20,11 @@
 	}
 	log_skip @htmx
 
-	@stats path /stats*
-	basic_auth @stats {
-		admin {$STATS_PASSWORD_HASH}
+	# Public: the player page, cover art and /stream. Icecast's status/admin
+	# pages and Liquidsoap are unreachable; /admin is the Node admin site.
+	@admin path /admin /admin/*
+	basic_auth @admin {
+		admin {$ADMIN_PASSWORD_HASH}
 	}
 
 	header {
@@ -60,14 +62,8 @@
 			flush_interval -1
 		}
 	}
-	handle /stats* {
-		uri strip_prefix /stats
-		reverse_proxy icecast:8000 {
-			header_down -Server
-		}
-	}
-	handle /admin* {
-		respond 403
+	handle @admin {
+		reverse_proxy admin:3000
 	}
 	handle {
 		respond 404

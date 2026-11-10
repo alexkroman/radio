@@ -23,13 +23,6 @@ repos:
       - id: yamllint
         args: [-d, relaxed]
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.4
-    hooks:
-      - id: ruff-check
-        args: [--fix]
-      - id: ruff-format
-
   - repo: local
     hooks:
       - id: liquidsoap
@@ -52,7 +45,7 @@ repos:
         # Root so validation can create the (throwaway) log directory.
         entry: --user 0:0 --entrypoint sh caddy:2.11.9 -c
         args:
-          - STATS_PASSWORD_HASH=$(caddy hash-password --plaintext check) caddy adapt --validate --config "$0" > /dev/null
+          - ADMIN_PASSWORD_HASH=$(caddy hash-password --plaintext check) caddy adapt --validate --config "$0" > /dev/null
         files: ^Caddyfile$
 
       - id: compose

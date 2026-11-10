@@ -7,6 +7,9 @@ services:
       - e2e-logs:/logs
       - e2e-covers:/covers
       - e2e-plays:/plays
+  icecast:
+    volumes:
+      - e2e-logs:/var/log/icecast
   liquidsoap:
     volumes:
       - ./test/fixtures/shows:/shows:ro

@@ -1,8 +1,8 @@
 enable_autocue_metadata()
 
-# Every shows/<slug>.md is a 24/7 MP3 stream at http://liquidsoap:8000/<slug>
-# (public at /<slug>/stream via Caddy) playing music/<slug>/ on shuffle. Each
-# play is appended to /plays/YYYY-MM.jsonl (read by the app's page and report).
+# Every shows/<slug>.md is a 24/7 MP3 stream on Icecast mount /<slug> (public
+# at /<slug>/stream via Caddy) playing music/<slug>/ on shuffle. Each play is
+# appended to /plays/YYYY-MM.jsonl (read by the app's page and report).
 # Adding or removing a show needs `docker compose restart liquidsoap`.
 
 # Artists of a track (split on ",", "&", "feat.", "x", "with"); falls back to
@@ -30,6 +30,21 @@ def title_from_filename(m) =
   end
 end
 
+# Listeners on an Icecast mount right now, from its status page (whose
+# "source" is an object for one mount and a list for several); 0 on error.
+def listeners(mount) =
+  body = try http.get(timeout=2., "http://icecast:8000/status-json.xsl") catch _ do "" end
+  try
+    let json.parse ({icestats = {source}} : {icestats: {source: [{listenurl: string, listeners: int}]}}) = body
+    list.fold(fun(n, s) -> if string.contains(suffix="/#{mount}", s.listenurl) then n + s.listeners else n end, 0, source)
+  catch _ do
+    try
+      let json.parse ({icestats = {source}} : {icestats: {source: {listenurl: string, listeners: int}}}) = body
+      if string.contains(suffix="/#{mount}", source.listenurl) then source.listeners else 0 end
+    catch _ do 0 end
+  end
+end
+
 def safe_recode(s) =
   if string.bytes.length(s) > 1024 then s
   else
@@ -40,7 +55,6 @@ end
 def show(f) =
   slug = path.remove_extension(path.basename(f))
   cover_file = "/covers/#{slug}.jpg"
-  listeners = ref(0)
 
   # Artist separation: reject a candidate if any of its artists was among the
   # last 20 artists played on this show; after 20 rejections in a row (a show
@@ -67,7 +81,7 @@ def show(f) =
       def tag(key, fallback) =
         safe_recode(list.assoc(default=list.assoc(default="", fallback, m), key, m))
       end
-      play = {time=time(), show=slug, artist=tag("artist", ""), title=tag("title", ""), album=tag("album", ""), label=tag("label", "publisher"), isrc=tag("isrc", "tsrc"), listeners=listeners()}
+      play = {time=time(), show=slug, artist=tag("artist", ""), title=tag("title", ""), album=tag("album", ""), label=tag("label", "publisher"), isrc=tag("isrc", "tsrc"), listeners=listeners(slug)}
       file.write(append=true, data="#{json.stringify(compact=true, play)}\n", "/plays/#{time.string('%Y-%m')}.jsonl")
 
       cover = metadata.cover(m)
@@ -84,7 +98,7 @@ def show(f) =
   # Limiter catches peaks from tracks autocue boosted and crossfade overlaps.
   radio = limit(mksafe(music))
   radio = metadata.map(fun(m) -> list.map(fun(kv) -> (fst(kv), safe_recode(snd(kv))), m), radio)
-  output.harbor(%mp3(bitrate=256), mount=slug, port=8000, on_connect=fun(~headers=_, ~uri=_, ~protocol=_, _) -> listeners := listeners() + 1, on_disconnect=fun(_) -> listeners := listeners() - 1, radio)
+  output.icecast(%mp3(bitrate=256), encoding="UTF-8", host="icecast", password=environment.get("PASSWORD"), mount=slug, radio)
 end
 
 list.iter(show, file.ls(absolute=true, pattern="*.md", "/shows"))

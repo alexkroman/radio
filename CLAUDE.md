@@ -8,12 +8,12 @@
 ## Docker builds and e2e in cloud sessions
 
 - Docker builds reach npm only through the session's HTTPS proxy. `.claude/hooks/session-start.sh` sets `E2E_COMPOSE`, `E2E_BAKE_FLAGS` and `BUILDX_BAKE_ENTITLEMENTS_FS`, so `npm run e2e` just works; for a manual build use `docker buildx bake --load $E2E_BAKE_FLAGS -f compose.yml -f .claude/compose.cloud.yml app` (`docker compose build` can't pass `--allow=network.host`).
-- Run `npm run e2e` after changing anything in the stack; it is the only test of the real system.
+- Run `npm run e2e` after changing anything in the stack; it is the only test of the real system. CI (`.github/workflows/ci.yml`) runs it and pre-commit too.
 
 ## Layout
 
-- `shows/<slug>.md` is a show: a 24/7 MP3 stream that Liquidsoap serves itself (`output.harbor`, `liquidsoap:8000/<slug>`, public at `/<slug>/stream` via Caddy) playing `music/<slug>/`. `radio.liq` builds one stream per show and appends each play (with tags and listener count) to `plays/YYYY-MM.jsonl`. Per-track work hangs off the playlist source's `on_track`: the crossfaded source doesn't mark every track.
+- `shows/<slug>.md` is a show: a 24/7 MP3 stream (Liquidsoap → Icecast mount `/<slug>`, public at `/<slug>/stream` via Caddy) playing `music/<slug>/`. Icecast stays because Liquidsoap's own HTTP output (`output.harbor`, 2.3.3) sends no ICY metadata, so players would get no track titles (`test/hunt.spec.ts` checks). `radio.liq` builds one stream per show and appends each play (with tags, and the listener count from Icecast's status-json) to `plays/YYYY-MM.jsonl`. Per-track work hangs off the playlist source's `on_track`: the crossfaded source doesn't mark every track.
 - `app/` is one Hono (+ hono/jsx) app: `server.tsx` (show list, player, covers), `admin.tsx` (`/admin`, Hono basicAuth, SoundExchange report), `login.tsx` (optional `SITE_PASSWORD` signed-cookie login), `plays.ts` (reads the play log), `client.ts` (browser bundle: htmx, icecast-metadata-player, Pico CSS from npm, no CDNs). The CSP forbids eval, so no htmx trigger filters.
-- Caddy routes `/<slug>/stream` to Liquidsoap and everything else to the app.
+- Caddy routes GET/HEAD `/<slug>/stream` to Icecast and everything else to the app. `login.tsx` also throttles failed logins (site form and admin basic auth).
 - `test/`: `e2e.sh` + `compose.yml` overlay + Playwright specs on `fixtures/`; `global-setup.ts` logs in with `SITE_PASSWORD`.
 - Run `pre-commit run --all-files` before committing.

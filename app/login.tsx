@@ -3,6 +3,7 @@
 // streams (Caddy → Liquidsoap) stay public so apps like VLC can play them.
 import type { Hono } from "hono";
 import { getSignedCookie, setSignedCookie } from "hono/cookie";
+import { createMiddleware } from "hono/factory";
 import { timingSafeEqual } from "hono/utils/buffer";
 
 const PASSWORD = process.env.SITE_PASSWORD;
@@ -27,12 +28,27 @@ const Login = ({ next, error }: { next: string; error?: boolean }) => (
   </article>
 );
 
+// At most 10 failed logins (site form or admin basic auth) per client IP per
+// 15 minutes. Caddy sets X-Forwarded-For to the real client address.
+const failures = new Map<string, number[]>();
+export const throttle = createMiddleware(async (c, next) => {
+  if (!/^\/(login|admin)(\/|$)/.test(c.req.path)) return next();
+  const ip = c.req.header("x-forwarded-for") ?? "";
+  const now = Date.now();
+  const recent = (failures.get(ip) ?? []).filter((t) => now - t < 15 * 60_000);
+  if (recent.length >= 10) return c.text("Too many attempts, try again later", 429);
+  await next();
+  if (c.res.status === 401 && (c.req.method === "POST" || c.req.header("authorization"))) recent.push(now);
+  if (recent.length) failures.set(ip, recent);
+  else failures.delete(ip);
+});
+
 export function login(app: Hono) {
   if (!PASSWORD) return;
 
   app.post("/login", async (c) => {
     const { password, next } = await c.req.parseBody();
-    const to = typeof next === "string" && /^\/(?![/\\])/.test(next) ? next : "/";
+    const to = typeof next === "string" && /^\/(?![/\\])/.test(next) && !/\p{Cc}/u.test(next) ? next : "/";
     if (typeof password !== "string" || !(await timingSafeEqual(password, PASSWORD))) {
       c.status(401);
       return c.render(<Login next={to} error />, { script: false });

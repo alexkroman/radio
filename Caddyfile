@@ -19,9 +19,13 @@
 	}
 	log_skip @htmx
 
-	# Public: each show's stream at /<slug>/stream (Liquidsoap's mount /<slug>);
-	# everything else, /admin included, is the Node app.
-	@stream path_regexp ^/[a-z0-9-]+/stream$
+	# Public: each show's stream at /<slug>/stream (Icecast mount /<slug>; GET
+	# and HEAD only, so no one can publish a source); everything else, /admin
+	# included, is the Node app.
+	@stream {
+		method GET HEAD
+		path_regexp ^/[a-z0-9-]+/stream$
+	}
 
 	header {
 		# Force HTTPS for a year (renewal is TLS-ALPN-01 on 443, no port 80).
@@ -40,7 +44,7 @@
 	redir /stream /default/stream
 	handle @stream {
 		rewrite * /{path.0}
-		reverse_proxy liquidsoap:8000 {
+		reverse_proxy icecast:8000 {
 			header_down -Server
 			header_up -Range
 			flush_interval -1

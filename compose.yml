@@ -1,12 +1,12 @@
 # ── Security model ────────────────────────────────────────────────────────────
 # Every long-running service: no privilege escalation + all Linux capabilities
 # dropped. None run as root:
-#   - liquidsoap / ddns keep their image's built-in non-root user and join the
-#     shared app group (GID 10001) so they can reach the bind-mounted dirs.
+#   - icecast / liquidsoap / ddns keep their image's built-in non-root user and
+#     join the shared app group (GID 10001) so they can reach the bind mounts.
 #   - app (Node, built from ./Dockerfile) runs as the image's `node` user.
 #   - caddy runs as a dedicated non-root UID:GID 10001:10001.
-# Only Caddy (443) is published; the app and the Liquidsoap streams are
-# reachable only through Caddy.
+# Only Caddy (443) is published; the app and the Icecast streams are reachable
+# only through Caddy.
 # The one-shot `init` service runs as root once at startup to set ownership on
 # the named volume and bind-mounted dirs to the app UID/GID, then exits. It is
 # the only root container and holds only the capabilities needed to chown.
@@ -44,8 +44,33 @@ services:
       - ./plays:/plays
     restart: "no"
 
-  # One 24/7 stream per show (radio.liq), served on port 8000; writes covers/
-  # and the play log (plays/YYYY-MM.jsonl).
+  # Serves the streams (one mount per show), with UTF-8 track metadata.
+  icecast:
+    <<: *hardening
+    group_add: ["10001"]
+    restart: unless-stopped
+    image: libretime/icecast:2.4.4
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        sed 's|</icecast>|<mount type="default"><charset>UTF-8</charset></mount></icecast>|' /etc/icecast.xml > /tmp/icecast.xml
+        grep -q '<charset>UTF-8' /tmp/icecast.xml
+        exec icecast -c /tmp/icecast.xml
+    environment:
+      ICECAST_SOURCE_PASSWORD: &password ${PASSWORD:?Set PASSWORD in .env}
+      ICECAST_ADMIN_PASSWORD: *password
+      ICECAST_RELAY_PASSWORD: *password
+      # One source per show (the image's default is 2).
+      ICECAST_MAX_SOURCES: 100
+    volumes:
+      - ./logs:/var/log/icecast
+    depends_on:
+      init: { condition: service_completed_successfully }
+
+  # One 24/7 stream per show (radio.liq), sent to Icecast; writes covers/ and
+  # the play log (plays/YYYY-MM.jsonl).
   liquidsoap:
     <<: *hardening
     group_add: ["10001"]
@@ -54,6 +79,7 @@ services:
     command: ["/radio.liq"]
     environment:
       TZ: ${TZ:-UTC}
+      PASSWORD: *password
     volumes:
       - ./radio.liq:/radio.liq:ro
       - ./shows:/shows:ro
@@ -62,6 +88,7 @@ services:
       - ./plays:/plays
     depends_on:
       init: { condition: service_completed_successfully }
+      icecast: { condition: service_started }
 
   # Show list, player pages and /admin (app/).
   app:
@@ -114,7 +141,7 @@ services:
       - caddy:/data
     depends_on:
       init: { condition: service_completed_successfully }
-      liquidsoap: { condition: service_started }
+      icecast: { condition: service_started }
       app: { condition: service_started }
 
 volumes:

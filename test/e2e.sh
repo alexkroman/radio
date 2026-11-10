@@ -8,6 +8,8 @@ set -eu
 cd "$(dirname "$0")/.."
 files="-f compose.yml -f test/compose.yml ${E2E_COMPOSE:+-f $E2E_COMPOSE}"
 dc() { docker compose -p radio-e2e --env-file test/test.env $files "$@"; }
+# Start clean (a leftover stack would keep stale containers) and clean up after.
+dc down -v --remove-orphans >/dev/null 2>&1
 trap 'dc down -v --remove-orphans >/dev/null 2>&1' EXIT
 # Build with bake (what `compose build` uses) so E2E_BAKE_FLAGS can be passed.
 set -a && . ./test/test.env && set +a

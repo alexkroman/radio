@@ -8,7 +8,7 @@ import { Hono } from "hono";
 import { jsxRenderer } from "hono/jsx-renderer";
 import { marked } from "marked";
 import { admin } from "./admin.tsx";
-import { login } from "./login.tsx";
+import { login, throttle } from "./login.tsx";
 import { type Play, recentPlays } from "./plays.ts";
 
 const SHOWS = process.env.SHOWS_DIR ?? "/shows";
@@ -117,6 +117,7 @@ app.use(
   )),
 );
 
+app.use(throttle);
 login(app);
 app.route("/admin", admin);
 

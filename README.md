@@ -1,8 +1,9 @@
 # Radio
 
-A small internet radio station: three services and one small TypeScript app.
+A small internet radio station: stock open-source services plus one small TypeScript app.
 
-- **Liquidsoap** plays and serves each show as its own 24/7 MP3 stream, on shuffle with automatic cue points, loudness levelling and crossfades, and appends every play to a monthly log, `plays/YYYY-MM.jsonl`.
+- **Liquidsoap** plays each show as its own 24/7 stream, on shuffle with automatic cue points, loudness levelling and crossfades, and appends every play (tags and listener count) to a monthly log, `plays/YYYY-MM.jsonl`.
+- **Icecast** serves the streams, with track titles (UTF-8) in the stream for players like VLC.
 - **`app/`** ([Hono](https://hono.dev)) serves the show list, the player pages and the admin site (SoundExchange reports from the play log). Its browser code (htmx, icecast-metadata-player, Pico CSS) is bundled from npm, so nothing loads from a CDN.
 - **Caddy** provides HTTPS and is the only public entry point.
 - **Docker** restarts any service that crashes.
@@ -56,7 +57,7 @@ Adding or removing a show needs `docker compose restart liquidsoap`; editing a t
 | `https://localhost/stream`        | Redirects to `/default/stream` (the old single-stream URL)     |
 | `https://localhost/admin/`        | Admin site (SoundExchange reports), `admin` / `ADMIN_PASSWORD` |
 
-Set `SITE_PASSWORD` in `.env` to put the show pages behind a login form; the streams stay public so apps can play them. Nothing else is public.
+Set `SITE_PASSWORD` in `.env` to put the show pages behind a login form; the streams stay public so apps can play them. After 10 wrong passwords (site or admin) from one address, logins are refused for 15 minutes. Nothing else is public.
 
 ## Development
 
@@ -71,9 +72,11 @@ npm run build       # esbuild → dist/ (the Docker image does this too)
 
 ## End-to-end tests
 
-`npm run e2e` builds the images, starts the real stack (Caddy, Liquidsoap, the app) on the fixture shows and music in `test/fixtures/`, runs the Playwright suites in `test/` from a container inside Caddy's network, and tears everything down. It needs only Docker, uses its own compose project (`radio-e2e`) and throwaway volumes, publishes no ports, and doesn't touch `logs/`, `covers/`, `plays/` or `music/`. Pass Playwright arguments through, e.g. `npm run e2e -- -g "admin"`.
+`npm run e2e` builds the images, starts the real stack (Caddy, Icecast, Liquidsoap, the app) on the fixture shows and music in `test/fixtures/`, runs the Playwright suites in `test/` from a container inside Caddy's network, and tears everything down. It needs only Docker, uses its own compose project (`radio-e2e`) and throwaway volumes, publishes no ports, and doesn't touch `logs/`, `covers/`, `plays/` or `music/`. Pass Playwright arguments through, e.g. `npm run e2e -- -g "admin"`.
 
 ## Checks
+
+CI (`.github/workflows/ci.yml`, GitHub Actions) runs `pre-commit run --all-files` and `npm run e2e` on every push to `main` and every pull request.
 
 Linters and formatters run through [pre-commit](https://pre-commit.com) (see `.pre-commit-config.yaml`): Prettier, ESLint and `caddy fmt` fix formatting themselves, so just re-stage and commit again; `tsc` type-checks. The TypeScript checks need `npm ci`; the Liquidsoap and Caddy checks run in Docker, so Docker must be running.
 

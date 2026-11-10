@@ -74,7 +74,7 @@ for show_dir in "${show_dirs[@]}"; do
 
   # 4. Rename files to "Artist - Title.ext" within the show directory
   echo "── Renaming files"
-  $BEET -l "$LIB" -d "$show_dir" move --yes </dev/null
+  $BEET -l "$LIB" -d "$show_dir" move </dev/null
 
   # 5. Extract embedded cover art from each track
   echo "── Extracting covers"

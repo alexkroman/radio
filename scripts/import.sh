@@ -14,7 +14,6 @@
 #   brew install chromaprint fdupes ffmpeg pipx
 #   pipx install beets && pipx inject beets pyacoustid
 #   pipx ensurepath   # adds ~/.local/bin to PATH if needed; restart shell
-#   export ACOUSTID_APIKEY=<your free key from acoustid.biz>
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -36,12 +35,6 @@ for cmd in beet fpcalc ffmpeg fdupes; do
     exit 1
   fi
 done
-
-if [[ -z "${ACOUSTID_APIKEY:-}" ]]; then
-  echo "ERROR: ACOUSTID_APIKEY is not set." >&2
-  echo "  Register free at https://acoustid.biz/login then: export ACOUSTID_APIKEY=<key>" >&2
-  exit 1
-fi
 
 # ── Determine which shows to process ────────────────────────────────────────
 if [[ "${1:-}" != "" ]]; then
@@ -70,7 +63,7 @@ for show_dir in "${show_dirs[@]}"; do
 
   # 2. Fingerprint + tag via MusicBrainz (incremental: skips already-imported)
   echo "── Tagging (beet import)"
-  beet -c "$CONFIG" import -q "$show_dir" || true
+  beet -c "$CONFIG" import -q "$show_dir" </dev/null || true
 
   # 3. Extract embedded cover art from each track
   echo "── Extracting covers"

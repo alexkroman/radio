@@ -56,6 +56,18 @@
       flex: 1;
       min-width: 0;
     }
+    #play {
+      flex-shrink: 0;
+      width: 3rem;
+      height: 3rem;
+      border-radius: 50%;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      align-self: center;
+    }
   </style>
   <main class="container">
     <hgroup>
@@ -88,8 +100,8 @@
             </hgroup>
             {{end}}{{end}}
           </div>
-          <button id="play">▶ Play</button>
         </div>
+        <button id="play" aria-label="Play">▶</button>
       </div>
     </article>
     <article id="history">
@@ -134,11 +146,13 @@
         refreshAlbumArt();
       },
       onPlay: () => {
-        button.textContent = "■ Stop";
+        button.textContent = "■";
+        button.setAttribute("aria-label", "Stop");
         if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
       },
       onStop: () => {
-        button.textContent = "▶ Play";
+        button.textContent = "▶";
+        button.setAttribute("aria-label", "Play");
         if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
       },
     });

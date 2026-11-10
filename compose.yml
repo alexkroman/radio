@@ -105,13 +105,11 @@ services:
       [
         "sh",
         "-c",
-        'export STATS_PASSWORD_HASH="$$(caddy hash-password --plaintext "$$STATS_PASSWORD")" && export LISTENER_PASSWORD_HASH="$$(caddy hash-password --plaintext "$$LISTENER_PASSWORD")" && exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile',
+        'export STATS_PASSWORD_HASH="$$(caddy hash-password --plaintext "$$STATS_PASSWORD")" && exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile',
       ]
     ports: ["443:443"]
     environment:
       DOMAIN: ${DOMAIN:-localhost}
-      # Listener gate: HTTP basic-auth on the index page (username "radio").
-      LISTENER_PASSWORD: ${LISTENER_PASSWORD:?Set LISTENER_PASSWORD in .env}
       # Stats page only — distinct from the Icecast PASSWORD, so this read-only
       # credential can't unlock Icecast admin. Caddy never sees PASSWORD.
       STATS_PASSWORD: ${STATS_PASSWORD:?Set STATS_PASSWORD in .env}

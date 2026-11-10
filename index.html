@@ -126,6 +126,30 @@
     </article>
   </main>
   <script>
+    if (!sessionStorage.getItem("auth")) {
+      const gate = document.createElement("div");
+      gate.style.cssText = "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--pico-background-color);z-index:999";
+      gate.innerHTML = `<article style="min-width:280px;text-align:center">
+        <h2>Radio</h2>
+        <form id="gate-form">
+          <input type="password" id="gate-pw" placeholder="Password" autofocus />
+          <button type="submit" style="margin-top:0.5rem;width:100%">Enter</button>
+          <p id="gate-err" hidden style="color:var(--pico-del-color);margin-top:0.5rem;margin-bottom:0">Wrong password</p>
+        </form>
+      </article>`;
+      document.body.prepend(gate);
+      document.getElementById("gate-form").onsubmit = e => {
+        e.preventDefault();
+        if (document.getElementById("gate-pw").value === "mazes2026") {
+          sessionStorage.setItem("auth", "1");
+          gate.remove();
+        } else {
+          document.getElementById("gate-err").hidden = false;
+        }
+      };
+    }
+  </script>
+  <script>
     const button = document.getElementById("play");
 
     function updateMediaSession(metadata) {

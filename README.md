@@ -14,7 +14,7 @@ Requires Docker.
 
 ```sh
 cp .env.example .env   # then replace every change-me value, e.g. with: openssl rand -hex 16
-cp ~/some/music/*.mp3 music/
+mkdir -p music && cp ~/some/music/*.mp3 music/
 docker compose up -d
 ```
 

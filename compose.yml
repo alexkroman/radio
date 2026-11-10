@@ -50,7 +50,7 @@ services:
       [
         "sh",
         "-c",
-        "sed 's|<!-- <playlistlog>playlist.log</playlistlog> -->|<playlistlog>playlist.log</playlistlog>|; s|<logsize>10000</logsize>|<logsize>1000</logsize>|' /etc/icecast.xml > /tmp/icecast.xml && grep -q '^ *<playlistlog>' /tmp/icecast.xml && exec icecast -c /tmp/icecast.xml",
+        "sed 's|<!-- <playlistlog>playlist.log</playlistlog> -->|<playlistlog>playlist.log</playlistlog>|; s|<logsize>10000</logsize>|<logsize>1000</logsize>|; s|^</icecast>|<mount><mount-name>/stream</mount-name><charset>UTF-8</charset></mount></icecast>|' /etc/icecast.xml > /tmp/icecast.xml && grep -q '^ *<playlistlog>' /tmp/icecast.xml && grep -q '<charset>UTF-8' /tmp/icecast.xml && exec icecast -c /tmp/icecast.xml",
       ]
     environment:
       ICECAST_SOURCE_PASSWORD: &password ${PASSWORD:?Set PASSWORD in .env}

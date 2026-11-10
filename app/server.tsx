@@ -73,22 +73,26 @@ const NowPlaying = ({ show, play }: { show: Show; play?: Play }) => (
 const History = ({ plays }: { plays: Play[] }) => (
   <article id="history">
     <small class="label">Recently played</small>
-    <table class="striped">
-      {plays.map((p) => {
-        const time = new Date(p.time * 1000).toISOString();
-        return (
-          <tr>
-            <td class="time">
-              <time datetime={time}>{time.slice(11, 16)}</time>
-            </td>
-            <td>
-              {p.title}
-              {p.artist && <span class="muted"> · {p.artist}</span>}
-            </td>
-          </tr>
-        );
-      })}
-    </table>
+    {plays.length === 0 ? (
+      <p class="muted">Nothing played yet.</p>
+    ) : (
+      <table class="striped">
+        {plays.map((p) => {
+          const time = new Date(p.time * 1000).toISOString();
+          return (
+            <tr>
+              <td class="time">
+                <time datetime={time}>{time.slice(11, 16)}</time>
+              </td>
+              <td>
+                {p.title}
+                {p.artist && <span class="muted"> · {p.artist}</span>}
+              </td>
+            </tr>
+          );
+        })}
+      </table>
+    )}
   </article>
 );
 
@@ -150,14 +154,21 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
           <a href="/">← All shows</a>
         </small>
       </p>
-      <hgroup>
-        <h1>{show.title}</h1>
-        <Markdown html={show.description} />
-      </hgroup>
+      <div class="show-header">
+        <div class="play-col">
+          <button id="play" aria-label="Play">▶</button>
+          <small>
+            <a href={stream}>{`https://${c.req.header("host")}${stream}`}</a>
+          </small>
+        </div>
+        <hgroup>
+          <h1>{show.title}</h1>
+          <Markdown html={show.description} />
+        </hgroup>
+      </div>
       <article>
         <small class="label">Now playing</small>
         <div class="np-row">
-          <button id="play" aria-label="Play">▶</button>
           <img
             id="album-art"
             src={`/${show.slug}/cover.jpg?t=${current?.time ?? 0}`}
@@ -169,11 +180,6 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
           </div>
         </div>
       </article>
-      <p>
-        <small>
-          Stream URL: <a href={stream}>{`https://${c.req.header("host")}${stream}`}</a>
-        </small>
-      </p>
       <History plays={recent} />
     </>,
     { title: show.title },

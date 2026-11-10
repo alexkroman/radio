@@ -23,6 +23,27 @@ main.container {
   font-variant-numeric: tabular-nums;
 }
 
+.show-header {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: var(--pico-block-spacing-vertical);
+}
+
+.show-header hgroup {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.play-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 .np-row {
   display: flex;
   gap: 1rem;
@@ -52,7 +73,7 @@ main.container {
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
-  align-self: center;
+  align-self: auto;
 }
 
 #login p {

@@ -7,3 +7,4 @@ logs/*
 .env
 root.crt
 .DS_Store
+.vscode/

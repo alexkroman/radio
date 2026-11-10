@@ -1,4 +1,9 @@
 music/*
 !music/.gitkeep
+covers/*
+!covers/.gitkeep
+logs/*
+!logs/.gitkeep
 .env
 root.crt
+.DS_Store

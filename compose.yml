@@ -13,7 +13,7 @@ services:
       ICECAST_ADMIN_PASSWORD: *password
       ICECAST_RELAY_PASSWORD: *password
     volumes:
-      - logs:/var/log/icecast
+      - ./logs:/var/log/icecast
       - stats:/usr/share/icecast/web/stats
 
   liquidsoap:
@@ -27,6 +27,7 @@ services:
     volumes:
       - ./radio.liq:/radio.liq:ro
       - ./music:/music:ro
+      - ./covers:/covers
     depends_on: [icecast]
 
   goaccess:
@@ -42,7 +43,6 @@ services:
       - --persist
       - --restore
       - --db-path=/db
-      - --geoip-database=/geo/city.mmdb
       - --ignore-panel=REQUESTS_STATIC
       - --ignore-panel=NOT_FOUND
       - --ignore-panel=REFERRERS
@@ -50,13 +50,24 @@ services:
       - --ignore-panel=ASN
       - --ignore-panel=UTM_CAMPAIGNS
     volumes:
-      - logs:/logs:ro
+      - ./logs:/logs:ro
       - stats:/stats
       - db:/db
-      - geo:/geo:ro
     depends_on:
       caddy: { condition: service_started }
-      geoip: { condition: service_completed_successfully }
+
+  ddns:
+    restart: unless-stopped
+    image: curlimages/curl@sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93
+    entrypoint:
+      [
+        "sh",
+        "-c",
+        'while true; do curl -fsS "https://dynamicdns.park-your-domain.com/update?host=@&domain=$$DOMAIN&password=$$DDNS_PASSWORD" && echo; sleep 300; done',
+      ]
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+      DDNS_PASSWORD: ${DDNS_PASSWORD:?Set DDNS_PASSWORD in .env}
 
   caddy:
     restart: unless-stopped
@@ -74,25 +85,12 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./index.html:/srv/index.html:ro
-      - logs:/srv/logs
+      - ./logs:/srv/logs
+      - ./covers:/srv/covers:ro
       - caddy:/data
     depends_on: [icecast]
 
-  geoip:
-    image: curlimages/curl@sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93
-    user: root
-    entrypoint:
-      [
-        "sh",
-        "-c",
-        '[ -n "$$(find /geo/city.mmdb -mtime -30 2>/dev/null)" ] || for m in $$(date +%Y-%m) $$(date -d @$$(($$(date +%s) - 2678400)) +%Y-%m); do curl -fsSL https://download.db-ip.com/free/dbip-city-lite-$$m.mmdb.gz | gunzip > /geo/new.mmdb && mv /geo/new.mmdb /geo/city.mmdb && break; done; test -s /geo/city.mmdb',
-      ]
-    volumes:
-      - geo:/geo
-
 volumes:
   caddy: {}
-  geo: {}
   db: {}
-  logs: {}
   stats: {}

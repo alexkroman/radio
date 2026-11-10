@@ -40,6 +40,22 @@
       white-space: nowrap;
       font-variant-numeric: tabular-nums;
     }
+    .np-row {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    #album-art {
+      width: 120px;
+      height: 120px;
+      object-fit: cover;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .np-info {
+      flex: 1;
+      min-width: 0;
+    }
   </style>
   <main class="container">
     <hgroup>
@@ -50,41 +66,42 @@
     "/logs/playlist.log" | trim | splitList "\n" | reverse}}{{end}}
     <article>
       <small class="label">Now playing</small>
-      <div
-        id="np"
-        hx-get="/"
-        hx-select="#np"
-        hx-select-oob="#history"
-        hx-swap="outerHTML"
-        hx-trigger="every 15s [!document.hidden], refresh"
-        hx-sync="this:replace"
-      >
-        {{if $log}}{{$f := index $log 0 | splitn "|" 4}}{{if ge (len $f) 4}}{{$s
-        := $f._3 | splitn " - " 2}}
-        <hgroup>
-          <h2>{{if $s._1}}{{$s._1 | html}}{{else}}{{$s._0 | html}}{{end}}</h2>
-          {{if $s._1}}
-          <p>{{$s._0 | html}}</p>
-          {{end}}
-        </hgroup>
-        {{end}}{{end}}
+      <div class="np-row">
+        <img id="album-art" src="/cover.jpg" alt="" hidden />
+        <div class="np-info">
+          <div
+            id="np"
+            hx-get="/"
+            hx-select="#np"
+            hx-select-oob="#history"
+            hx-swap="outerHTML"
+            hx-trigger="every 15s [!document.hidden], refresh"
+            hx-sync="this:replace"
+          >
+            {{if $log}}{{$f := index $log 0 | splitn "|" 4}}{{if ge (len $f) 4}}{{$s
+            := $f._3 | splitn " - " 2}}
+            <hgroup>
+              <h2>{{if $s._1}}{{$s._1 | html}}{{else}}{{$s._0 | html}}{{end}}</h2>
+              {{if $s._1}}
+              <p>{{$s._0 | html}}</p>
+              {{end}}
+            </hgroup>
+            {{end}}{{end}}
+          </div>
+          <button id="play">▶ Play</button>
+        </div>
       </div>
-      <button id="play">▶ Play</button>
-      <p>
-        <small class="muted"
-          >Listen in VLC, a WiiM or any radio app:
-          <a href="/stream">https://{{.Req.Host | html}}/stream</a></small
-        >
-      </p>
     </article>
     <article id="history">
-      <small class="label">Recently played · times in UTC</small>
+      <small class="label">Recently played</small>
       <table class="striped">
         {{range $i, $line := $log}}{{if and $i (lt $i 21)}}{{$f := splitn "|" 4
         $line}}{{if ge (len $f) 4}}{{$s := $f._3 | splitn " - " 2}}
         <tr>
           <td class="time">
-            {{$f._0 | toDate "02/Jan/2006:15:04:05 -0700" | date "15:04"}}
+            <time datetime="{{$f._0 | toDate "02/Jan/2006:15:04:05 -0700" | date "2006-01-02T15:04:05Z07:00"}}">
+              {{$f._0 | toDate "02/Jan/2006:15:04:05 -0700" | date "15:04"}}
+            </time>
           </td>
           <td>
             {{if $s._1}}{{$s._1 | html}}
@@ -98,13 +115,69 @@
   </main>
   <script>
     const button = document.getElementById("play");
+
+    function updateMediaSession(metadata) {
+      if (!("mediaSession" in navigator)) return;
+      const raw = metadata?.StreamTitle ?? "";
+      const dash = raw.indexOf(" - ");
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: dash >= 0 ? raw.slice(dash + 3) : raw,
+        artist: dash >= 0 ? raw.slice(0, dash) : "",
+        artwork: [{ src: "/cover.jpg?t=" + Date.now(), sizes: "512x512", type: "image/jpeg" }],
+      });
+    }
+
     const player = new IcecastMetadataPlayer("/stream", {
       retryTimeout: 120,
-      onMetadata: () => htmx.trigger("#np", "refresh"),
-      onPlay: () => (button.textContent = "■ Stop"),
-      onStop: () => (button.textContent = "▶ Play"),
+      onMetadata: (metadata) => {
+        htmx.trigger("#np", "refresh");
+        updateMediaSession(metadata);
+      },
+      onPlay: () => {
+        button.textContent = "■ Stop";
+        if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
+      },
+      onStop: () => {
+        button.textContent = "▶ Play";
+        if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
+      },
     });
     button.onclick = () =>
       player.state === "stopped" ? player.play() : player.stop();
+
+    if ("mediaSession" in navigator) {
+      navigator.mediaSession.setActionHandler("play", () => player.play());
+      navigator.mediaSession.setActionHandler("pause", () => player.stop());
+      navigator.mediaSession.setActionHandler("stop", () => player.stop());
+    }
+
+    function localTimes() {
+      document.querySelectorAll("time[datetime]").forEach((el) => {
+        const d = new Date(el.getAttribute("datetime"));
+        if (!isNaN(d))
+          el.textContent = d.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+      });
+    }
+
+    function refreshAlbumArt() {
+      const img = document.getElementById("album-art");
+      if (!img) return;
+      const fresh = "/cover.jpg?t=" + Date.now();
+      const probe = new Image();
+      probe.onload = () => { img.src = fresh; img.hidden = false; };
+      probe.onerror = () => { img.hidden = true; };
+      probe.src = fresh;
+    }
+
+    document.addEventListener("htmx:afterSettle", () => {
+      localTimes();
+      refreshAlbumArt();
+    });
+
+    localTimes();
+    refreshAlbumArt();
   </script>
 </html>

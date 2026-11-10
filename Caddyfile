@@ -25,21 +25,47 @@
 		templates
 		file_server
 	}
+	handle /favicon.ico {
+		respond 204
+	}
+	handle /cover.jpg {
+		root * /srv/covers
+		file_server
+	}
 	handle /ws {
 		reverse_proxy goaccess:7890
 	}
 	handle {
-		reverse_proxy icecast:8000
+		reverse_proxy icecast:8000 {
+			header_up -Range
+			flush_interval -1
+		}
 	}
 }
 
-# Plain HTTP for devices on the home network that can't verify the certificate
-# (without a real DOMAIN, Caddy's localhost certificate isn't trusted by e.g. a WiiM):
-# only the stream; everything else goes to HTTPS.
-http:// {
+http://{$DOMAIN:localhost} {
 	import access_log
-	handle /stream {
+	handle /admin* {
 		reverse_proxy icecast:8000
+	}
+	handle /stream {
+		reverse_proxy icecast:8000 {
+			header_up -Range
+			flush_interval -1
+		}
+	}
+	handle /favicon.ico {
+		respond 204
+	}
+	handle /cover.jpg {
+		root * /srv/covers
+		file_server
+	}
+	handle / {
+		root * /srv
+		rewrite * /index.html
+		templates
+		file_server
 	}
 	handle {
 		redir https://{host}{uri} permanent

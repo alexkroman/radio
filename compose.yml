@@ -55,10 +55,14 @@ services:
       - -c
       - |
         set -e
-        sed 's|</icecast>|<mount type="default"><charset>UTF-8</charset></mount></icecast>|' /etc/icecast.xml > /tmp/icecast.xml
+        sed \
+          -e "s|<hostname>localhost</hostname>|<hostname>$$DOMAIN</hostname>|" \
+          -e 's|</icecast>|<mount type="default"><charset>UTF-8</charset></mount></icecast>|' \
+          /etc/icecast.xml > /tmp/icecast.xml
         grep -q '<charset>UTF-8' /tmp/icecast.xml
         exec icecast -c /tmp/icecast.xml
     environment:
+      DOMAIN: ${DOMAIN:-localhost}
       ICECAST_SOURCE_PASSWORD: &password ${PASSWORD:?Set PASSWORD in .env}
       ICECAST_ADMIN_PASSWORD: *password
       ICECAST_RELAY_PASSWORD: *password
@@ -96,9 +100,11 @@ services:
     group_add: ["10001"]
     restart: unless-stopped
     image: radio-app
+    pull_policy: build
     build: { context: ., target: app }
     environment:
       TZ: ${TZ:-UTC}
+      SITE_TITLE: ${SITE_TITLE:-Radio}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       SITE_PASSWORD: ${SITE_PASSWORD:-}
     volumes:
@@ -116,7 +122,7 @@ services:
       [
         "sh",
         "-c",
-        'while true; do curl -fsS "https://dynamicdns.park-your-domain.com/update?host=@&domain=$$DOMAIN&password=$$DDNS_PASSWORD" && echo; sleep 300; done',
+        'while true; do [ "$$DOMAIN" != "localhost" ] && curl -fsS "https://dynamicdns.park-your-domain.com/update?host=@&domain=$$DOMAIN&password=$$DDNS_PASSWORD" && echo; sleep 300; done',
       ]
     environment:
       DOMAIN: ${DOMAIN:-localhost}

@@ -13,8 +13,10 @@ A small internet radio station: stock open-source services plus one small TypeSc
 Requires Docker.
 
 ```sh
-cp .env.example .env   # then replace every change-me value, e.g. with: openssl rand -hex 16
-mkdir -p music/default && cp ~/some/music/*.mp3 music/default/
+cp .env.example .env              # then replace every change-me value, e.g. with: openssl rand -hex 16
+mkdir -p music/<slug>             # one directory per show (e.g. music/myshow)
+cp ~/some/music/*.mp3 music/<slug>/
+# create shows/<slug>.md for each show (see Shows below; shows/ is gitignored)
 docker compose up -d --build
 ```
 
@@ -39,13 +41,13 @@ Each `shows/<slug>.md` is a show: its own 24/7 stream at `/<slug>/stream`, playi
 
 ```md
 ---
-title: Morning Mazes
+title: My Show
 ---
 
-Slow, bright records.
+A description shown on the player page.
 ```
 
-Adding or removing a show needs `docker compose restart liquidsoap`; editing a title or description shows up immediately.
+`shows/` is gitignored — create your own show files after cloning. Adding or removing a show needs `docker compose restart liquidsoap`; editing a title or description shows up immediately.
 
 ## Where things are
 
@@ -54,7 +56,6 @@ Adding or removing a show needs `docker compose restart liquidsoap`; editing a t
 | `https://localhost/`              | List of shows                                                  |
 | `https://localhost/<slug>`        | A show's player, now playing, history                          |
 | `https://localhost/<slug>/stream` | A show's stream for apps and VLC                               |
-| `https://localhost/stream`        | Redirects to `/default/stream` (the old single-stream URL)     |
 | `https://localhost/admin/`        | Admin site (SoundExchange reports), `admin` / `ADMIN_PASSWORD` |
 
 Set `SITE_PASSWORD` in `.env` to put the show pages behind a login form; the streams stay public so apps can play them. After 10 wrong passwords (site or admin) from one address, logins are refused for 15 minutes. Nothing else is public.

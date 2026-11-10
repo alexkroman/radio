@@ -13,6 +13,7 @@ import { type Play, recentPlays } from "./plays.ts";
 
 const SHOWS = process.env.SHOWS_DIR ?? "/shows";
 const COVERS = process.env.COVERS_DIR ?? "/covers";
+const SITE_TITLE = process.env.SITE_TITLE ?? "Radio";
 const SLUG = "[a-z0-9-]+";
 
 type Show = { slug: string; title: string; description: string };
@@ -55,7 +56,7 @@ const NowPlaying = ({ show, play }: { show: Show; play?: Play }) => (
     data-show={show.slug}
     hx-get={`/${show.slug}`}
     hx-select="#np"
-    hx-select-oob="#history,#album-art"
+    hx-select-oob="#history:innerHTML,#album-art"
     hx-swap="outerHTML"
     hx-trigger="every 15s, refresh"
     hx-sync="this:replace"
@@ -105,7 +106,7 @@ app.use(
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false}' />
-        <title>{title ?? "Radio"}</title>
+        <title>{title ?? SITE_TITLE}</title>
         <link rel="icon" href="data:," />
         <link rel="stylesheet" href="/assets/app.css" />
         {script && <script src="/assets/app.js" defer />}
@@ -124,10 +125,7 @@ app.route("/admin", admin);
 app.get("/", async (c) =>
   c.render(
     <>
-      <hgroup>
-        <h1>Radio</h1>
-        <p>Pick a show</p>
-      </hgroup>
+      <h1>{SITE_TITLE}</h1>
       {(await getShows()).map((s) => (
         <article>
           <h2>
@@ -159,6 +157,7 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
       <article>
         <small class="label">Now playing</small>
         <div class="np-row">
+          <button id="play" aria-label="Play">▶</button>
           <img
             id="album-art"
             src={`/${show.slug}/cover.jpg?t=${current?.time ?? 0}`}
@@ -168,9 +167,6 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
           <div class="np-info">
             <NowPlaying show={show} play={current} />
           </div>
-          <button id="play" aria-label="Play">
-            ▶
-          </button>
         </div>
       </article>
       <p>

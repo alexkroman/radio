@@ -104,7 +104,7 @@ def safe_recode(s) =
   else
     try
       string.recode(s)
-    catch e do
+    catch _ do
       s
     end
   end

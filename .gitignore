@@ -1,4 +1,6 @@
 /music/
+shows/*
+!shows/.gitkeep
 covers/*
 !covers/.gitkeep
 logs/*

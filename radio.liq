@@ -17,10 +17,7 @@ def artist_not_recent(r) =
   if list.exists(fun(a) -> list.mem(a, recent_artists()), artists) then
     log.info(label="separation", "Skipping #{path.basename(request.uri(r))}: artist played recently")
     false
-  else
-    recent_artists := list.prefix(20, list.append(artists, recent_artists()))
-    true
-  end
+  else true end
 end
 
 # Loudness: autocue measures each track and sets liq_amplify (gain to reach
@@ -47,6 +44,13 @@ radio.on_track(fun(m) ->
       if file.exists("/covers/cover.jpg") then
         file.remove("/covers/cover.jpg")
       end
+    end
+
+    a = list.assoc(default="", "artist", m)
+    if a != "" then
+      parts = string.split(separator=",|&| feat\\.? | ft\\.? | x | with ", string.case(lower=true, a))
+      artists = list.filter(fun(x) -> x != "", list.map(string.trim, parts))
+      recent_artists := list.prefix(20, list.append(artists, recent_artists()))
     end
   end)
 output.icecast(%mp3(bitrate=128), host="icecast", password=environment.get("PASSWORD"), mount="stream", radio)

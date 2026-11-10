@@ -7,6 +7,8 @@
 #   pipx install beets && pipx inject beets pyacoustid
 #   pipx ensurepath                   # adds ~/.local/bin to PATH; restart shell
 
+id3v23: yes # write ID3v2.3 (Picard default; broader compatibility than v2.4)
+
 directory: .
 library: scripts/beets/library.db
 
@@ -17,7 +19,7 @@ import:
   timid: no # auto-accept matches above the confidence threshold
   incremental: yes # skip files already processed in a prior run
 
-plugins: chroma fetchart scrub
+plugins: chroma fetchart scrub mbsync
 
 chroma:
   auto: yes # fingerprint every track before MusicBrainz lookup
@@ -42,3 +44,4 @@ scrub:
 #   label   → TPUB   label   tag("label", "publisher")
 #   isrc    → TSRC   isrc    tag("isrc", "tsrc")
 # Beets writes all of these by default via its MusicBrainz lookup.
+# mbsync re-syncs from MusicBrainz after import for more complete ISRC data.

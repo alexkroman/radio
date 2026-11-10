@@ -65,7 +65,11 @@ for show_dir in "${show_dirs[@]}"; do
   echo "── Tagging (beet import)"
   beet -c "$CONFIG" import -q "$show_dir" </dev/null || true
 
-  # 3. Extract embedded cover art from each track
+  # 3. Re-sync from MusicBrainz for complete ISRC and album artist data
+  echo "── Syncing metadata (beet mbsync)"
+  beet -c "$CONFIG" mbsync "$show_dir" </dev/null || true
+
+  # 4. Extract embedded cover art from each track
   echo "── Extracting covers"
   cover_dir="$COVERS_DIR/$slug"
   mkdir -p "$cover_dir"

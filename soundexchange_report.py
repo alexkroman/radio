@@ -10,20 +10,20 @@ Usage:
     python3 soundexchange_report.py 2026-11 --isrc    # also look up ISRCs via MusicBrainz
 """
 
-import sys
+import html
+import json
 import os
 import re
-import json
-import html
-import time
-import urllib.request
-import urllib.parse
 import subprocess
-from datetime import datetime
+import sys
+import time
+import urllib.parse
+import urllib.request
 from collections import defaultdict
+from datetime import datetime
 
 PLAYLIST_LOG = os.path.join(os.path.dirname(__file__), "logs", "playlist.log")
-MUSIC_DIR    = os.path.join(os.path.dirname(__file__), "music")
+MUSIC_DIR = os.path.join(os.path.dirname(__file__), "music")
 SERVICE_NAME = "MAZES RADIO"
 STATION_SHORT = "MAZESRADIO"
 
@@ -61,10 +61,10 @@ def parse_log(year, month):
             if " - " in title_decoded:
                 dash = title_decoded.index(" - ")
                 artist = title_decoded[:dash].strip()
-                title  = title_decoded[dash + 3:].strip()
+                title = title_decoded[dash + 3 :].strip()
             else:
                 artist = ""
-                title  = title_decoded
+                title = title_decoded
             entries.append((dt, artist, title, listeners))
     return entries
 
@@ -83,16 +83,26 @@ def mp3_tags(artist, title):
         return {}
     try:
         out = subprocess.run(
-            ["ffprobe", "-v", "quiet", "-print_format", "json",
-             "-show_entries", "format_tags", path],
-            capture_output=True, text=True, timeout=5
+            [
+                "ffprobe",
+                "-v",
+                "quiet",
+                "-print_format",
+                "json",
+                "-show_entries",
+                "format_tags",
+                path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
         ).stdout
         tags = json.loads(out).get("format", {}).get("tags", {})
         t = {k.lower(): v for k, v in tags.items()}
         return {
             "album": t.get("album", ""),
             "label": t.get("label") or t.get("organization") or t.get("publisher") or "",
-            "isrc":  t.get("isrc", ""),
+            "isrc": t.get("isrc", ""),
         }
     except Exception:
         return {}
@@ -101,9 +111,13 @@ def mp3_tags(artist, title):
 def musicbrainz_isrc(artist, title):
     """Query MusicBrainz for an ISRC. Returns empty string if not found."""
     query = f'artist:"{artist}" AND recording:"{title}"'
-    url = "https://musicbrainz.org/ws/2/recording/?" + urllib.parse.urlencode({
-        "query": query, "fmt": "json", "limit": 5,
-    })
+    url = "https://musicbrainz.org/ws/2/recording/?" + urllib.parse.urlencode(
+        {
+            "query": query,
+            "fmt": "json",
+            "limit": 5,
+        }
+    )
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "mazesradio-report/1.0"})
         with urllib.request.urlopen(req, timeout=5) as resp:
@@ -120,7 +134,7 @@ def encode_field(val):
     if isinstance(val, int):
         return str(val)
     # Uppercase, strip pipe and caret, wrap in carets
-    cleaned = re.sub(r'[|^]', '', str(val).upper())
+    cleaned = re.sub(r"[|^]", "", str(val).upper())
     return f"^{cleaned}^"
 
 
@@ -148,28 +162,30 @@ def main():
 
     # Collect metadata
     rows = []
-    for (artist, title), perf_count in sorted(performances.items(),
-                                               key=lambda x: (-x[1], x[0][0])):
+    for (artist, title), perf_count in sorted(performances.items(), key=lambda x: (-x[1], x[0][0])):
         tags = mp3_tags(artist, title)
         isrc = tags.get("isrc", "")
         if fetch_isrc and not isrc:
             print(f"  MusicBrainz lookup: {artist} - {title}", file=sys.stderr)
             isrc = musicbrainz_isrc(artist, title)
             time.sleep(1)  # MusicBrainz rate limit: 1 req/sec
-        rows.append([
-            SERVICE_NAME,
-            "A",
-            artist,
-            title,
-            isrc,
-            tags.get("album", ""),
-            tags.get("label", ""),
-            perf_count,
-        ])
+        rows.append(
+            [
+                SERVICE_NAME,
+                "A",
+                artist,
+                title,
+                isrc,
+                tags.get("album", ""),
+                tags.get("label", ""),
+                perf_count,
+            ]
+        )
 
     # Build output
     start_str = datetime(year, month, 1).strftime("%d%m%Y")
     import calendar
+
     last_day = calendar.monthrange(year, month)[1]
     end_str = datetime(year, month, last_day).strftime("%d%m%Y")
     filename = f"{STATION_SHORT}{start_str}-{end_str}_A.txt"

@@ -11,8 +11,9 @@
 #   3. Extract embedded cover art to covers/<show>/<stem>.jpg
 #
 # Requirements:
-#   brew install chromaprint fdupes ffmpeg
-#   pip install beets pyacoustid
+#   brew install chromaprint fdupes ffmpeg pipx
+#   pipx install beets && pipx inject beets pyacoustid
+#   pipx ensurepath   # adds ~/.local/bin to PATH if needed; restart shell
 #   export ACOUSTID_APIKEY=<your free key from acoustid.biz>
 
 set -euo pipefail
@@ -27,7 +28,7 @@ for cmd in beet fpcalc ffmpeg fdupes; do
   if ! command -v "$cmd" &>/dev/null; then
     echo "ERROR: '$cmd' not found." >&2
     case "$cmd" in
-    beet) echo "  pip install beets pyacoustid" >&2 ;;
+    beet) echo "  brew install pipx && pipx install beets && pipx inject beets pyacoustid" >&2 ;;
     fpcalc) echo "  brew install chromaprint" >&2 ;;
     ffmpeg) echo "  brew install ffmpeg" >&2 ;;
     fdupes) echo "  brew install fdupes" >&2 ;;

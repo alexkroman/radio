@@ -3,8 +3,9 @@
 # Run: scripts/import.sh [show-slug]
 #
 # One-time setup:
-#   brew install chromaprint          # provides fpcalc fingerprinter
-#   pip install beets pyacoustid      # beets + acoustid python bindings
+#   brew install chromaprint pipx     # fpcalc fingerprinter + pipx
+#   pipx install beets && pipx inject beets pyacoustid
+#   pipx ensurepath                   # adds ~/.local/bin to PATH; restart shell
 #   Register a free AcoustID API key at https://acoustid.biz/login
 #   Set ACOUSTID_APIKEY in your shell or .env, or hardcode it below.
 

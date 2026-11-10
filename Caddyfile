@@ -55,6 +55,7 @@
 	}
 	handle /listen.m3u {
 		header Content-Type "audio/x-mpegurl"
+		header Content-Disposition `attachment; filename="mazesradio.m3u"`
 		root * /srv
 		file_server
 	}

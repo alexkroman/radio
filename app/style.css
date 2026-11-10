@@ -2,6 +2,7 @@ main.container {
   overflow-wrap: anywhere;
   max-width: 40rem;
 }
+
 .label {
   display: block;
   margin-bottom: 0.75rem;
@@ -10,20 +11,24 @@ main.container {
   text-transform: uppercase;
   color: var(--pico-muted-color);
 }
+
 .muted,
 .time {
   color: var(--pico-muted-color);
 }
+
 .time {
   width: 1%;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+
 .np-row {
   display: flex;
   gap: 1rem;
   align-items: flex-start;
 }
+
 #album-art {
   width: 120px;
   height: 120px;
@@ -31,10 +36,12 @@ main.container {
   border-radius: 4px;
   flex-shrink: 0;
 }
+
 .np-info {
   flex: 1;
   min-width: 0;
 }
+
 #play {
   flex-shrink: 0;
   width: 3rem;
@@ -47,6 +54,7 @@ main.container {
   font-size: 1rem;
   align-self: center;
 }
+
 #login p {
   color: var(--pico-del-color);
 }

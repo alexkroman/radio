@@ -1,0 +1,8 @@
+{
+  "config": {
+    // Docs keep one line per paragraph (Prettier preserves prose wrapping).
+    "MD013": false,
+  },
+  // Deliberately odd show files for the e2e suite.
+  "ignores": ["test/fixtures/**"],
+}

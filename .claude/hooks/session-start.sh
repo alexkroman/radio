@@ -22,7 +22,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 # Docker daemon (the container ships the binaries but doesn't start it).
 if ! docker info >/dev/null 2>&1; then
-  setsid nohup dockerd >/tmp/dockerd.log 2>&1 < /dev/null &
+  setsid nohup dockerd >/tmp/dockerd.log 2>&1 </dev/null &
   for _ in $(seq 1 30); do
     docker info >/dev/null 2>&1 && break
     sleep 1
@@ -35,8 +35,8 @@ pull() {
   local img=$1 mirror
   docker image inspect "$img" >/dev/null 2>&1 && return 0
   case "$img" in
-    */*) mirror="mirror.gcr.io/$img" ;;
-    *) mirror="mirror.gcr.io/library/$img" ;;
+  */*) mirror="mirror.gcr.io/$img" ;;
+  *) mirror="mirror.gcr.io/library/$img" ;;
   esac
   for attempt in 1 2 3; do
     docker pull -q "$img" >/dev/null 2>&1 && return 0
@@ -63,11 +63,12 @@ npm ci --no-audit --no-fund
 # `npm run e2e`: Docker builds reach npm through this session's HTTPS proxy, so
 # test/e2e.sh adds .claude/compose.cloud.yml (host network + these secrets) and
 # lets buildx bake use them.
-printf 'https-proxy=%s\nproxy=%s\ncafile=/run/secrets/ca\n' "$HTTPS_PROXY" "$HTTPS_PROXY" > "$HOME/.npmrc-docker"
-echo "export E2E_COMPOSE=.claude/compose.cloud.yml E2E_BAKE_FLAGS=--allow=network.host BUILDX_BAKE_ENTITLEMENTS_FS=0" >> "${CLAUDE_ENV_FILE:-/dev/null}"
+printf 'https-proxy=%s\nproxy=%s\ncafile=/run/secrets/ca\n' "$HTTPS_PROXY" "$HTTPS_PROXY" >"$HOME/.npmrc-docker"
+echo "export E2E_COMPOSE=.claude/compose.cloud.yml E2E_BAKE_FLAGS=--allow=network.host BUILDX_BAKE_ENTITLEMENTS_FS=0" >>"${CLAUDE_ENV_FILE:-/dev/null}"
 
 # Git hook + hook environments (pre-commit caches these in ~/.cache/pre-commit).
 pre-commit install
 pre-commit install-hooks
 
-echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "${CLAUDE_ENV_FILE:-/dev/null}"
+# shellcheck disable=SC2016 # expanded when the env file is sourced
+echo 'export PATH="$HOME/.local/bin:$PATH"' >>"${CLAUDE_ENV_FILE:-/dev/null}"

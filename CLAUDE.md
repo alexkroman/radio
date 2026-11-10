@@ -8,6 +8,7 @@
 ## Docker builds and e2e in cloud sessions
 
 - Docker builds reach npm only through the session's HTTPS proxy. `.claude/hooks/session-start.sh` sets `E2E_COMPOSE`, `E2E_BAKE_FLAGS` and `BUILDX_BAKE_ENTITLEMENTS_FS`, so `npm run e2e` just works; for a manual build use `docker buildx bake --load $E2E_BAKE_FLAGS -f compose.yml -f .claude/compose.cloud.yml app` (`docker compose build` can't pass `--allow=network.host`).
+- If a Docker build's `npm ci` fails with ECONNREFUSED, the session proxy's port changed (the sandbox was recycled): rewrite `~/.npmrc-docker` from `$HTTPS_PROXY` as `.claude/hooks/session-start.sh` does.
 - Run `npm run e2e` after changing anything in the stack; it is the only test of the real system. CI (`.github/workflows/ci.yml`) runs it and pre-commit too.
 
 ## Layout

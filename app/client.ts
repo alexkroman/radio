@@ -42,10 +42,11 @@ function player(show: string, button: HTMLButtonElement) {
       if (session) session.playbackState = "paused";
     },
   });
-  button.onclick = () => (p.state === "stopped" ? p.play() : p.stop());
-  session?.setActionHandler("play", () => p.play());
-  session?.setActionHandler("pause", () => p.stop());
-  session?.setActionHandler("stop", () => p.stop());
+  // play()/stop() return promises; the player reports failures via its callbacks.
+  button.onclick = () => void (p.state === "stopped" ? p.play() : p.stop());
+  session?.setActionHandler("play", () => void p.play());
+  session?.setActionHandler("pause", () => void p.stop());
+  session?.setActionHandler("stop", () => void p.stop());
 
   return p;
 }

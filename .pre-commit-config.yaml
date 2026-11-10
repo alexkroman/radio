@@ -1,7 +1,3 @@
-# Node for the prettier hook (pinned for reproducibility).
-default_language_version:
-  node: 22.12.0
-
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -11,17 +7,29 @@ repos:
       - id: check-merge-conflict
       - id: check-added-large-files
       - id: detect-private-key
-
-  - repo: https://github.com/rbubley/mirrors-prettier
-    rev: v3.9.10
-    hooks:
-      - id: prettier
+      - id: check-json
 
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.38.0
     hooks:
       - id: yamllint
         args: [-d, relaxed]
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.14.1-1
+    hooks:
+      - id: shfmt
+        args: [-w, -s, -i, "2"]
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.24.0
+    hooks:
+      - id: markdownlint-cli2
 
   # GitHub Actions workflows: actionlint (syntax, expressions, shellcheck of
   # run: steps) and zizmor (security: permissions, injection, pinning...).
@@ -39,7 +47,15 @@ repos:
 
   - repo: local
     hooks:
-      # TypeScript checks use the project's node_modules (npm ci first).
+      # Node tools use the project's node_modules (npm ci first).
+      # Prettier formats every text file it has a parser for, radio.liq
+      # included (liquidsoap-prettier plugin, .prettierrc.json).
+      - id: prettier
+        name: prettier
+        language: system
+        entry: npx prettier --write --ignore-unknown
+        types: [text]
+
       - id: tsc
         name: tsc (type-check)
         language: system
@@ -52,6 +68,26 @@ repos:
         language: system
         entry: npx eslint --fix
         files: \.tsx?$
+
+      - id: stylelint
+        name: stylelint
+        language: system
+        entry: npx stylelint --fix
+        files: \.css$
+
+      # Unused files, exports and dependencies.
+      - id: knip
+        name: knip
+        language: system
+        entry: npx knip
+        files: \.(tsx?|json)$
+        pass_filenames: false
+
+      - id: hadolint
+        name: hadolint
+        language: docker_image
+        entry: hadolint/hadolint:v2.14.0 hadolint
+        files: (^|/)Dockerfile$
 
       - id: liquidsoap
         name: liquidsoap --check

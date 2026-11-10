@@ -3,10 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "format": "prettier --write --ignore-unknown .",
     "build": "esbuild app/server.tsx --bundle --platform=node --format=esm --packages=external --outdir=dist && esbuild app/client.ts --bundle --minify --outfile=dist/public/app.js",
     "typecheck": "tsc",
     "lint": "eslint .",
-    "e2e": "sh test/e2e.sh"
+    "e2e": "bash test/e2e.sh",
+    "knip": "knip"
   },
   "dependencies": {
     "@hono/node-server": "2.1.6",
@@ -23,6 +25,11 @@
     "htmx.org": "2.0.11",
     "icecast-metadata-player": "1.17.13",
     "jiti": "2.7.0",
+    "knip": "6.45.0",
+    "liquidsoap-prettier": "1.9.0",
+    "prettier": "3.9.10",
+    "stylelint": "18.0.0",
+    "stylelint-config-standard": "41.0.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.2"
   }

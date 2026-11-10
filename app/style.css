@@ -1,14 +1,107 @@
-main.container {
-  overflow-wrap: anywhere;
-  max-width: 40rem;
+/* Match Pico's selector specificity to override theme colors */
+[data-theme="light"],
+:root:not([data-theme="dark"]) {
+  --pico-font-family-sans-serif: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --pico-primary: #111111;
+  --pico-primary-hover: #333333;
+  --pico-primary-focus: rgba(17, 17, 17, 0.12);
+  --pico-primary-inverse: #ffffff;
+  --pico-card-background-color: #f7f7f7;
+  --pico-card-border-color: transparent;
+  --pico-card-box-shadow: none;
+  --pico-card-sectionning-background-color: #f0f0f0;
 }
 
+main.container {
+  overflow-wrap: anywhere;
+  max-width: 36rem;
+  padding-block: 2.5rem;
+}
+
+/* Show page: title is context, not the star */
+h1.show-title {
+  font-size: 1.375rem;
+  font-weight: 600;
+  margin-bottom: 0.125rem;
+}
+
+/* Show description in hgroup */
+h1.show-title ~ div p,
+hgroup p {
+  font-size: 0.875rem;
+  margin-bottom: 0;
+}
+
+/* ── Index show cards ── */
+.show-card {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 1.125rem;
+  background: #f7f7f7;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  margin-bottom: 0.75rem;
+  transition: background 100ms ease;
+}
+
+.show-card:hover {
+  background: #efefef;
+  color: inherit;
+}
+
+.show-cover {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+.show-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.show-name {
+  font-size: 1rem;
+  font-weight: 600;
+  display: block;
+}
+
+.show-card-body div p {
+  font-size: 0.875rem;
+  color: var(--pico-muted-color);
+  margin: 0;
+}
+
+.show-current {
+  font-size: 0.8125rem;
+  color: var(--pico-muted-color);
+  margin: 0.125rem 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.now-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1aa352;
+  flex-shrink: 0;
+}
+
+/* ── Type utilities ── */
 .label {
   display: block;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
   font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--pico-muted-color);
 }
 
@@ -21,41 +114,16 @@ main.container {
   width: 1%;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  padding-right: 1rem;
+  font-size: 0.8125rem;
 }
 
-.show-header {
+/* ── Now-playing article ── */
+article.now-playing {
   display: flex;
-  gap: 1rem;
-  align-items: flex-start;
-  margin-bottom: var(--pico-block-spacing-vertical);
-}
-
-.show-header hgroup {
-  flex: 1;
-  min-width: 0;
-  margin-bottom: 0;
-}
-
-.play-col {
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  flex-shrink: 0;
-}
-
-.np-row {
-  display: flex;
   gap: 1rem;
-  align-items: flex-start;
-}
-
-#album-art {
-  width: 120px;
-  height: 120px;
-  object-fit: cover;
-  border-radius: 4px;
-  flex-shrink: 0;
+  margin-bottom: 0.5rem;
 }
 
 .np-info {
@@ -63,19 +131,88 @@ main.container {
   min-width: 0;
 }
 
+.np-info hgroup {
+  margin-bottom: 0;
+}
+
+/* Track title: the most important thing on the page */
+.np-info h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Artist: clearly secondary */
+.np-info p {
+  margin-bottom: 0;
+  font-size: 0.8125rem;
+  color: var(--pico-muted-color);
+}
+
+/* ── Album art ── */
+#album-art {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+/* ── Play button ── */
 #play {
   flex-shrink: 0;
-  width: 4.5rem;
-  height: 4.5rem;
+  width: 3.5rem;
+  height: 3.5rem;
   border-radius: 50%;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
-  align-self: auto;
+  font-size: 1rem;
+  align-self: center;
+  background: #1aa352;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  box-shadow: none;
+  transition: transform 80ms ease, background 80ms ease;
 }
 
+#play:hover,
+#play:focus {
+  background: #1dbc5e;
+  color: #ffffff;
+  transform: scale(1.05);
+}
+
+#play:active {
+  background: #168a44;
+  transform: scale(0.95);
+}
+
+/* ── Stream URL ── */
+.stream-url {
+  margin-top: 0;
+  font-size: 0.75rem;
+}
+
+.stream-url a {
+  color: var(--pico-muted-color);
+}
+
+/* ── History ── */
+#history {
+  font-size: 0.875rem;
+}
+
+#history td {
+  padding-block: 0.5rem;
+}
+
+/* ── Login ── */
 #login p {
   color: var(--pico-del-color);
 }

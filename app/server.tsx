@@ -76,7 +76,7 @@ const History = ({ plays }: { plays: Play[] }) => (
     {plays.length === 0 ? (
       <p class="muted">Nothing played yet.</p>
     ) : (
-      <table class="striped">
+      <table>
         {plays.map((p) => {
           const time = new Date(p.time * 1000).toISOString();
           return (
@@ -112,6 +112,9 @@ app.use(
         <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false}' />
         <title>{title ?? SITE_TITLE}</title>
         <link rel="icon" href="data:," />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" />
         <link rel="stylesheet" href="/assets/app.css" />
         {script && <script src="/assets/app.js" defer />}
       </head>
@@ -126,21 +129,37 @@ app.use(throttle);
 login(app);
 app.route("/admin", admin);
 
-app.get("/", async (c) =>
-  c.render(
+app.get("/", async (c) => {
+  const shows = await getShows();
+  const cards = await Promise.all(
+    shows.map(async (s) => ({
+      ...s,
+      cover: await hasCover(s.slug),
+      current: (await recentPlays(s.slug, 1))[0],
+    })),
+  );
+  return c.render(
     <>
       <h1>{SITE_TITLE}</h1>
-      {(await getShows()).map((s) => (
-        <article>
-          <h2>
-            <a href={`/${s.slug}`}>{s.title}</a>
-          </h2>
-          <Markdown html={s.description} />
-        </article>
+      {cards.map((s) => (
+        <a href={`/${s.slug}`} class="show-card">
+          {s.cover && <img src={`/${s.slug}/cover.jpg`} alt="" class="show-cover" />}
+          <div class="show-card-body">
+            <strong class="show-name">{s.title}</strong>
+            <Markdown html={s.description} />
+            {s.current && (
+              <p class="show-current">
+                <span class="now-dot" />
+                {s.current.title}
+                {s.current.artist && <span class="muted"> · {s.current.artist}</span>}
+              </p>
+            )}
+          </div>
+        </a>
       ))}
     </>,
-  ),
-);
+  );
+});
 
 app.get(`/:slug{${SLUG}}`, async (c) => {
   const show = await getShow(c.req.param("slug"));
@@ -154,32 +173,25 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
           <a href="/">← All shows</a>
         </small>
       </p>
-      <div class="show-header">
-        <div class="play-col">
-          <button id="play" aria-label="Play">▶</button>
-          <small>
-            <a href={stream}>{`https://${c.req.header("host")}${stream}`}</a>
-          </small>
-        </div>
-        <hgroup>
-          <h1>{show.title}</h1>
-          <Markdown html={show.description} />
-        </hgroup>
-      </div>
-      <article>
-        <small class="label">Now playing</small>
-        <div class="np-row">
-          <img
-            id="album-art"
-            src={`/${show.slug}/cover.jpg?t=${current?.time ?? 0}`}
-            alt=""
-            hidden={!(await hasCover(show.slug))}
-          />
-          <div class="np-info">
-            <NowPlaying show={show} play={current} />
-          </div>
+      <hgroup>
+        <h1 class="show-title">{show.title}</h1>
+        <Markdown html={show.description} />
+      </hgroup>
+      <article class="now-playing">
+        <button id="play" aria-label="Play">▶</button>
+        <img
+          id="album-art"
+          src={`/${show.slug}/cover.jpg?t=${current?.time ?? 0}`}
+          alt=""
+          hidden={!(await hasCover(show.slug))}
+        />
+        <div class="np-info">
+          <NowPlaying show={show} play={current} />
         </div>
       </article>
+      <p class="stream-url">
+        <a href={stream}>{`https://${c.req.header("host")}${stream}`}</a>
+      </p>
       <History plays={recent} />
     </>,
     { title: show.title },

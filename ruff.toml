@@ -1,6 +1,0 @@
-target-version = "py311"
-line-length = 100
-
-[lint]
-# pyflakes, pycodestyle, isort, pyupgrade, bugbear
-select = ["F", "E", "W", "I", "UP", "B"]

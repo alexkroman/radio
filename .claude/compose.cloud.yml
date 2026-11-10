@@ -1,0 +1,15 @@
+# Claude Code cloud sessions only (E2E_COMPOSE, set by hooks/session-start.sh):
+# Docker builds reach npm through the session's HTTPS proxy, so build on the
+# host network with an .npmrc (proxy settings) and the proxy's CA as secrets.
+x-build: &build
+  network: host
+  entitlements: [network.host]
+  secrets: [npmrc, ca]
+services:
+  app: { build: *build }
+  e2e: { build: *build }
+secrets:
+  npmrc:
+    file: ${HOME}/.npmrc-docker
+  ca:
+    file: /root/.ccr/ca-bundle.crt

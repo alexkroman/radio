@@ -1,7 +1,3 @@
-# Node for the prettier hook (pinned for reproducibility).
-default_language_version:
-  node: 22.12.0
-
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -11,11 +7,7 @@ repos:
       - id: check-merge-conflict
       - id: check-added-large-files
       - id: detect-private-key
-
-  - repo: https://github.com/rbubley/mirrors-prettier
-    rev: v3.9.10
-    hooks:
-      - id: prettier
+      - id: check-json
 
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.38.0
@@ -23,15 +15,80 @@ repos:
       - id: yamllint
         args: [-d, relaxed]
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.4
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
     hooks:
-      - id: ruff-check
-        args: [--fix]
-      - id: ruff-format
+      - id: shellcheck
+
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.14.1-1
+    hooks:
+      - id: shfmt
+        args: [-w, -s, -i, "2"]
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.24.0
+    hooks:
+      - id: markdownlint-cli2
+
+  # GitHub Actions workflows: actionlint (syntax, expressions, shellcheck of
+  # run: steps) and zizmor (security: permissions, injection, pinning...).
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint-docker
+
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.32.0
+    hooks:
+      - id: zizmor
+        # Offline: same results locally and in CI, no GitHub token needed.
+        args: [--offline]
 
   - repo: local
     hooks:
+      # Node tools use the project's node_modules (npm ci first).
+      # Prettier formats every text file it has a parser for, radio.liq
+      # included (liquidsoap-prettier plugin, .prettierrc.json).
+      - id: prettier
+        name: prettier
+        language: system
+        entry: npx prettier --write --ignore-unknown
+        types: [text]
+
+      - id: tsc
+        name: tsc (type-check)
+        language: system
+        entry: npx tsc
+        files: \.tsx?$
+        pass_filenames: false
+
+      - id: eslint
+        name: eslint
+        language: system
+        entry: npx eslint --fix
+        files: \.tsx?$
+
+      - id: stylelint
+        name: stylelint
+        language: system
+        entry: npx stylelint --fix
+        files: \.css$
+
+      # Unused files, exports and dependencies.
+      - id: knip
+        name: knip
+        language: system
+        entry: npx knip
+        files: \.(tsx?|json)$
+        pass_filenames: false
+
+      - id: hadolint
+        name: hadolint
+        language: docker_image
+        entry: hadolint/hadolint:v2.14.0 hadolint
+        files: (^|/)Dockerfile$
+
       - id: liquidsoap
         name: liquidsoap --check
         language: docker_image
@@ -48,11 +105,8 @@ repos:
       - id: caddy-validate
         name: caddy validate
         language: docker_image
-        # Caddyfile needs a password hash at load time; generate a throwaway one.
         # Root so validation can create the (throwaway) log directory.
-        entry: --user 0:0 --entrypoint sh caddy:2.11.9 -c
-        args:
-          - STATS_PASSWORD_HASH=$(caddy hash-password --plaintext check) caddy adapt --validate --config "$0" > /dev/null
+        entry: --user 0:0 caddy:2.11.9 caddy adapt --validate --config
         files: ^Caddyfile$
 
       - id: compose

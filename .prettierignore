@@ -1,2 +1,8 @@
-# Go-template HTML (Caddy templates); Prettier cannot parse {{ }} inside attributes.
-index.html
+dist/
+test-results/
+playwright-report/
+package-lock.json
+plays/
+logs/
+covers/
+music/

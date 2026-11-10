@@ -15,14 +15,16 @@
 
 	@htmx {
 		method GET
-		path /
 		header HX-Request true
 	}
 	log_skip @htmx
 
-	@stats path /stats*
-	basic_auth @stats {
-		admin {$STATS_PASSWORD_HASH}
+	# Public: each show's stream at /<slug>/stream (Icecast mount /<slug>; GET
+	# and HEAD only, so no one can publish a source); everything else, /admin
+	# included, is the Node app.
+	@stream {
+		method GET HEAD
+		path_regexp ^/[a-z0-9-]+/stream$
 	}
 
 	header {
@@ -32,44 +34,23 @@
 		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "no-referrer"
 		Permissions-Policy "geolocation=(), camera=(), microphone=(), usb=(), payment=()"
-		# icecast-metadata-player needs blob: workers + WASM; assets come from
-		# jsDelivr; the page has inline <script>/<style>; audio uses MediaSource.
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; media-src 'self' blob: data:; connect-src 'self'; worker-src 'self' blob:; child-src blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
-		# Strip server banners (e.g. Icecast version) on every response.
+		# All assets are self-hosted; icecast-metadata-player needs blob: workers
+		# + WASM, and audio uses MediaSource.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self'; img-src 'self' data:; media-src 'self' blob: data:; connect-src 'self'; worker-src 'self' blob:; child-src blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		# Strip server banners on every response.
 		-Server
 	}
 
-	handle / {
-		root * /srv
-		rewrite * /index.html
-		templates
-		file_server
-	}
-	handle /favicon.ico {
-		respond 204
-	}
-	handle /cover.jpg {
-		header Cache-Control "public, max-age=30"
-		root * /srv/covers
-		file_server
-	}
-	handle /stream {
+	redir /stream /default/stream
+	handle @stream {
+		rewrite * /{path.0}
 		reverse_proxy icecast:8000 {
 			header_down -Server
 			header_up -Range
 			flush_interval -1
 		}
 	}
-	handle /stats* {
-		uri strip_prefix /stats
-		reverse_proxy icecast:8000 {
-			header_down -Server
-		}
-	}
-	handle /admin* {
-		respond 403
-	}
 	handle {
-		respond 404
+		reverse_proxy app:3000
 	}
 }

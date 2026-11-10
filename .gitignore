@@ -1,4 +1,4 @@
-music/
+/music/
 covers/*
 !covers/.gitkeep
 logs/*
@@ -7,3 +7,9 @@ logs/*
 root.crt
 .DS_Store
 .vscode/
+node_modules/
+dist/
+test-results/
+playwright-report/
+plays/*
+!plays/.gitkeep

@@ -1,0 +1,9 @@
+.git
+node_modules
+dist
+music
+logs
+covers
+.env
+test-results
+playwright-report

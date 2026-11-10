@@ -3,9 +3,7 @@
 # Run: scripts/import.sh [show-slug]
 #
 # One-time setup:
-#   pip install beets beets-fetchart pyacoustid chromaprint
-#   Register a free AcoustID API key at https://acoustid.biz/login
-#   Set it below or in env: BEETS_ACOUSTID_APIKEY
+#   pip install beets
 
 directory: .
 library: scripts/beets/library.db
@@ -17,7 +15,7 @@ import:
   timid: no # auto-accept matches above the confidence threshold
   incremental: yes # skip files already imported in a prior run
 
-plugins: fetchart chroma acoustid scrub
+plugins: fetchart scrub
 
 fetchart:
   auto: yes
@@ -25,14 +23,19 @@ fetchart:
   min_width: 300
   sources: coverart itunes amazon albumart
 
-chroma:
-  auto: yes
-
-acoustid:
-  apikey: YOUR_ACOUSTID_KEY_HERE
-
 scrub:
   auto: yes
+
+# To enable audio fingerprinting for untagged/mis-tagged files:
+#   brew install chromaprint
+#   pip install pyacoustid
+#   Register a free AcoustID API key at https://acoustid.biz/login
+#   Then add to plugins: chroma acoustid
+#   And add:
+#     chroma:
+#       auto: yes
+#     acoustid:
+#       apikey: YOUR_KEY_HERE
 
 # Tags the app / Liquidsoap care about:
 #   artist  → TPE1   artist  tag("artist", "")

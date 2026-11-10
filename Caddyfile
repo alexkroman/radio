@@ -53,6 +53,11 @@
 	handle /favicon.ico {
 		respond 204
 	}
+	handle /listen.m3u {
+		header Content-Type "audio/x-mpegurl"
+		root * /srv
+		file_server
+	}
 	handle /cover.jpg {
 		header Cache-Control "public, max-age=30"
 		root * /srv/covers

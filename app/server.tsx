@@ -106,6 +106,7 @@ app.use(
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false}' />
         <title>{title ?? "Radio"}</title>
+        <link rel="icon" href="data:," />
         <link rel="stylesheet" href="/assets/app.css" />
         {script && <script src="/assets/app.js" defer />}
       </head>

@@ -60,21 +60,21 @@ for show_dir in "${show_dirs[@]}"; do
 
   # 1. Remove exact duplicates (same audio content, different filenames)
   echo "── Deduplication"
-  fdupes --delete --noprompt --quiet "$show_dir" || true
+  fdupes --delete --noprompt --quiet "$show_dir"
 
   LIB="scripts/beets/library-$slug.db"
 
   # 2. Fingerprint + tag via MusicBrainz (incremental: skips already-imported)
   echo "── Tagging (beet import)"
-  $BEET -l "$LIB" import -q "$show_dir" </dev/null || true
+  $BEET -l "$LIB" import -q "$show_dir" </dev/null
 
   # 3. Re-sync from MusicBrainz for complete ISRC and album artist data
   echo "── Syncing metadata (beet mbsync)"
-  $BEET -l "$LIB" mbsync </dev/null || true
+  $BEET -l "$LIB" mbsync </dev/null
 
   # 4. Rename files to "Artist - Title.ext" within the show directory
   echo "── Renaming files"
-  $BEET -l "$LIB" -d "$show_dir" move --yes </dev/null || true
+  $BEET -l "$LIB" -d "$show_dir" move --yes </dev/null
 
   # 5. Extract embedded cover art from each track
   echo "── Extracting covers"

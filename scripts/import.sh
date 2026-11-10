@@ -6,12 +6,14 @@
 #   scripts/import.sh jazz         # process music/jazz/ only
 #
 # What it does (safe to re-run; existing tagged files and covers are skipped):
-#   1. beet import – MusicBrainz lookup, writes tags, embeds cover art
-#   2. Remove exact duplicate files within each show directory
-#   3. Extract embedded cover art from each track to covers/<show>/<stem>.jpg
+#   1. Remove exact duplicate files within each show directory
+#   2. beet import – fingerprint via acoustid, MusicBrainz lookup, embed cover art
+#   3. Extract embedded cover art to covers/<show>/<stem>.jpg
 #
-# Requirements: beets (pip install beets), ffmpeg, fdupes
-#   First run: edit scripts/beets/config.yaml and set your AcoustID API key.
+# Requirements:
+#   brew install chromaprint fdupes ffmpeg
+#   pip install beets pyacoustid
+#   export ACOUSTID_APIKEY=<your free key from acoustid.biz>
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -21,12 +23,24 @@ COVERS_DIR="covers"
 CONFIG="scripts/beets/config.yaml"
 
 # ── Validate dependencies ────────────────────────────────────────────────────
-for cmd in beet ffmpeg fdupes; do
+for cmd in beet fpcalc ffmpeg fdupes; do
   if ! command -v "$cmd" &>/dev/null; then
-    echo "ERROR: '$cmd' not found. Install it and try again." >&2
+    echo "ERROR: '$cmd' not found." >&2
+    case "$cmd" in
+    beet) echo "  pip install beets pyacoustid" >&2 ;;
+    fpcalc) echo "  brew install chromaprint" >&2 ;;
+    ffmpeg) echo "  brew install ffmpeg" >&2 ;;
+    fdupes) echo "  brew install fdupes" >&2 ;;
+    esac
     exit 1
   fi
 done
+
+if [[ -z "${ACOUSTID_APIKEY:-}" ]]; then
+  echo "ERROR: ACOUSTID_APIKEY is not set." >&2
+  echo "  Register free at https://acoustid.biz/login then: export ACOUSTID_APIKEY=<key>" >&2
+  exit 1
+fi
 
 # ── Determine which shows to process ────────────────────────────────────────
 if [[ "${1:-}" != "" ]]; then
@@ -49,15 +63,15 @@ for show_dir in "${show_dirs[@]}"; do
   echo ""
   echo "══ $slug ══════════════════════════════════"
 
-  # 1. Remove exact duplicates (same content, different filenames)
+  # 1. Remove exact duplicates (same audio content, different filenames)
   echo "── Deduplication"
   fdupes --delete --noprompt --quiet "$show_dir" || true
 
-  # 2. Tag with MusicBrainz via beets (incremental: skips already-imported)
-  echo "── Tagging (beets import)"
+  # 2. Fingerprint + tag via MusicBrainz (incremental: skips already-imported)
+  echo "── Tagging (beet import)"
   beet -c "$CONFIG" import -q "$show_dir" || true
 
-  # 3. Extract cover art from each track
+  # 3. Extract embedded cover art from each track
   echo "── Extracting covers"
   cover_dir="$COVERS_DIR/$slug"
   mkdir -p "$cover_dir"

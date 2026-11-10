@@ -24,27 +24,9 @@ const HEADER = [
 const field = (v: string | number) =>
   typeof v === "number" ? String(v) : `^${v.toUpperCase().replace(/[|^]/g, "")}^`;
 
-async function musicbrainzIsrc(artist: string, title: string): Promise<string> {
-  const q = new URLSearchParams({
-    query: `artist:"${artist}" AND recording:"${title}"`,
-    fmt: "json",
-    limit: "5",
-  });
-  await new Promise((r) => setTimeout(r, 1000)); // MusicBrainz: 1 request/second
-  try {
-    const res = await fetch(`https://musicbrainz.org/ws/2/recording/?${q}`, {
-      headers: { "User-Agent": "radio-report/1.0" },
-      signal: AbortSignal.timeout(5000),
-    });
-    const data = (await res.json()) as { recordings?: { isrcs?: string[] }[] };
-    return data.recordings?.find((r) => r.isrcs?.length)?.isrcs?.[0] ?? "";
-  } catch {
-    return "";
-  }
-}
-
 // One row per song across all shows; each play counts its listeners (at least 1).
-async function report(month: string, lookupIsrc: boolean): Promise<string> {
+// ISRCs come from tags written by scripts/import.sh (beet mbsync).
+async function report(month: string): Promise<string> {
   const songs = new Map<
     string,
     { artist: string; title: string; isrc: string; album: string; label: string; count: number }
@@ -60,8 +42,7 @@ async function report(month: string, lookupIsrc: boolean): Promise<string> {
     (a, b) => b.count - a.count || a.artist.localeCompare(b.artist) || a.title.localeCompare(b.title),
   );
   for (const s of sorted) {
-    const isrc = s.isrc || (lookupIsrc ? await musicbrainzIsrc(s.artist, s.title) : "");
-    rows.push([SERVICE, "A", s.artist, s.title, isrc, s.album, s.label, s.count]);
+    rows.push([SERVICE, "A", s.artist, s.title, s.isrc, s.album, s.label, s.count]);
   }
   return rows.map((r) => r.map(field).join("|")).join("\n") + "\n";
 }
@@ -86,9 +67,6 @@ admin.get("/", (c) => {
             <td>
               <a href={`/admin/report?month=${m}`}>Download</a>
             </td>
-            <td>
-              <a href={`/admin/report?month=${m}&isrc=1`}>With MusicBrainz ISRCs (slow)</a>
-            </td>
           </tr>
         ))}
       </table>
@@ -102,13 +80,13 @@ admin.get(
   validator("query", (q, c) => {
     const month = typeof q.month === "string" ? q.month : "";
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return c.text("month must be YYYY-MM", 400);
-    return { month, isrc: q.isrc !== undefined };
+    return { month };
   }),
   async (c) => {
-    const { month, isrc } = c.req.valid("query");
+    const { month } = c.req.valid("query");
     const [y, m] = month.split("-");
     const last = new Date(Number(y), Number(m), 0).getDate();
     c.header("Content-Disposition", `attachment; filename="${SHORT}01${m}${y}-${last}${m}${y}_A.txt"`);
-    return c.text(await report(month, isrc));
+    return c.text(await report(month));
   },
 );

@@ -21,6 +21,7 @@ cd "$(dirname "$0")/.."
 MUSIC_DIR="music"
 COVERS_DIR="covers"
 CONFIG="scripts/beets/config.yaml"
+BEET="beet -c $CONFIG"
 
 # ── Validate dependencies ────────────────────────────────────────────────────
 for cmd in beet fpcalc ffmpeg fdupes; do
@@ -61,15 +62,21 @@ for show_dir in "${show_dirs[@]}"; do
   echo "── Deduplication"
   fdupes --delete --noprompt --quiet "$show_dir" || true
 
+  LIB="scripts/beets/library-$slug.db"
+
   # 2. Fingerprint + tag via MusicBrainz (incremental: skips already-imported)
   echo "── Tagging (beet import)"
-  beet -c "$CONFIG" import -q "$show_dir" </dev/null || true
+  $BEET -l "$LIB" import -q "$show_dir" </dev/null || true
 
   # 3. Re-sync from MusicBrainz for complete ISRC and album artist data
   echo "── Syncing metadata (beet mbsync)"
-  beet -c "$CONFIG" mbsync "$show_dir" </dev/null || true
+  $BEET -l "$LIB" mbsync </dev/null || true
 
-  # 4. Extract embedded cover art from each track
+  # 4. Rename files to "Artist - Title.ext" within the show directory
+  echo "── Renaming files"
+  $BEET -l "$LIB" -d "$show_dir" move --yes </dev/null || true
+
+  # 5. Extract embedded cover art from each track
   echo "── Extracting covers"
   cover_dir="$COVERS_DIR/$slug"
   mkdir -p "$cover_dir"

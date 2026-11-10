@@ -3,6 +3,15 @@ default_language_version:
   node: 22.12.0
 
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: detect-private-key
+
   - repo: https://github.com/rbubley/mirrors-prettier
     rev: v3.9.10
     hooks:
@@ -13,6 +22,13 @@ repos:
     hooks:
       - id: yamllint
         args: [-d, relaxed]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.4
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
 
   - repo: local
     hooks:
@@ -25,7 +41,8 @@ repos:
       - id: caddy-fmt
         name: caddy fmt
         language: docker_image
-        entry: caddy:2.11.9 caddy fmt --diff
+        # Rewrites the file in place, like Prettier; re-stage and commit again.
+        entry: caddy:2.11.9 caddy fmt --overwrite
         files: ^Caddyfile$
 
       - id: caddy-validate

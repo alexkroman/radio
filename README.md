@@ -13,7 +13,7 @@ A small internet radio station built from stock open-source parts with almost no
 Requires Docker.
 
 ```sh
-printf 'PASSWORD=%s\nLIVE_PASSWORD=%s\n' "$(openssl rand -hex 16)" "$(openssl rand -hex 16)" > .env
+cp .env.example .env   # then replace every change-me value, e.g. with: openssl rand -hex 16
 cp ~/some/music/*.mp3 music/
 docker compose up -d
 ```
@@ -48,9 +48,11 @@ Settings → Server → Add: type **Icecast**, address = your server, port **800
 
 ## Checks
 
-Linters and formatters run through [pre-commit](https://pre-commit.com) (see `.pre-commit-config.yaml`); Prettier fixes formatting itself.
+Linters and formatters run through [pre-commit](https://pre-commit.com) (see `.pre-commit-config.yaml`); Prettier, Ruff and `caddy fmt` fix formatting themselves, so just re-stage and commit again. The Liquidsoap and Caddy checks run in Docker, so Docker must be running.
 
 ```sh
 pre-commit install          # once after cloning: run the checks on every commit
 pre-commit run --all-files  # run them by hand
 ```
+
+In Claude Code cloud sessions, `.claude/hooks/session-start.sh` does all of this automatically: it installs pre-commit, starts Docker, pulls the check images and installs the git hook.

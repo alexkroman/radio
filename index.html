@@ -131,6 +131,7 @@
       onMetadata: (metadata) => {
         htmx.trigger("#np", "refresh");
         updateMediaSession(metadata);
+        refreshAlbumArt();
       },
       onPlay: () => {
         button.textContent = "■ Stop";

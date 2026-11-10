@@ -53,4 +53,4 @@ radio.on_track(fun(m) ->
       recent_artists := list.prefix(20, list.append(artists, recent_artists()))
     end
   end)
-output.icecast(%mp3(bitrate=128), host="icecast", password=environment.get("PASSWORD"), mount="stream", radio)
+output.icecast(%mp3(bitrate=256), host="icecast", password=environment.get("PASSWORD"), mount="stream", radio)

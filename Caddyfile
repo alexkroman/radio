@@ -20,6 +20,11 @@
 	}
 	log_skip @htmx
 
+	@listener path /
+	basic_auth @listener {
+		radio {$LISTENER_PASSWORD_HASH}
+	}
+
 	@stats path /stats/* /ws
 	basic_auth @stats {
 		admin {$STATS_PASSWORD_HASH}

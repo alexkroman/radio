@@ -25,7 +25,7 @@
 		radio {$LISTENER_PASSWORD_HASH}
 	}
 
-	@stats path /stats/* /ws
+	@stats path /stats*
 	basic_auth @stats {
 		admin {$STATS_PASSWORD_HASH}
 	}
@@ -58,9 +58,6 @@
 		root * /srv/covers
 		file_server
 	}
-	handle /ws {
-		reverse_proxy goaccess:7890
-	}
 	handle /stream {
 		reverse_proxy icecast:8000 {
 			header_down -Server
@@ -68,7 +65,8 @@
 			flush_interval -1
 		}
 	}
-	handle /stats/* {
+	handle /stats* {
+		uri strip_prefix /stats
 		reverse_proxy icecast:8000 {
 			header_down -Server
 		}

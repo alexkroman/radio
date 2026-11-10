@@ -4,7 +4,7 @@
 #   - icecast / liquidsoap / ddns keep their image's built-in non-root user
 #     (icecast / liquidsoap / curl_user) and join the shared app group (GID
 #     10001) so they can reach the shared volumes and bind-mounted dirs.
-#   - caddy / goaccess run as a dedicated non-root UID:GID 10001:10001.
+#   - caddy runs as a dedicated non-root UID:GID 10001:10001.
 # The one-shot `init` service runs as root once at startup to set ownership on
 # the named volumes and bind-mounted dirs to the app UID/GID, then exits. It is
 # the only root container and holds only the capabilities needed to chown.
@@ -32,13 +32,11 @@ services:
       - -c
       - |
         set -e
-        chown -R 10001:10001 /data /stats /db /logs /covers
-        chmod -R u+rwX,g+rwX /logs /covers /stats /db /data
+        chown -R 10001:10001 /data /logs /covers
+        chmod -R u+rwX,g+rwX /logs /covers /data
         chmod g+s /logs /covers
     volumes:
       - caddy:/data
-      - stats:/stats
-      - db:/db
       - ./logs:/logs
       - ./covers:/covers
     restart: "no"
@@ -60,7 +58,6 @@ services:
       ICECAST_RELAY_PASSWORD: *password
     volumes:
       - ./logs:/var/log/icecast
-      - stats:/usr/share/icecast/web/stats
     depends_on:
       init: { condition: service_completed_successfully }
 
@@ -81,35 +78,6 @@ services:
     depends_on:
       init: { condition: service_completed_successfully }
       icecast: { condition: service_started }
-
-  goaccess:
-    <<: *hardening
-    user: "10001:10001"
-    restart: unless-stopped
-    image: allinurl/goaccess@sha256:20072eca570093cf6dcadb17856d90d48cd9e8a9e114b8f539c2ebefec99c63e
-    command:
-      - /logs/caddy-access.log
-      - -o
-      - /stats/index.html
-      - --real-time-html
-      - --ws-url=wss://${DOMAIN:-localhost}:443/ws
-      - --log-format=CADDY
-      - --persist
-      - --restore
-      - --db-path=/db
-      - --ignore-panel=REQUESTS_STATIC
-      - --ignore-panel=NOT_FOUND
-      - --ignore-panel=REFERRERS
-      - --ignore-panel=REFERRING_SITES
-      - --ignore-panel=ASN
-      - --ignore-panel=UTM_CAMPAIGNS
-    volumes:
-      - ./logs:/logs:ro
-      - stats:/stats
-      - db:/db
-    depends_on:
-      init: { condition: service_completed_successfully }
-      caddy: { condition: service_started }
 
   ddns:
     <<: *hardening
@@ -161,5 +129,3 @@ services:
 
 volumes:
   caddy: {}
-  db: {}
-  stats: {}

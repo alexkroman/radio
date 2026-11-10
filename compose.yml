@@ -120,7 +120,6 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./index.html:/srv/index.html:ro
-      - ./listen.m3u:/srv/listen.m3u:ro
       - ./logs:/srv/logs
       - ./covers:/srv/covers:ro
       - caddy:/data

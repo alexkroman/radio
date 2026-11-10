@@ -53,13 +53,7 @@
 	handle /favicon.ico {
 		respond 204
 	}
-	handle /listen.m3u {
-		header Content-Type "audio/x-mpegurl"
-		header Content-Disposition `attachment; filename="mazesradio.m3u"`
-		root * /srv
-		file_server
-	}
-	handle /cover.jpg {
+handle /cover.jpg {
 		header Cache-Control "public, max-age=30"
 		root * /srv/covers
 		file_server

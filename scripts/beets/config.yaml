@@ -31,7 +31,11 @@ fetchart:
   auto: yes
   enforce_ratio: no
   min_width: 300
-  sources: coverart itunes amazon albumart
+  sources:
+    - coverart
+    - itunes
+    - amazon
+    - albumart
 
 scrub:
   auto: yes # strip junk tags before writing clean ones

@@ -1,18 +1,17 @@
 // Admin site (behind Caddy basic auth at /admin): SoundExchange Report of Use
 // from Icecast's playlist.log, with album/label/ISRC read from music/ tags.
-import { readdir, readFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { jsxRenderer } from "hono/jsx-renderer";
 import { validator } from "hono/validator";
 import { parseFile } from "music-metadata";
+import { readPlays } from "../shared/playlist.ts";
 
-const LOG = process.env.PLAYLIST_LOG ?? "/logs/playlist.log";
 const MUSIC = process.env.MUSIC_DIR ?? "/music";
 const SERVICE = "MAZES RADIO";
 const SHORT = "MAZESRADIO";
-const MONTHS = "JanFebMarAprMayJunJulAugSepOctNovDec";
 const HEADER = [
   "NAME_OF_SERVICE",
   "TRANSMISSION_CATEGORY",
@@ -23,48 +22,36 @@ const HEADER = [
   "MARKETING_LABEL",
   "ACTUAL_TOTAL_PERFORMANCES",
 ];
-const ENTITIES: Record<string, string> = {
-  amp: "&",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-  "#39": "'",
-};
-
-const unescape = (s: string) =>
-  s.replace(/&(amp|lt|gt|quot|apos|#39);/g, (_, e: string) => ENTITIES[e]!);
 const field = (v: string | number) =>
   typeof v === "number"
     ? String(v)
     : `^${v.toUpperCase().replace(/[|^]/g, "")}^`;
 const pad = (n: number) => String(n).padStart(2, "0");
 
-// Performances per "Artist - Title" in a month, across all shows: each play
-// counts its listeners (at least 1).
-async function getPlays(
-  year: number,
-  month: number,
-): Promise<[string, number][]> {
-  const log = await readFile(LOG, "utf8").catch(() => "");
-  const counts = new Map<string, number>();
-  for (const line of log.split("\n")) {
-    const [date, , listeners, title] = line.split("|");
-    const d = /^\d+\/(\w+)\/(\d+):/.exec(date ?? "");
-    if (
-      !title ||
-      !d ||
-      Number(d[2]) !== year ||
-      MONTHS.indexOf(d[1]!) / 3 + 1 !== month
-    )
-      continue;
-    const key = unescape(title.trim());
-    counts.set(
-      key,
-      (counts.get(key) ?? 0) + Math.max(parseInt(listeners ?? "") || 0, 1),
-    );
+// Performances per song in a month, across all shows and rotated logs: each
+// play counts its listeners (at least 1).
+async function getPerformances(year: number, month: number) {
+  const counts = new Map<
+    string,
+    { artist: string; title: string; count: number }
+  >();
+  for (const p of await readPlays()) {
+    if (p.year !== year || p.month !== month) continue;
+    const key = `${p.artist}\n${p.title}`;
+    const row = counts.get(key) ?? {
+      artist: p.artist,
+      title: p.title,
+      count: 0,
+    };
+    row.count += Math.max(p.listeners, 1);
+    counts.set(key, row);
   }
-  return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return [...counts.values()].sort(
+    (a, b) =>
+      b.count - a.count ||
+      a.artist.localeCompare(b.artist) ||
+      a.title.localeCompare(b.title),
+  );
 }
 
 // Tags from the file named "Artist- Title.*" anywhere under music/.
@@ -116,10 +103,7 @@ async function report(
     names.map((f) => [basename(f, extname(f)).toLowerCase(), join(MUSIC, f)]),
   );
   const rows: (string | number)[][] = [HEADER];
-  for (const [song, count] of await getPlays(year, month)) {
-    const dash = song.indexOf(" - ");
-    const [artist, title] =
-      dash < 0 ? ["", song] : [song.slice(0, dash), song.slice(dash + 3)];
+  for (const { artist, title, count } of await getPerformances(year, month)) {
     const tags = await getTags(files, artist, title);
     const isrc =
       tags.isrc || (lookupIsrc ? await musicbrainzIsrc(artist, title) : "");
@@ -190,7 +174,7 @@ app.get("/", (c) => {
 app.get(
   "/report",
   validator("query", (q, c) => {
-    const m = /^(\d{4})-(\d{2})$/.exec(
+    const m = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(
       typeof q.month === "string" ? q.month : "",
     );
     if (!m) return c.text("month must be YYYY-MM", 400);

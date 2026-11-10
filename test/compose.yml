@@ -7,6 +7,9 @@ services:
       - e2e-logs:/logs
       - e2e-covers:/covers
   icecast:
+    environment:
+      # Rotate playlist.log every ~1 KB so the suite runs across rotations.
+      ICECAST_LOGSIZE_KB: 1
     volumes:
       - e2e-logs:/var/log/icecast
   liquidsoap:
@@ -41,6 +44,7 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     volumes:
       - ./test-results:/app/test-results
+      - e2e-logs:/logs:ro
     depends_on:
       caddy: { condition: service_started }
       liquidsoap: { condition: service_started }

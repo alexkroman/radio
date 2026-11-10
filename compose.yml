@@ -49,12 +49,20 @@ services:
     group_add: ["10001"]
     restart: unless-stopped
     image: libretime/icecast:2.4.4
+    # Enable playlist.log, keep rotated logs (playlist.log.<timestamp>, read by
+    # the admin report) and treat MP3 metadata as UTF-8.
     command:
-      [
-        "sh",
-        "-c",
-        "sed 's|<!-- <playlistlog>playlist.log</playlistlog> -->|<playlistlog>playlist.log</playlistlog>|; s|<logsize>10000</logsize>|<logsize>1000</logsize>|' /etc/icecast.xml > /tmp/icecast.xml && grep -q '^ *<playlistlog>' /tmp/icecast.xml && exec icecast -c /tmp/icecast.xml",
-      ]
+      - sh
+      - -c
+      - |
+        set -e
+        sed -e 's|<!-- <playlistlog>playlist.log</playlistlog> -->|<playlistlog>playlist.log</playlistlog>|' \
+          -e "s|<logsize>10000</logsize>|<logsize>$${ICECAST_LOGSIZE_KB:-1000}</logsize><logarchive>1</logarchive>|" \
+          -e 's|</icecast>|<mount type="default"><charset>UTF-8</charset></mount></icecast>|' \
+          /etc/icecast.xml > /tmp/icecast.xml
+        grep -q '^ *<playlistlog>' /tmp/icecast.xml
+        grep -q '<logarchive>' /tmp/icecast.xml
+        exec icecast -c /tmp/icecast.xml
     environment:
       ICECAST_SOURCE_PASSWORD: &password ${PASSWORD:?Set PASSWORD in .env}
       ICECAST_ADMIN_PASSWORD: *password

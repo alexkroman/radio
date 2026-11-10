@@ -1,47 +1,7 @@
 // End-to-end tests against the real stack (Caddy, Icecast, Liquidsoap, site,
 // admin) running on test/fixtures. Run with `npm run e2e`.
-import { request as https } from "node:https";
-import { expect, test, type Page } from "@playwright/test";
-
-const BASE = process.env.BASE_URL ?? "https://localhost";
-const ADMIN = { username: "admin", password: process.env.ADMIN_PASSWORD ?? "" };
-const month = new Date().toISOString().slice(0, 7);
-
-// Status, type and first ~16 KB of a (never-ending) stream.
-function streamHead(
-  path: string,
-): Promise<{ status?: number; type?: string; bytes: number }> {
-  return new Promise((resolve, reject) => {
-    const req = https(
-      new URL(path, BASE),
-      { rejectUnauthorized: false, timeout: 30_000 },
-      (res) => {
-        const done = (bytes: number) => {
-          resolve({
-            status: res.statusCode,
-            type: res.headers["content-type"],
-            bytes,
-          });
-          req.destroy();
-        };
-        let bytes = 0;
-        if (res.statusCode !== 200) return done(0);
-        res.on(
-          "data",
-          (chunk: Buffer) => (bytes += chunk.length) > 16_384 && done(bytes),
-        );
-      },
-    );
-    req.on("timeout", () => req.destroy(new Error(`timeout reading ${path}`)));
-    req.on("error", reject);
-    req.end();
-  });
-}
-
-// Skip the client-side password gate.
-async function signedIn(page: Page) {
-  await page.addInitScript(() => sessionStorage.setItem("auth", "1"));
-}
+import { expect, test } from "@playwright/test";
+import { ADMIN, BASE, month, signedIn, streamHead } from "./helpers.ts";
 
 test("each show is its own MP3 stream", async () => {
   for (const show of ["default", "night"]) {

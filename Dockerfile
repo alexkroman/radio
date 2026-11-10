@@ -12,6 +12,7 @@ FROM deps AS build
 COPY tsconfig.json ./
 COPY site site
 COPY admin admin
+COPY shared shared
 RUN npm run build && npm prune --omit=dev
 
 FROM node:22-alpine AS app

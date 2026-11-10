@@ -6,14 +6,13 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { jsxRenderer } from "hono/jsx-renderer";
 import { marked } from "marked";
+import { type Play, readPlays } from "../shared/playlist.ts";
 
 const SHOWS = process.env.SHOWS_DIR ?? "/shows";
-const LOG = process.env.PLAYLIST_LOG ?? "/logs/playlist.log";
 const COVERS = process.env.COVERS_DIR ?? "/covers";
 const SLUG = "[a-z0-9-]+";
 
 type Show = { slug: string; title: string; description: string };
-type Play = { time: Date; artist: string; title: string };
 
 declare module "hono" {
   interface ContextRenderer {
@@ -29,9 +28,12 @@ async function getShow(slug: string): Promise<Show | undefined> {
     () => undefined,
   );
   if (text === undefined) return undefined;
-  const [, front = "", body = text] =
-    /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(text) ?? [];
-  const title = /^title:\s*(.*?)\s*$/m.exec(front)?.[1] ?? slug;
+  const md = text.replace(/\r\n?/g, "\n");
+  const [, front = "", body = md] =
+    /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(md) ?? [];
+  // `title: x`, optionally quoted as in YAML.
+  const raw = /^title:\s*(.*?)\s*$/m.exec(front)?.[1];
+  const title = raw?.replace(/^(["'])(.*)\1$/, "$2") || slug;
   return { slug, title, description: await marked.parse(body) };
 }
 
@@ -44,42 +46,12 @@ async function getShows(): Promise<Show[]> {
   );
 }
 
-// Icecast's playlist.log lines: "10/Nov/2026:16:05:34 +0000|/mount|listeners|Artist - Title".
-// Icecast HTML-escapes the title.
-const MONTHS = "JanFebMarAprMayJunJulAugSepOctNovDec";
-const ENTITIES: Record<string, string> = {
-  amp: "&",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-  "#39": "'",
-};
-const unescape = (s: string) =>
-  s.replace(/&(amp|lt|gt|quot|apos|#39);/g, (_, e: string) => ENTITIES[e]!);
-
+// The newest plays on a show (the current log plus the last rotated one).
 async function getPlays(slug: string, limit = 21): Promise<Play[]> {
-  const log = await readFile(LOG, "utf8").catch(() => "");
-  const plays: Play[] = [];
-  for (const line of log.trimEnd().split("\n").reverse()) {
-    const [date = "", mount, , escaped = ""] = line.split("|");
-    const song = unescape(escaped);
-    const d = /^(\d+)\/(\w+)\/(\d+):(\d+):(\d+):(\d+) ([+-]\d\d)(\d\d)$/.exec(
-      date,
-    );
-    if (mount !== `/${slug}` || !d) continue;
-    const [, day, mon, year, h, m, s, tzh, tzm] = d;
-    const mm = String(MONTHS.indexOf(mon!) / 3 + 1).padStart(2, "0");
-    const time = new Date(`${year}-${mm}-${day}T${h}:${m}:${s}${tzh}:${tzm}`);
-    const dash = song.indexOf(" - ");
-    plays.push(
-      dash < 0
-        ? { time, artist: "", title: song }
-        : { time, artist: song.slice(0, dash), title: song.slice(dash + 3) },
-    );
-    if (plays.length === limit) break;
-  }
-  return plays;
+  return (await readPlays(1))
+    .filter((p) => p.mount === `/${slug}`)
+    .slice(-limit)
+    .reverse();
 }
 
 const Markdown = ({ html }: { html: string }) => (

@@ -32,7 +32,8 @@ done
 if [[ "${1:-}" != "" ]]; then
   show_dirs=("$MUSIC_DIR/$1")
 else
-  mapfile -t show_dirs < <(find "$MUSIC_DIR" -mindepth 1 -maxdepth 1 -type d | sort)
+  show_dirs=()
+  while IFS= read -r dir; do show_dirs+=("$dir"); done < <(find "$MUSIC_DIR" -mindepth 1 -maxdepth 1 -type d | sort)
 fi
 
 if [[ ${#show_dirs[@]} -eq 0 ]]; then

@@ -2,10 +2,10 @@
 [data-theme="light"],
 :root:not([data-theme="dark"]) {
   --pico-font-family-sans-serif: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-  --pico-primary: #111111;
-  --pico-primary-hover: #333333;
-  --pico-primary-focus: rgba(17, 17, 17, 0.12);
-  --pico-primary-inverse: #ffffff;
+  --pico-primary: #111;
+  --pico-primary-hover: #333;
+  --pico-primary-focus: rgb(17 17 17 / 12%);
+  --pico-primary-inverse: #fff;
   --pico-card-background-color: #f7f7f7;
   --pico-card-border-color: transparent;
   --pico-card-box-shadow: none;
@@ -26,7 +26,6 @@ h1.show-title {
 }
 
 /* Show description in hgroup */
-h1.show-title ~ div p,
 hgroup p {
   font-size: 0.875rem;
   margin-bottom: 0;
@@ -73,7 +72,7 @@ hgroup p {
   display: block;
 }
 
-.show-card-body div p {
+.show-card-body p {
   font-size: 0.875rem;
   color: var(--pico-muted-color);
   margin: 0;
@@ -143,6 +142,7 @@ article.now-playing {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  padding-bottom: 0.1em; /* prevent descender clipping under overflow:hidden */
 }
 
 /* Artist: clearly secondary */
@@ -174,17 +174,19 @@ article.now-playing {
   font-size: 1rem;
   align-self: center;
   background: #1aa352;
-  color: #ffffff;
+  color: #fff;
   border: none;
   cursor: pointer;
   box-shadow: none;
-  transition: transform 80ms ease, background 80ms ease;
+  transition:
+    transform 80ms ease,
+    background 80ms ease;
 }
 
 #play:hover,
 #play:focus {
   background: #1dbc5e;
-  color: #ffffff;
+  color: #fff;
   transform: scale(1.05);
 }
 
@@ -210,6 +212,19 @@ article.now-playing {
 
 #history td {
   padding-block: 0.5rem;
+}
+
+.history-cover {
+  width: 32px;
+  padding-inline: 0;
+}
+
+.history-cover img {
+  display: block;
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 3px;
 }
 
 /* ── Login ── */

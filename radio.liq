@@ -156,6 +156,8 @@ def show(f) =
         def tag(key, fallback) =
           safe_recode(list.assoc(default=list.assoc(default="", fallback, m), key, m))
         end
+        track_stem = path.remove_extension(path.basename(list.assoc(default="", "filename", m)))
+        track_cover = "/covers/#{slug}/#{track_stem}.jpg"
         play =
           {
             time = time(),
@@ -165,6 +167,7 @@ def show(f) =
             album = tag("album", ""),
             label = tag("label", "publisher"),
             isrc = tag("isrc", "tsrc"),
+            cover = if file.exists(track_cover) then "#{slug}/#{track_stem}.jpg" else "" end,
             listeners = listeners(slug)
           }
         file.write(
@@ -173,11 +176,12 @@ def show(f) =
           "/plays/#{time.string('%Y-%m')}.jsonl"
         )
 
-        cover = metadata.cover(m)
+        # Use covers pre-extracted by scripts/import.sh rather than reading
+        # embedded art at runtime. file.contents reads the JPEG as a byte string.
         if
-          null.defined(cover)
+          file.exists(track_cover)
         then
-          file.write(data=null.get(cover), cover_file)
+          file.write(data=file.contents(track_cover), cover_file)
         elsif
           file.exists(cover_file)
         then

@@ -15,3 +15,4 @@ test-results/
 playwright-report/
 plays/*
 !plays/.gitkeep
+scripts/beets/library.db

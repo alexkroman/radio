@@ -1,0 +1,43 @@
+# Beets config for Mazes Radio.
+# Tags MP3s in-place (no moving/copying) using MusicBrainz lookups.
+# Run: scripts/import.sh [show-slug]
+#
+# One-time setup:
+#   pip install beets beets-fetchart pyacoustid chromaprint
+#   Register a free AcoustID API key at https://acoustid.biz/login
+#   Set it below or in env: BEETS_ACOUSTID_APIKEY
+
+directory: .
+library: scripts/beets/library.db
+
+import:
+  copy: no # tag in-place; don't move files into a library folder
+  move: no
+  write: yes
+  timid: no # auto-accept matches above the confidence threshold
+  incremental: yes # skip files already imported in a prior run
+
+plugins: fetchart chroma acoustid scrub
+
+fetchart:
+  auto: yes
+  enforce_ratio: no
+  min_width: 300
+  sources: coverart itunes amazon albumart
+
+chroma:
+  auto: yes
+
+acoustid:
+  apikey: YOUR_ACOUSTID_KEY_HERE
+
+scrub:
+  auto: yes
+
+# Tags the app / Liquidsoap care about:
+#   artist  → TPE1   artist  tag("artist", "")
+#   title   → TIT2   title   tag("title", "")
+#   album   → TALB   album   tag("album", "")
+#   label   → TPUB   label   tag("label", "publisher")
+#   isrc    → TSRC   isrc    tag("isrc", "tsrc")
+# Beets writes all of these by default via its MusicBrainz lookup.

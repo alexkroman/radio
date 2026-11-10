@@ -70,31 +70,37 @@ const NowPlaying = ({ show, play }: { show: Show; play?: Play }) => (
   </div>
 );
 
-const History = ({ plays }: { plays: Play[] }) => (
-  <article id="history">
-    <small class="label">Recently played</small>
-    {plays.length === 0 ? (
-      <p class="muted">Nothing played yet.</p>
-    ) : (
-      <table>
-        {plays.map((p) => {
-          const time = new Date(p.time * 1000).toISOString();
-          return (
-            <tr>
-              <td class="time">
-                <time datetime={time}>{time.slice(11, 16)}</time>
-              </td>
-              <td>
-                {p.title}
-                {p.artist && <span class="muted"> · {p.artist}</span>}
-              </td>
-            </tr>
-          );
-        })}
-      </table>
-    )}
-  </article>
-);
+const History = ({ plays }: { plays: Play[] }) => {
+  const hasCoverCol = plays.some((p) => p.cover);
+  return (
+    <article id="history">
+      <small class="label">Recently played</small>
+      {plays.length === 0 ? (
+        <p class="muted">Nothing played yet.</p>
+      ) : (
+        <table>
+          {plays.map((p) => {
+            const time = new Date(p.time * 1000).toISOString();
+            return (
+              <tr>
+                <td class="time">
+                  <time datetime={time}>{time.slice(11, 16)}</time>
+                </td>
+                {hasCoverCol && (
+                  <td class="history-cover">{p.cover && <img src={`/covers/${p.cover}`} alt="" />}</td>
+                )}
+                <td>
+                  {p.title}
+                  {p.artist && <span class="muted"> · {p.artist}</span>}
+                </td>
+              </tr>
+            );
+          })}
+        </table>
+      )}
+    </article>
+  );
+};
 
 const app = new Hono({ strict: false });
 
@@ -114,7 +120,10 @@ app.use(
         <link rel="icon" href="data:," />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+        />
         <link rel="stylesheet" href="/assets/app.css" />
         {script && <script src="/assets/app.js" defer />}
       </head>
@@ -178,7 +187,9 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
         <Markdown html={show.description} />
       </hgroup>
       <article class="now-playing">
-        <button id="play" aria-label="Play">▶</button>
+        <button id="play" aria-label="Play">
+          ▶
+        </button>
         <img
           id="album-art"
           src={`/${show.slug}/cover.jpg?t=${current?.time ?? 0}`}
@@ -203,6 +214,16 @@ app.get(`/:slug{${SLUG}}/cover.jpg`, async (c) => {
   if (!jpg) return c.notFound();
   c.header("Content-Type", "image/jpeg");
   c.header("Cache-Control", "public, max-age=30");
+  return c.body(jpg);
+});
+
+// Per-track covers extracted by scripts/import.sh → covers/<show>/<stem>.jpg
+app.get(`/covers/:slug{${SLUG}}/:file{[^/]+\\.jpg}`, async (c) => {
+  const { slug, file } = c.req.param();
+  const jpg = await readFile(`${COVERS}/${slug}/${file}`).catch(() => undefined);
+  if (!jpg) return c.notFound();
+  c.header("Content-Type", "image/jpeg");
+  c.header("Cache-Control", "public, max-age=3600");
   return c.body(jpg);
 });
 

@@ -25,7 +25,7 @@ test("home page lists every show with its description", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("link", { name: "Fixture Default" })).toHaveAttribute("href", "/default");
   await expect(page.getByRole("link", { name: "Fixture Night" })).toHaveAttribute("href", "/night");
-  await expect(page.locator("strong", { hasText: "default" })).toBeVisible();
+  await expect(page.locator("strong.show-name", { hasText: "default" })).toBeVisible();
 });
 
 test("show page shows its own now playing and history", async ({ page }) => {
@@ -167,6 +167,9 @@ test("player plays the stream using only self-hosted assets", async ({ page }) =
     (r) =>
       !r.url().startsWith(BASE) &&
       !/^(blob|data):/.test(r.url()) &&
+      // Google Fonts is intentionally allowed in the CSP for typography
+      !r.url().startsWith("https://fonts.googleapis.com") &&
+      !r.url().startsWith("https://fonts.gstatic.com") &&
       problems.push(`external request: ${r.url()}`),
   );
   await page.goto("/night");

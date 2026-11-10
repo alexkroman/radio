@@ -1,0 +1,50 @@
+# End-to-end overlay for compose.yml (run with test/e2e.sh): the real stack on
+# fixture shows/music, with logs/covers in throwaway volumes, nothing
+# published to the host, no DDNS, and a Playwright container driving it.
+services:
+  init:
+    volumes:
+      - e2e-logs:/logs
+      - e2e-covers:/covers
+  icecast:
+    volumes:
+      - e2e-logs:/var/log/icecast
+  liquidsoap:
+    volumes:
+      - ./test/fixtures/shows:/shows:ro
+      - ./test/fixtures/music:/music:ro
+      - e2e-covers:/covers
+  site:
+    volumes:
+      - ./test/fixtures/shows:/shows:ro
+      - e2e-logs:/logs:ro
+      - e2e-covers:/covers:ro
+  admin:
+    volumes:
+      - e2e-logs:/logs:ro
+      - ./test/fixtures/music:/music:ro
+  caddy:
+    ports: !reset []
+    volumes:
+      - ./test/fixtures/shows:/srv/shows:ro
+      - e2e-logs:/srv/logs
+  ddns:
+    profiles: [disabled]
+  e2e:
+    image: radio-e2e
+    build: { context: ., target: e2e }
+    # Share Caddy's network namespace so the tests reach it as https://localhost,
+    # the same site address (and local-CA certificate) as an unconfigured install.
+    network_mode: service:caddy
+    environment:
+      BASE_URL: https://localhost
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+    volumes:
+      - ./test-results:/app/test-results
+    depends_on:
+      caddy: { condition: service_started }
+      liquidsoap: { condition: service_started }
+
+volumes:
+  e2e-logs: {}
+  e2e-covers: {}

@@ -5,9 +5,9 @@
 #     (icecast / liquidsoap / curl_user) and join the shared app group (GID
 #     10001) so they can reach the shared volumes and bind-mounted dirs.
 #   - caddy runs as a dedicated non-root UID:GID 10001:10001.
-#   - admin runs as the node image's non-root `node` user.
-# Only Caddy (443) and Liquidsoap's live input (8005) are published; Icecast
-# and the admin app are reachable only through Caddy.
+#   - site / admin (Node, built from ./Dockerfile) run as the image's `node` user.
+# Only Caddy (443) is published; Icecast, site and admin are reachable only
+# through Caddy.
 # The one-shot `init` service runs as root once at startup to set ownership on
 # the named volumes and bind-mounted dirs to the app UID/GID, then exits. It is
 # the only root container and holds only the capabilities needed to chown.
@@ -59,6 +59,8 @@ services:
       ICECAST_SOURCE_PASSWORD: &password ${PASSWORD:?Set PASSWORD in .env}
       ICECAST_ADMIN_PASSWORD: *password
       ICECAST_RELAY_PASSWORD: *password
+      # One source per show (the image's default is 2).
+      ICECAST_MAX_SOURCES: 100
     volumes:
       - ./logs:/var/log/icecast
     depends_on:
@@ -70,11 +72,9 @@ services:
     restart: unless-stopped
     image: savonet/liquidsoap:v2.3.3
     command: ["/radio.liq"]
-    ports: ["8005:8005"]
     environment:
       TZ: ${TZ:-UTC}
       PASSWORD: *password
-      LIVE_PASSWORD: ${LIVE_PASSWORD:?Set LIVE_PASSWORD in .env}
     volumes:
       - ./radio.liq:/radio.liq:ro
       - ./shows:/shows:ro
@@ -84,11 +84,27 @@ services:
       init: { condition: service_completed_successfully }
       icecast: { condition: service_started }
 
+  site:
+    <<: *hardening
+    group_add: ["10001"]
+    restart: unless-stopped
+    image: radio-app
+    build: { context: ., target: app }
+    command: ["node", "dist/site/server.js"]
+    volumes:
+      - ./shows:/shows:ro
+      - ./logs:/logs:ro
+      - ./covers:/covers:ro
+    depends_on:
+      init: { condition: service_completed_successfully }
+
   admin:
     <<: *hardening
     group_add: ["10001"]
     restart: unless-stopped
-    build: ./admin
+    image: radio-app
+    build: { context: ., target: app }
+    command: ["node", "dist/admin/server.js"]
     environment:
       TZ: ${TZ:-UTC}
     volumes:
@@ -134,13 +150,13 @@ services:
       XDG_CONFIG_HOME: /data
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./index.html:/srv/index.html:ro
+      - ./shows:/srv/shows:ro
       - ./logs:/srv/logs
-      - ./covers:/srv/covers:ro
       - caddy:/data
     depends_on:
       init: { condition: service_completed_successfully }
       icecast: { condition: service_started }
+      site: { condition: service_started }
       admin: { condition: service_started }
 
 volumes:

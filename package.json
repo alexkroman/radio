@@ -1,0 +1,30 @@
+{
+  "name": "radio",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild site/server.tsx admin/server.tsx --bundle --platform=node --format=esm --packages=external --outdir=dist --outbase=. && esbuild site/client.ts --bundle --minify --outfile=dist/site/public/app.js",
+    "typecheck": "tsc",
+    "lint": "eslint .",
+    "e2e": "sh test/e2e.sh"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.6",
+    "hono": "4.13.17",
+    "marked": "18.2.0",
+    "music-metadata": "12.3.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@picocss/pico": "2.1.1",
+    "@playwright/test": "1.65.0",
+    "@types/node": "22.20.5",
+    "esbuild": "0.28.2",
+    "eslint": "10.14.0",
+    "htmx.org": "2.0.11",
+    "icecast-metadata-player": "1.17.13",
+    "jiti": "2.7.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.2"
+  }
+}

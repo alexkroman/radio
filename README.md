@@ -1,11 +1,12 @@
 # Radio
 
-A small internet radio station built from stock open-source parts with almost no hand-written code:
+A small internet radio station built from stock open-source parts plus two small TypeScript apps:
 
-- **Liquidsoap** plays scheduled shows on shuffle with automatic cue points, loudness levelling and crossfades, and lets a DJ take over live from [BUTT](https://danielnoethen.de/butt/).
-- **Icecast** serves the stream.
-- **Caddy** provides HTTPS and the player page (Pico.css, htmx, icecast-metadata-player).
-- **Node** runs a small admin site (SoundExchange reports), with no npm dependencies.
+- **Liquidsoap** plays each show as its own 24/7 stream, on shuffle with automatic cue points, loudness levelling and crossfades.
+- **Icecast** serves the streams.
+- **Caddy** provides HTTPS and is the only public entry point.
+- **`site/`** ([Hono](https://hono.dev)) serves the show list and player pages; its browser code (htmx, icecast-metadata-player, Pico CSS) is bundled from npm, so nothing loads from a CDN.
+- **`admin/`** (Hono) is the admin site (SoundExchange reports).
 - **Docker** restarts any service that crashes.
 
 ## Setup
@@ -15,7 +16,7 @@ Requires Docker.
 ```sh
 cp .env.example .env   # then replace every change-me value, e.g. with: openssl rand -hex 16
 mkdir -p music/default && cp ~/some/music/*.mp3 music/default/
-docker compose up -d
+docker compose up -d --build
 ```
 
 Open <https://localhost/>. On localhost your browser warns about the certificate the first time; for a public station, add `DOMAIN=radio.example.com` to `.env` and Caddy gets a real certificate. See [`.env.example`](.env.example) for all settings.
@@ -24,51 +25,63 @@ Open <https://localhost/>. On localhost your browser warns about the certificate
 
 | Command                             | What it does                                         |
 | ----------------------------------- | ---------------------------------------------------- |
-| `docker compose up -d`              | Start (or apply config changes)                      |
+| `docker compose up -d --build`      | Start (or apply config and code changes)             |
 | `docker compose down`               | Stop (`down -v` also deletes stats and history!)     |
 | `docker compose logs -f`            | Follow logs (Ctrl-C stops watching, not the station) |
 | `docker compose ps`                 | Show which services are running                      |
-| `docker compose restart caddy`      | Pick up edits to `Caddyfile` or `index.html`         |
+| `docker compose restart caddy`      | Pick up edits to `Caddyfile`                         |
 | `docker compose restart liquidsoap` | Pick up edits to `shows/`                            |
 
 Add or remove files in `music/<show>/` any time; they're picked up without a restart. Anything ffmpeg can decode works.
 
 ## Shows
 
-Each `shows/<slug>.md` is a show that plays `music/<slug>/`. Front matter sets the title and, optionally, when it's on:
+Each `shows/<slug>.md` is a show: its own 24/7 stream at `/<slug>/stream`, playing `music/<slug>/` on shuffle, with a player page at `/<slug>`. Slugs are lowercase letters, digits and hyphens. The front matter sets the title; the body is the description shown on the page:
 
 ```md
 ---
 title: Morning Mazes
-when: 1w-5w and 6h-10h
 ---
 
-Weekday mornings, 6–10am.
+Slow, bright records.
 ```
 
-`when:` is [Liquidsoap time predicates](https://www.liquidsoap.info/doc-dev/language.html) joined by `and`: `6h-10h` (hours), `1w-5w` (Mon–Fri, `7w` = Sunday), `20h30m-22h`. Times use `TZ` from `.env`. A show without `when:` plays whenever nothing scheduled is on; when schedules overlap, the show with more terms wins. Shows switch at the end of the current track.
+Adding or removing a show needs `docker compose restart liquidsoap`; editing a title or description shows up immediately.
 
 ## Where things are
 
-| URL                        | What's there                                                   |
-| -------------------------- | -------------------------------------------------------------- |
-| `https://localhost/`       | Player, now playing, history                                   |
-| `https://localhost/stream` | The stream for apps and VLC                                    |
-| `https://localhost/admin/` | Admin site (SoundExchange reports), `admin` / `ADMIN_PASSWORD` |
+| URL                               | What's there                                                   |
+| --------------------------------- | -------------------------------------------------------------- |
+| `https://localhost/`              | List of shows                                                  |
+| `https://localhost/<slug>`        | A show's player, now playing, history                          |
+| `https://localhost/<slug>/stream` | A show's stream for apps and VLC                               |
+| `https://localhost/stream`        | Redirects to `/default/stream` (the old single-stream URL)     |
+| `https://localhost/admin/`        | Admin site (SoundExchange reports), `admin` / `ADMIN_PASSWORD` |
 
 Nothing else is public: Icecast's status and admin pages are not reachable from outside, and Caddy answers 404 for any other path.
 
-## Going live with BUTT
+## Development
 
-Settings → Server → Add: type **Icecast**, address = your server, port **8005**, mountpoint **live**, user **source**, password = `LIVE_PASSWORD`. Press play to take over (after a ~12 s buffer) and stop to fade back to the playlist. If you go silent for 20 s, the playlist takes over until you're audible again.
+Node 22 for the TypeScript apps (`site/`, `admin/`, `test/`):
+
+```sh
+npm ci              # once after cloning
+npm run typecheck   # tsc
+npm run lint        # eslint
+npm run build       # esbuild → dist/ (the Docker image does this too)
+```
+
+## End-to-end tests
+
+`npm run e2e` builds the images, starts the real stack (Caddy, Icecast, Liquidsoap, site, admin) on the fixture shows and music in `test/fixtures/`, runs the Playwright suite in `test/e2e.spec.ts` from a container inside Caddy's network, and tears everything down. It needs only Docker, uses its own compose project (`radio-e2e`) and throwaway volumes, publishes no ports, and doesn't touch `logs/`, `covers/` or `music/`. Pass Playwright arguments through, e.g. `npm run e2e -- -g "admin"`.
 
 ## Checks
 
-Linters and formatters run through [pre-commit](https://pre-commit.com) (see `.pre-commit-config.yaml`); Prettier, Ruff and `caddy fmt` fix formatting themselves, so just re-stage and commit again. The Liquidsoap and Caddy checks run in Docker, so Docker must be running.
+Linters and formatters run through [pre-commit](https://pre-commit.com) (see `.pre-commit-config.yaml`): Prettier, ESLint and `caddy fmt` fix formatting themselves, so just re-stage and commit again; `tsc` type-checks. The TypeScript checks need `npm ci`; the Liquidsoap and Caddy checks run in Docker, so Docker must be running.
 
 ```sh
 pre-commit install          # once after cloning: run the checks on every commit
 pre-commit run --all-files  # run them by hand
 ```
 
-In Claude Code cloud sessions, `.claude/hooks/session-start.sh` does all of this automatically: it installs pre-commit, starts Docker, pulls the check images and installs the git hook.
+In Claude Code cloud sessions, `.claude/hooks/session-start.sh` does all of this automatically: it installs pre-commit and `node_modules`, starts Docker, pulls the images, sets up Docker builds behind the session's proxy (so `npm run e2e` works) and installs the git hook.

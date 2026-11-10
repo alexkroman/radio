@@ -15,13 +15,21 @@
 
 	@htmx {
 		method GET
-		path /
 		header HX-Request true
 	}
 	log_skip @htmx
 
-	# Public: the player page, cover art and /stream. Icecast's status/admin
-	# pages and Liquidsoap are unreachable; /admin is the Node admin site.
+	# Public: each shows/<slug>.md's stream at /<slug>/stream (Icecast mount
+	# /<slug>); only existing shows match, so Icecast's status/admin pages stay
+	# unreachable. /admin is the Node admin site behind basic auth; everything
+	# else is the Node site.
+	@stream {
+		path_regexp ^/[a-z0-9-]+/stream$
+		file {
+			root /srv/shows
+			try_files /{path.0}.md
+		}
+	}
 	@admin path /admin /admin/*
 	basic_auth @admin {
 		admin {$ADMIN_PASSWORD_HASH}
@@ -34,28 +42,16 @@
 		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "no-referrer"
 		Permissions-Policy "geolocation=(), camera=(), microphone=(), usb=(), payment=()"
-		# icecast-metadata-player needs blob: workers + WASM; assets come from
-		# jsDelivr; the page has inline <script>/<style>; audio uses MediaSource.
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; media-src 'self' blob: data:; connect-src 'self'; worker-src 'self' blob:; child-src blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		# All assets are self-hosted; icecast-metadata-player needs blob: workers
+		# + WASM, and audio uses MediaSource.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self'; img-src 'self' data:; media-src 'self' blob: data:; connect-src 'self'; worker-src 'self' blob:; child-src blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
 		# Strip server banners (e.g. Icecast version) on every response.
 		-Server
 	}
 
-	handle / {
-		root * /srv
-		rewrite * /index.html
-		templates
-		file_server
-	}
-	handle /favicon.ico {
-		respond 204
-	}
-	handle /cover.jpg {
-		header Cache-Control "public, max-age=30"
-		root * /srv/covers
-		file_server
-	}
-	handle /stream {
+	redir /stream /default/stream
+	handle @stream {
+		rewrite * /{path.0}
 		reverse_proxy icecast:8000 {
 			header_down -Server
 			header_up -Range
@@ -66,6 +62,6 @@
 		reverse_proxy admin:3000
 	}
 	handle {
-		respond 404
+		reverse_proxy site:3000
 	}
 }

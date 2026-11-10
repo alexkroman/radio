@@ -25,6 +25,20 @@ repos:
 
   - repo: local
     hooks:
+      # TypeScript checks use the project's node_modules (npm ci first).
+      - id: tsc
+        name: tsc (type-check)
+        language: system
+        entry: npx tsc
+        files: \.tsx?$
+        pass_filenames: false
+
+      - id: eslint
+        name: eslint
+        language: system
+        entry: npx eslint --fix
+        files: \.tsx?$
+
       - id: liquidsoap
         name: liquidsoap --check
         language: docker_image

@@ -1,0 +1,68 @@
+main.container {
+  max-width: 40rem;
+}
+.label {
+  display: block;
+  margin-bottom: 0.75rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pico-muted-color);
+}
+.muted,
+.time {
+  color: var(--pico-muted-color);
+}
+.time {
+  width: 1%;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.np-row {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+#album-art {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.np-info {
+  flex: 1;
+  min-width: 0;
+}
+#play {
+  flex-shrink: 0;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  align-self: center;
+}
+#gate {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--pico-background-color);
+  z-index: 999;
+}
+#gate article {
+  min-width: 280px;
+  text-align: center;
+}
+#gate button {
+  width: 100%;
+}
+#gate p {
+  color: var(--pico-del-color);
+  margin: 0.5rem 0 0;
+}

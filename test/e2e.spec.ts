@@ -1,7 +1,7 @@
-// End-to-end tests against the real stack (Caddy, Icecast, Liquidsoap, site,
-// admin) running on test/fixtures. Run with `npm run e2e`.
+// End-to-end tests against the real stack (Caddy, Liquidsoap, the app) running
+// on test/fixtures. Run with `npm run e2e`; test/global-setup.ts logs in.
 import { expect, test } from "@playwright/test";
-import { ADMIN, BASE, month, signedIn, streamHead } from "./helpers.ts";
+import { ADMIN, BASE, month, SITE_PASSWORD, streamHead } from "./helpers.ts";
 
 test("each show is its own MP3 stream", async () => {
   for (const show of ["default", "night"]) {
@@ -22,23 +22,15 @@ test("/stream redirects to the default show", async ({ request }) => {
 });
 
 test("home page lists every show with its description", async ({ page }) => {
-  await signedIn(page);
   await page.goto("/");
-  await expect(
-    page.getByRole("link", { name: "Fixture Default" }),
-  ).toHaveAttribute("href", "/default");
-  await expect(
-    page.getByRole("link", { name: "Fixture Night" }),
-  ).toHaveAttribute("href", "/night");
+  await expect(page.getByRole("link", { name: "Fixture Default" })).toHaveAttribute("href", "/default");
+  await expect(page.getByRole("link", { name: "Fixture Night" })).toHaveAttribute("href", "/night");
   await expect(page.locator("strong", { hasText: "default" })).toBeVisible();
 });
 
 test("show page shows its own now playing and history", async ({ page }) => {
-  await signedIn(page);
   await page.goto("/night");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Fixture Night",
-  );
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Fixture Night");
   await expect(async () => {
     await page.reload();
     await expect(page.locator("#np h2")).toHaveText("Midnight", {
@@ -46,9 +38,7 @@ test("show page shows its own now playing and history", async ({ page }) => {
     });
   }).toPass();
   await expect(page.locator("#np p")).toHaveText("Gamma");
-  await expect(
-    page.getByRole("link", { name: /\/night\/stream$/ }),
-  ).toHaveAttribute("href", "/night/stream");
+  await expect(page.getByRole("link", { name: /\/night\/stream$/ })).toHaveAttribute("href", "/night/stream");
 
   await page.goto("/default");
   await expect(async () => {
@@ -59,7 +49,7 @@ test("show page shows its own now playing and history", async ({ page }) => {
   }).toPass();
   await expect(page.locator("main")).not.toContainText("Midnight");
 
-  // Icecast logs "&" as "&amp;"; the page must show it once, unescaped.
+  // "&" must show once, unescaped.
   await expect(async () => {
     await page.reload();
     await expect(page.locator("main")).toContainText("Beta & Band", {
@@ -72,7 +62,6 @@ test("show page shows its own now playing and history", async ({ page }) => {
 test("now playing refreshes itself", async ({ page }) => {
   const problems: string[] = [];
   page.on("console", (m) => m.type() === "error" && problems.push(m.text()));
-  await signedIn(page);
   await page.goto("/default");
   const latest = () =>
     page
@@ -94,12 +83,11 @@ test("cover art of the current track is served", async ({ request }) => {
 });
 
 test("unknown shows are 404", async ({ request }) => {
-  for (const path of ["/nope", "/nope/cover.jpg"])
-    expect((await request.get(path)).status()).toBe(404);
+  for (const path of ["/nope", "/nope/cover.jpg"]) expect((await request.get(path)).status()).toBe(404);
   expect((await streamHead("/nope/stream")).status).toBe(404);
 });
 
-test("Icecast internals are not reachable", async ({ playwright }) => {
+test("only the app and the show streams are reachable", async ({ playwright }) => {
   const paths = [
     "/status-json.xsl",
     "/status.xsl",
@@ -126,9 +114,7 @@ test("Icecast internals are not reachable", async ({ playwright }) => {
   }
 });
 
-test("security headers are set and the server banner is stripped", async ({
-  request,
-}) => {
+test("security headers are set and the server banner is stripped", async ({ request }) => {
   const headers = (await request.get("/")).headers();
   expect(headers["content-security-policy"]).toContain("default-src 'self'");
   expect(headers["strict-transport-security"]).toContain("max-age=");
@@ -148,9 +134,7 @@ test("admin requires a password", async ({ request, playwright }) => {
   await authed.dispose();
 });
 
-test("SoundExchange report counts plays from every show with file tags", async ({
-  playwright,
-}) => {
+test("SoundExchange report counts plays from every show with file tags", async ({ playwright }) => {
   const request = await playwright.request.newContext({
     baseURL: BASE,
     ignoreHTTPSErrors: true,
@@ -169,16 +153,12 @@ test("SoundExchange report counts plays from every show with file tags", async (
     expect(text).toMatch(
       /^\^MAZES RADIO\^\|\^A\^\|\^BETA & BAND\^\|\^SECOND WIND\^\|\^\^\|\^\^\|\^\^\|\d+$/m,
     );
-    expect(text).toMatch(
-      /^\^MAZES RADIO\^\|\^A\^\|\^GAMMA\^\|\^MIDNIGHT\^\|\^\^\|\^\^\|\^\^\|\d+$/m,
-    );
+    expect(text).toMatch(/^\^MAZES RADIO\^\|\^A\^\|\^GAMMA\^\|\^MIDNIGHT\^\|\^\^\|\^\^\|\^\^\|\d+$/m);
   }).toPass({ timeout: 80_000 });
   await request.dispose();
 });
 
-test("player plays the stream using only self-hosted assets", async ({
-  page,
-}) => {
+test("player plays the stream using only self-hosted assets", async ({ page }) => {
   const problems: string[] = [];
   page.on("console", (m) => m.type() === "error" && problems.push(m.text()));
   page.on("pageerror", (e) => problems.push(e.message));
@@ -189,16 +169,11 @@ test("player plays the stream using only self-hosted assets", async ({
       !/^(blob|data):/.test(r.url()) &&
       problems.push(`external request: ${r.url()}`),
   );
-  await signedIn(page);
   await page.goto("/night");
   await page.getByRole("button", { name: "Play" }).click();
   await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
   await expect
-    .poll(() =>
-      page.evaluate(
-        () => (window as unknown as { player: { state: string } }).player.state,
-      ),
-    )
+    .poll(() => page.evaluate(() => (window as unknown as { player: { state: string } }).player.state))
     .toBe("playing");
   await expect(page.locator("#album-art")).toBeVisible();
   await page.getByRole("button", { name: "Stop" }).click();
@@ -206,13 +181,39 @@ test("player plays the stream using only self-hosted assets", async ({
   expect(problems).toEqual([]);
 });
 
-test("password gate", async ({ page }) => {
-  await page.goto("/");
-  const gate = page.locator("#gate");
-  await gate.getByPlaceholder("Password").fill("wrong");
-  await gate.getByRole("button", { name: "Enter" }).click();
-  await expect(gate.getByText("Wrong password")).toBeVisible();
-  await gate.getByPlaceholder("Password").fill("mazes2026");
-  await gate.getByRole("button", { name: "Enter" }).click();
-  await expect(gate).toBeHidden();
+test.describe("site password", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("pages need a login; streams and assets don't", async ({ page, request }) => {
+    expect((await request.get("/night")).status()).toBe(401);
+    expect((await request.get("/night/cover.jpg")).status()).toBe(401);
+    expect((await request.get("/assets/app.css")).status()).toBe(200);
+    expect((await streamHead("/night/stream")).status).toBe(200);
+
+    await page.goto("/night");
+    await page.getByPlaceholder("Password").fill("wrong");
+    await page.getByRole("button", { name: "Enter" }).click();
+    await expect(page.getByText("Wrong password")).toBeVisible();
+    await page.getByPlaceholder("Password").fill(SITE_PASSWORD);
+    await page.getByRole("button", { name: "Enter" }).click();
+    await expect(page).toHaveURL(/\/night$/);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Fixture Night");
+    const cookie = (await page.context().cookies()).find((c) => c.name === "radio_auth");
+    expect(cookie).toMatchObject({ httpOnly: true, secure: true });
+  });
+
+  test("login only redirects within the site", async ({ request }) => {
+    for (const next of ["//evil.example", "https://evil.example", "/\\evil.example"]) {
+      const res = await request.post("/login", { form: { password: SITE_PASSWORD, next }, maxRedirects: 0 });
+      expect(res.status(), next).toBe(303);
+      expect(res.headers()["location"], next).toBe("/");
+    }
+  });
+
+  test("a forged cookie is rejected", async ({ browser }) => {
+    const context = await browser.newContext({ ignoreHTTPSErrors: true });
+    await context.addCookies([{ name: "radio_auth", value: "1", url: BASE }]);
+    expect((await context.request.get(`${BASE}/night`)).status()).toBe(401);
+    await context.close();
+  });
 });

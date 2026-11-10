@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild site/server.tsx admin/server.tsx --bundle --platform=node --format=esm --packages=external --outdir=dist --outbase=. && esbuild site/client.ts --bundle --minify --outfile=dist/site/public/app.js",
+    "build": "esbuild app/server.tsx --bundle --platform=node --format=esm --packages=external --outdir=dist && esbuild app/client.ts --bundle --minify --outfile=dist/public/app.js",
     "typecheck": "tsc",
     "lint": "eslint .",
     "e2e": "sh test/e2e.sh"
@@ -11,8 +11,7 @@
   "dependencies": {
     "@hono/node-server": "2.1.6",
     "hono": "4.13.17",
-    "marked": "18.2.0",
-    "music-metadata": "12.3.5"
+    "marked": "18.2.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

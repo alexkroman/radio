@@ -55,11 +55,8 @@ repos:
       - id: caddy-validate
         name: caddy validate
         language: docker_image
-        # Caddyfile needs a password hash at load time; generate a throwaway one.
         # Root so validation can create the (throwaway) log directory.
-        entry: --user 0:0 --entrypoint sh caddy:2.11.9 -c
-        args:
-          - ADMIN_PASSWORD_HASH=$(caddy hash-password --plaintext check) caddy adapt --validate --config "$0" > /dev/null
+        entry: --user 0:0 caddy:2.11.9 caddy adapt --validate --config
         files: ^Caddyfile$
 
       - id: compose

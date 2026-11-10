@@ -6,8 +6,7 @@ x-build: &build
   entitlements: [network.host]
   secrets: [npmrc, ca]
 services:
-  site: { build: *build }
-  admin: { build: *build }
+  app: { build: *build }
   e2e: { build: *build }
 secrets:
   npmrc:

@@ -1,12 +1,10 @@
 # Radio
 
-A small internet radio station built from stock open-source parts plus two small TypeScript apps:
+A small internet radio station: three services and one small TypeScript app.
 
-- **Liquidsoap** plays each show as its own 24/7 stream, on shuffle with automatic cue points, loudness levelling and crossfades.
-- **Icecast** serves the streams.
+- **Liquidsoap** plays and serves each show as its own 24/7 MP3 stream, on shuffle with automatic cue points, loudness levelling and crossfades, and appends every play to a monthly log, `plays/YYYY-MM.jsonl`.
+- **`app/`** ([Hono](https://hono.dev)) serves the show list, the player pages and the admin site (SoundExchange reports from the play log). Its browser code (htmx, icecast-metadata-player, Pico CSS) is bundled from npm, so nothing loads from a CDN.
 - **Caddy** provides HTTPS and is the only public entry point.
-- **`site/`** ([Hono](https://hono.dev)) serves the show list and player pages; its browser code (htmx, icecast-metadata-player, Pico CSS) is bundled from npm, so nothing loads from a CDN.
-- **`admin/`** (Hono) is the admin site (SoundExchange reports).
 - **Docker** restarts any service that crashes.
 
 ## Setup
@@ -58,11 +56,11 @@ Adding or removing a show needs `docker compose restart liquidsoap`; editing a t
 | `https://localhost/stream`        | Redirects to `/default/stream` (the old single-stream URL)     |
 | `https://localhost/admin/`        | Admin site (SoundExchange reports), `admin` / `ADMIN_PASSWORD` |
 
-Nothing else is public: Icecast's status and admin pages are not reachable from outside, and Caddy answers 404 for any other path.
+Set `SITE_PASSWORD` in `.env` to put the show pages behind a login form; the streams stay public so apps can play them. Nothing else is public.
 
 ## Development
 
-Node 22 for the TypeScript apps (`site/`, `admin/`, `test/`):
+Node 22 for the TypeScript (`app/`, `test/`):
 
 ```sh
 npm ci              # once after cloning
@@ -73,7 +71,7 @@ npm run build       # esbuild → dist/ (the Docker image does this too)
 
 ## End-to-end tests
 
-`npm run e2e` builds the images, starts the real stack (Caddy, Icecast, Liquidsoap, site, admin) on the fixture shows and music in `test/fixtures/`, runs the Playwright suite in `test/e2e.spec.ts` from a container inside Caddy's network, and tears everything down. It needs only Docker, uses its own compose project (`radio-e2e`) and throwaway volumes, publishes no ports, and doesn't touch `logs/`, `covers/` or `music/`. Pass Playwright arguments through, e.g. `npm run e2e -- -g "admin"`.
+`npm run e2e` builds the images, starts the real stack (Caddy, Liquidsoap, the app) on the fixture shows and music in `test/fixtures/`, runs the Playwright suites in `test/` from a container inside Caddy's network, and tears everything down. It needs only Docker, uses its own compose project (`radio-e2e`) and throwaway volumes, publishes no ports, and doesn't touch `logs/`, `covers/`, `plays/` or `music/`. Pass Playwright arguments through, e.g. `npm run e2e -- -g "admin"`.
 
 ## Checks
 

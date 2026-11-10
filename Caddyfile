@@ -19,21 +19,9 @@
 	}
 	log_skip @htmx
 
-	# Public: each shows/<slug>.md's stream at /<slug>/stream (Icecast mount
-	# /<slug>); only existing shows match, so Icecast's status/admin pages stay
-	# unreachable. /admin is the Node admin site behind basic auth; everything
-	# else is the Node site.
-	@stream {
-		path_regexp ^/[a-z0-9-]+/stream$
-		file {
-			root /srv/shows
-			try_files /{path.0}.md
-		}
-	}
-	@admin path /admin /admin/*
-	basic_auth @admin {
-		admin {$ADMIN_PASSWORD_HASH}
-	}
+	# Public: each show's stream at /<slug>/stream (Liquidsoap's mount /<slug>);
+	# everything else, /admin included, is the Node app.
+	@stream path_regexp ^/[a-z0-9-]+/stream$
 
 	header {
 		# Force HTTPS for a year (renewal is TLS-ALPN-01 on 443, no port 80).
@@ -45,23 +33,20 @@
 		# All assets are self-hosted; icecast-metadata-player needs blob: workers
 		# + WASM, and audio uses MediaSource.
 		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self'; img-src 'self' data:; media-src 'self' blob: data:; connect-src 'self'; worker-src 'self' blob:; child-src blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
-		# Strip server banners (e.g. Icecast version) on every response.
+		# Strip server banners on every response.
 		-Server
 	}
 
 	redir /stream /default/stream
 	handle @stream {
 		rewrite * /{path.0}
-		reverse_proxy icecast:8000 {
+		reverse_proxy liquidsoap:8000 {
 			header_down -Server
 			header_up -Range
 			flush_interval -1
 		}
 	}
-	handle @admin {
-		reverse_proxy admin:3000
-	}
 	handle {
-		reverse_proxy site:3000
+		reverse_proxy app:3000
 	}
 }

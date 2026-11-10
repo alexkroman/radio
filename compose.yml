@@ -1,15 +1,14 @@
 # ── Security model ────────────────────────────────────────────────────────────
 # Every long-running service: no privilege escalation + all Linux capabilities
 # dropped. None run as root:
-#   - icecast / liquidsoap / ddns keep their image's built-in non-root user
-#     (icecast / liquidsoap / curl_user) and join the shared app group (GID
-#     10001) so they can reach the shared volumes and bind-mounted dirs.
+#   - liquidsoap / ddns keep their image's built-in non-root user and join the
+#     shared app group (GID 10001) so they can reach the bind-mounted dirs.
+#   - app (Node, built from ./Dockerfile) runs as the image's `node` user.
 #   - caddy runs as a dedicated non-root UID:GID 10001:10001.
-#   - site / admin (Node, built from ./Dockerfile) run as the image's `node` user.
-# Only Caddy (443) is published; Icecast, site and admin are reachable only
-# through Caddy.
+# Only Caddy (443) is published; the app and the Liquidsoap streams are
+# reachable only through Caddy.
 # The one-shot `init` service runs as root once at startup to set ownership on
-# the named volumes and bind-mounted dirs to the app UID/GID, then exits. It is
+# the named volume and bind-mounted dirs to the app UID/GID, then exits. It is
 # the only root container and holds only the capabilities needed to chown.
 # Caddy binds privileged port 443 as non-root via an unprivileged-port sysctl.
 x-hardening: &hardening
@@ -35,45 +34,18 @@ services:
       - -c
       - |
         set -e
-        chown -R 10001:10001 /data /logs /covers
-        chmod -R u+rwX,g+rwX /logs /covers /data
-        chmod g+s /logs /covers
+        chown -R 10001:10001 /data /logs /covers /plays
+        chmod -R u+rwX,g+rwX /logs /covers /plays /data
+        chmod g+s /logs /covers /plays
     volumes:
       - caddy:/data
       - ./logs:/logs
       - ./covers:/covers
+      - ./plays:/plays
     restart: "no"
 
-  icecast:
-    <<: *hardening
-    group_add: ["10001"]
-    restart: unless-stopped
-    image: libretime/icecast:2.4.4
-    # Enable playlist.log, keep rotated logs (playlist.log.<timestamp>, read by
-    # the admin report) and treat MP3 metadata as UTF-8.
-    command:
-      - sh
-      - -c
-      - |
-        set -e
-        sed -e 's|<!-- <playlistlog>playlist.log</playlistlog> -->|<playlistlog>playlist.log</playlistlog>|' \
-          -e "s|<logsize>10000</logsize>|<logsize>$${ICECAST_LOGSIZE_KB:-1000}</logsize><logarchive>1</logarchive>|" \
-          -e 's|</icecast>|<mount type="default"><charset>UTF-8</charset></mount></icecast>|' \
-          /etc/icecast.xml > /tmp/icecast.xml
-        grep -q '^ *<playlistlog>' /tmp/icecast.xml
-        grep -q '<logarchive>' /tmp/icecast.xml
-        exec icecast -c /tmp/icecast.xml
-    environment:
-      ICECAST_SOURCE_PASSWORD: &password ${PASSWORD:?Set PASSWORD in .env}
-      ICECAST_ADMIN_PASSWORD: *password
-      ICECAST_RELAY_PASSWORD: *password
-      # One source per show (the image's default is 2).
-      ICECAST_MAX_SOURCES: 100
-    volumes:
-      - ./logs:/var/log/icecast
-    depends_on:
-      init: { condition: service_completed_successfully }
-
+  # One 24/7 stream per show (radio.liq), served on port 8000; writes covers/
+  # and the play log (plays/YYYY-MM.jsonl).
   liquidsoap:
     <<: *hardening
     group_add: ["10001"]
@@ -82,42 +54,30 @@ services:
     command: ["/radio.liq"]
     environment:
       TZ: ${TZ:-UTC}
-      PASSWORD: *password
     volumes:
       - ./radio.liq:/radio.liq:ro
       - ./shows:/shows:ro
       - ./music:/music:ro
       - ./covers:/covers
+      - ./plays:/plays
     depends_on:
       init: { condition: service_completed_successfully }
-      icecast: { condition: service_started }
 
-  site:
+  # Show list, player pages and /admin (app/).
+  app:
     <<: *hardening
     group_add: ["10001"]
     restart: unless-stopped
     image: radio-app
     build: { context: ., target: app }
-    command: ["node", "dist/site/server.js"]
-    volumes:
-      - ./shows:/shows:ro
-      - ./logs:/logs:ro
-      - ./covers:/covers:ro
-    depends_on:
-      init: { condition: service_completed_successfully }
-
-  admin:
-    <<: *hardening
-    group_add: ["10001"]
-    restart: unless-stopped
-    image: radio-app
-    build: { context: ., target: app }
-    command: ["node", "dist/admin/server.js"]
     environment:
       TZ: ${TZ:-UTC}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      SITE_PASSWORD: ${SITE_PASSWORD:-}
     volumes:
-      - ./logs:/logs:ro
-      - ./music:/music:ro
+      - ./shows:/shows:ro
+      - ./covers:/covers:ro
+      - ./plays:/plays:ro
     depends_on:
       init: { condition: service_completed_successfully }
 
@@ -143,29 +103,19 @@ services:
       - net.ipv4.ip_unprivileged_port_start=443
     restart: unless-stopped
     image: caddy:2.11.9
-    command:
-      [
-        "sh",
-        "-c",
-        'export ADMIN_PASSWORD_HASH="$$(caddy hash-password --plaintext "$$ADMIN_PASSWORD")" && exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile',
-      ]
     ports: ["443:443"]
     environment:
       DOMAIN: ${DOMAIN:-localhost}
-      # Admin site only — distinct from the Icecast PASSWORD, which Caddy never sees.
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       # Keep Caddy's config/data under the writable /data volume (non-root).
       XDG_CONFIG_HOME: /data
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./shows:/srv/shows:ro
       - ./logs:/srv/logs
       - caddy:/data
     depends_on:
       init: { condition: service_completed_successfully }
-      icecast: { condition: service_started }
-      site: { condition: service_started }
-      admin: { condition: service_started }
+      liquidsoap: { condition: service_started }
+      app: { condition: service_started }
 
 volumes:
   caddy: {}

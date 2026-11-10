@@ -12,3 +12,5 @@ node_modules/
 dist/
 test-results/
 playwright-report/
+plays/*
+!plays/.gitkeep

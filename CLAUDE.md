@@ -7,16 +7,13 @@
 
 ## Docker builds and e2e in cloud sessions
 
-- Docker builds reach npm only through the session's HTTPS proxy. `.claude/hooks/session-start.sh` sets `E2E_COMPOSE`, `E2E_BAKE_FLAGS` and `BUILDX_BAKE_ENTITLEMENTS_FS`, so `npm run e2e` just works; for a manual build use `docker buildx bake --load $E2E_BAKE_FLAGS -f compose.yml -f .claude/compose.cloud.yml site` (`docker compose build` can't pass `--allow=network.host`).
+- Docker builds reach npm only through the session's HTTPS proxy. `.claude/hooks/session-start.sh` sets `E2E_COMPOSE`, `E2E_BAKE_FLAGS` and `BUILDX_BAKE_ENTITLEMENTS_FS`, so `npm run e2e` just works; for a manual build use `docker buildx bake --load $E2E_BAKE_FLAGS -f compose.yml -f .claude/compose.cloud.yml app` (`docker compose build` can't pass `--allow=network.host`).
 - Run `npm run e2e` after changing anything in the stack; it is the only test of the real system.
 
 ## Layout
 
-- `shows/<slug>.md` is a show: a 24/7 stream (Icecast mount `/<slug>`, public at `/<slug>/stream`) playing `music/<slug>/`. `radio.liq` builds one stream per show.
-- `site/` (Hono + hono/jsx) serves `/` (show list), `/<slug>` (player) and `/<slug>/cover.jpg`; `site/client.ts` is the browser bundle (htmx, icecast-metadata-player, Pico CSS from npm, no CDNs). The CSP forbids eval, so no htmx trigger filters.
-- `admin/` (Hono) is the admin site at `/admin` behind Caddy basic auth.
-- `shared/playlist.ts` parses Icecast's playlist.log (and its rotated `playlist.log.<timestamp>` files) for both apps. Icecast metadata is UTF-8 (default mount charset in compose.yml).
-- `test/edge.spec.ts` covers odd titles/show files, bad input, traversal and log rotation (the e2e stack rotates the log every ~1 KB).
-- Caddy exposes only the site, `/<slug>/stream` and `/admin`; keep Icecast and Liquidsoap admin/status pages unreachable (the e2e suite checks this).
-- `test/`: `e2e.sh` + `compose.yml` overlay + Playwright `e2e.spec.ts` on `fixtures/`.
+- `shows/<slug>.md` is a show: a 24/7 MP3 stream that Liquidsoap serves itself (`output.harbor`, `liquidsoap:8000/<slug>`, public at `/<slug>/stream` via Caddy) playing `music/<slug>/`. `radio.liq` builds one stream per show and appends each play (with tags and listener count) to `plays/YYYY-MM.jsonl`. Per-track work hangs off the playlist source's `on_track`: the crossfaded source doesn't mark every track.
+- `app/` is one Hono (+ hono/jsx) app: `server.tsx` (show list, player, covers), `admin.tsx` (`/admin`, Hono basicAuth, SoundExchange report), `login.tsx` (optional `SITE_PASSWORD` signed-cookie login), `plays.ts` (reads the play log), `client.ts` (browser bundle: htmx, icecast-metadata-player, Pico CSS from npm, no CDNs). The CSP forbids eval, so no htmx trigger filters.
+- Caddy routes `/<slug>/stream` to Liquidsoap and everything else to the app.
+- `test/`: `e2e.sh` + `compose.yml` overlay + Playwright specs on `fixtures/`; `global-setup.ts` logs in with `SITE_PASSWORD`.
 - Run `pre-commit run --all-files` before committing.

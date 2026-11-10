@@ -1,35 +1,26 @@
 # End-to-end overlay for compose.yml (run with test/e2e.sh): the real stack on
-# fixture shows/music, with logs/covers in throwaway volumes, nothing
+# fixture shows/music, with logs/covers/plays in throwaway volumes, nothing
 # published to the host, no DDNS, and a Playwright container driving it.
 services:
   init:
     volumes:
       - e2e-logs:/logs
       - e2e-covers:/covers
-  icecast:
-    environment:
-      # Rotate playlist.log every ~1 KB so the suite runs across rotations.
-      ICECAST_LOGSIZE_KB: 1
-    volumes:
-      - e2e-logs:/var/log/icecast
+      - e2e-plays:/plays
   liquidsoap:
     volumes:
       - ./test/fixtures/shows:/shows:ro
       - ./test/fixtures/music:/music:ro
       - e2e-covers:/covers
-  site:
+      - e2e-plays:/plays
+  app:
     volumes:
       - ./test/fixtures/shows:/shows:ro
-      - e2e-logs:/logs:ro
       - e2e-covers:/covers:ro
-  admin:
-    volumes:
-      - e2e-logs:/logs:ro
-      - ./test/fixtures/music:/music:ro
+      - e2e-plays:/plays:ro
   caddy:
     ports: !reset []
     volumes:
-      - ./test/fixtures/shows:/srv/shows:ro
       - e2e-logs:/srv/logs
   ddns:
     profiles: [disabled]
@@ -42,9 +33,10 @@ services:
     environment:
       BASE_URL: https://localhost
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      SITE_PASSWORD: ${SITE_PASSWORD}
     volumes:
       - ./test-results:/app/test-results
-      - e2e-logs:/logs:ro
+      - e2e-plays:/plays:ro
     depends_on:
       caddy: { condition: service_started }
       liquidsoap: { condition: service_started }
@@ -52,3 +44,4 @@ services:
 volumes:
   e2e-logs: {}
   e2e-covers: {}
+  e2e-plays: {}

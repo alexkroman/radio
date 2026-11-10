@@ -1,4 +1,4 @@
-# One image for the site and admin servers (compose picks the entry point),
+# The web app image (site + admin),
 # plus an `e2e` target with Playwright for the end-to-end suite.
 FROM node:22-alpine AS deps
 WORKDIR /app
@@ -10,9 +10,7 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc --mount=type=secret,id=ca \
 
 FROM deps AS build
 COPY tsconfig.json ./
-COPY site site
-COPY admin admin
-COPY shared shared
+COPY app app
 RUN npm run build && npm prune --omit=dev
 
 FROM node:22-alpine AS app
@@ -21,7 +19,7 @@ COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules node_modules
 COPY --from=build /app/dist dist
 USER node
-CMD ["node", "dist/site/server.js"]
+CMD ["node", "dist/server.js"]
 
 FROM mcr.microsoft.com/playwright:v1.65.0-noble AS e2e
 WORKDIR /app

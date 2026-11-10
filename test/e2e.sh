@@ -11,5 +11,5 @@ dc() { docker compose -p radio-e2e --env-file test/test.env $files "$@"; }
 trap 'dc down -v --remove-orphans >/dev/null 2>&1' EXIT
 # Build with bake (what `compose build` uses) so E2E_BAKE_FLAGS can be passed.
 set -a && . ./test/test.env && set +a
-docker buildx bake --load ${E2E_BAKE_FLAGS:-} $files site admin e2e
+docker buildx bake --load ${E2E_BAKE_FLAGS:-} $files app e2e
 dc run --rm e2e npx playwright test "$@"

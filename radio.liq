@@ -1,7 +1,8 @@
 enable_autocue_metadata()
 
-# Every shows/<slug>.md is a 24/7 stream at Icecast mount /<slug> playing
-# music/<slug>/ on shuffle.
+# Every shows/<slug>.md is a 24/7 MP3 stream at http://liquidsoap:8000/<slug>
+# (public at /<slug>/stream via Caddy) playing music/<slug>/ on shuffle. Each
+# play is appended to /plays/YYYY-MM.jsonl (read by the app's page and report).
 # Adding or removing a show needs `docker compose restart liquidsoap`.
 
 # Artists of a track (split on ",", "&", "feat.", "x", "with"); falls back to
@@ -39,6 +40,7 @@ end
 def show(f) =
   slug = path.remove_extension(path.basename(f))
   cover_file = "/covers/#{slug}.jpg"
+  listeners = ref(0)
 
   # Artist separation: reject a candidate if any of its artists was among the
   # last 20 artists played on this show; after 20 rejections in a row (a show
@@ -56,12 +58,18 @@ def show(f) =
     end
   end
 
-  # Loudness: autocue measures each track and sets liq_amplify (gain to reach
-  # -14 LUFS); amplify applies it via its default override="liq_amplify".
-  music = crossfade(duration=12., fade_in=6., fade_out=6., amplify(1., metadata.map(insert_missing=true, title_from_filename, playlist(mode="randomize", reload_mode="watch", check_next=fun(r) -> not string.contains(suffix=".gitkeep", request.uri(r)) and artist_not_recent(r), "/music/#{slug}"))))
-  # Covers/artists come from the raw metadata, before the text recode below.
-  music.on_track(fun(m) ->
+  tracks = metadata.map(insert_missing=true, title_from_filename, playlist(mode="randomize", reload_mode="watch", check_next=fun(r) -> not string.contains(suffix=".gitkeep", request.uri(r)) and artist_not_recent(r), "/music/#{slug}"))
+  # Per track (on the playlist: the crossfaded source doesn't mark every track),
+  # from the raw metadata before the text recode below: cover, artist
+  # separation and the play log.
+  tracks.on_track(fun(m) ->
     begin
+      def tag(key, fallback) =
+        safe_recode(list.assoc(default=list.assoc(default="", fallback, m), key, m))
+      end
+      play = {time=time(), show=slug, artist=tag("artist", ""), title=tag("title", ""), album=tag("album", ""), label=tag("label", "publisher"), isrc=tag("isrc", "tsrc"), listeners=listeners()}
+      file.write(append=true, data="#{json.stringify(compact=true, play)}\n", "/plays/#{time.string('%Y-%m')}.jsonl")
+
       cover = metadata.cover(m)
       if null.defined(cover) then
         file.write(data=null.get(cover), cover_file)
@@ -70,10 +78,13 @@ def show(f) =
       end
       recent_artists := list.prefix(20, list.append(artists_of(list.assoc(default="", "artist", m)), recent_artists()))
     end)
+  # Loudness: autocue measures each track and sets liq_amplify (gain to reach
+  # -14 LUFS); amplify applies it via its default override="liq_amplify".
+  music = crossfade(duration=12., fade_in=6., fade_out=6., amplify(1., tracks))
   # Limiter catches peaks from tracks autocue boosted and crossfade overlaps.
   radio = limit(mksafe(music))
   radio = metadata.map(fun(m) -> list.map(fun(kv) -> (fst(kv), safe_recode(snd(kv))), m), radio)
-  output.icecast(%mp3(bitrate=256), encoding="UTF-8", host="icecast", password=environment.get("PASSWORD"), mount=slug, radio)
+  output.harbor(%mp3(bitrate=256), mount=slug, port=8000, on_connect=fun(~headers=_, ~uri=_, ~protocol=_, _) -> listeners := listeners() + 1, on_disconnect=fun(_) -> listeners := listeners() - 1, radio)
 end
 
 list.iter(show, file.ls(absolute=true, pattern="*.md", "/shows"))

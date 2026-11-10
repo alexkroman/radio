@@ -1,19 +1,10 @@
 // Edge cases: odd titles and show files, missing music, bad input, traversal,
 // listener counting. Fixtures: test/fixtures/{shows,music}/{edge,plain,empty}.
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
-import {
-  adminRequest,
-  listen,
-  performances,
-  signedIn,
-  streamHead,
-} from "./helpers.ts";
+import { adminRequest, listen, month, performances, streamHead } from "./helpers.ts";
 
-test("titles with unicode, pipes and HTML show exactly as tagged", async ({
-  page,
-}) => {
-  await signedIn(page);
+test("titles with unicode, pipes and HTML show exactly as tagged", async ({ page }) => {
   await page.goto("/edge");
   await expect(async () => {
     await page.reload();
@@ -27,41 +18,25 @@ test("titles with unicode, pipes and HTML show exactly as tagged", async ({
 
 test("report keeps unicode and the whole title when it contains a pipe", async () => {
   const admin = await adminRequest();
-  await expect
-    .poll(() => performances(admin, "ZOË ÑANDÚ", "CAFÉ  OLÉ <B>"))
-    .toBeGreaterThan(0);
+  await expect.poll(() => performances(admin, "ZOË ÑANDÚ", "CAFÉ  OLÉ <B>")).toBeGreaterThan(0);
   await admin.dispose();
 });
 
-test("front matter with CRLF line endings and a quoted title", async ({
-  page,
-}) => {
-  await signedIn(page);
+test("front matter with CRLF line endings and a quoted title", async ({ page }) => {
   await page.goto("/");
-  await expect(
-    page.getByRole("link", { name: "Edge Cases", exact: true }),
-  ).toHaveAttribute("href", "/edge");
+  await expect(page.getByRole("link", { name: "Edge Cases", exact: true })).toHaveAttribute("href", "/edge");
   await page.goto("/edge");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Edge Cases",
-  );
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Edge Cases");
   await expect(page.locator("main")).not.toContainText("title:");
 });
 
 test("a show without front matter is titled by its slug", async ({ page }) => {
-  await signedIn(page);
   await page.goto("/plain");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("plain");
-  await expect(page.locator("main")).toContainText(
-    "Just a description, no front matter.",
-  );
+  await expect(page.locator("main")).toContainText("Just a description, no front matter.");
 });
 
-test("an untagged track is shown by its file name, without cover art", async ({
-  page,
-  request,
-}) => {
-  await signedIn(page);
+test("an untagged track is shown by its file name, without cover art", async ({ page, request }) => {
   await page.goto("/plain");
   await expect(async () => {
     await page.reload();
@@ -73,15 +48,12 @@ test("an untagged track is shown by its file name, without cover art", async ({
   await expect(page.locator("#album-art")).toBeHidden();
 });
 
-test("a show with no music folder still streams and renders", async ({
-  page,
-}) => {
+test("a show with no music folder still streams and renders", async ({ page }) => {
   expect(await streamHead("/empty/stream")).toEqual({
     status: 200,
     type: "audio/mpeg",
     bytes: expect.any(Number),
   });
-  await signedIn(page);
   await page.goto("/empty");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Empty");
   await expect(page.locator("#np h2")).toHaveCount(0);
@@ -90,12 +62,7 @@ test("a show with no music folder still streams and renders", async ({
 test("admin rejects malformed months", async () => {
   const admin = await adminRequest();
   for (const m of ["2026-13", "2026-00", "26-01", "2026-1", "", "2026-01x"]) {
-    expect(
-      (
-        await admin.get(`/admin/report?month=${encodeURIComponent(m)}`)
-      ).status(),
-      m,
-    ).toBe(400);
+    expect((await admin.get(`/admin/report?month=${encodeURIComponent(m)}`)).status(), m).toBe(400);
   }
   expect((await admin.get("/admin/report")).status()).toBe(400);
   await admin.dispose();
@@ -124,20 +91,14 @@ test("encoded and dotted paths don't leak files", async ({ request }) => {
   ];
   for (const path of paths) {
     const res = await request.get(path);
-    expect([400, 401, 404], `${path} → ${res.status()}`).toContain(
-      res.status(),
-    );
+    expect([400, 401, 404], `${path} → ${res.status()}`).toContain(res.status());
   }
 });
 
 test("the report counts every listener connected when a track starts", async () => {
   const admin = await adminRequest();
   const before = await performances(admin, "GAMMA", "MIDNIGHT");
-  const stops = [
-    listen("/night/stream"),
-    listen("/night/stream"),
-    listen("/night/stream"),
-  ];
+  const stops = [listen("/night/stream"), listen("/night/stream"), listen("/night/stream")];
   // Midnight (20 s) repeats on the night show; wait for it to be logged again.
   await expect
     .poll(() => performances(admin, "GAMMA", "MIDNIGHT"), { timeout: 60_000 })
@@ -146,29 +107,14 @@ test("the report counts every listener connected when a track starts", async () 
   await admin.dispose();
 });
 
-test("the report includes plays from rotated logs", async () => {
-  // test/compose.yml makes Icecast rotate playlist.log every ~1 KB.
-  await expect
-    .poll(
-      async () =>
-        (await readdir("/logs")).filter((f) => f.startsWith("playlist.log."))
-          .length,
-      { timeout: 80_000 },
-    )
-    .toBeGreaterThan(0);
+test("the report matches the play log", async () => {
   const admin = await adminRequest();
   await expect(async () => {
-    const files = (await readdir("/logs")).filter((f) =>
-      f.startsWith("playlist.log"),
-    );
-    const lines = (
-      await Promise.all(files.map((f) => readFile(`/logs/${f}`, "utf8")))
-    ).flatMap((t) => t.split("\n"));
-    const expected = lines
-      .filter((l) =>
-        l.endsWith("|/night|" + l.split("|")[2] + "|Gamma - Midnight"),
-      )
-      .reduce((n, l) => n + Math.max(Number(l.split("|")[2]) || 0, 1), 0);
+    const lines = (await readFile(`/plays/${month}.jsonl`, "utf8")).trim().split("\n");
+    const plays = lines.map((l) => JSON.parse(l) as { show: string; title: string; listeners: number });
+    const expected = plays
+      .filter((p) => p.show === "night" && p.title === "Midnight")
+      .reduce((n, p) => n + Math.max(p.listeners, 1), 0);
     expect(expected).toBeGreaterThan(0);
     expect(await performances(admin, "GAMMA", "MIDNIGHT")).toBe(expected);
   }).toPass();

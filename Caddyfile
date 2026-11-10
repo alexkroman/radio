@@ -1,3 +1,9 @@
+{
+	# Port 80 is not published or bound: no HTTP listener, no HTTP->HTTPS
+	# redirect server. Certificates are issued/renewed over TLS-ALPN-01 on 443.
+	auto_https disable_redirects
+}
+
 (access_log) {
 	log {
 		output file /srv/logs/caddy-access.log
@@ -19,6 +25,20 @@
 		admin {$STATS_PASSWORD_HASH}
 	}
 
+	header {
+		# Force HTTPS for a year (renewal is TLS-ALPN-01 on 443, no port 80).
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "geolocation=(), camera=(), microphone=(), usb=(), payment=()"
+		# icecast-metadata-player needs blob: workers + WASM; assets come from
+		# jsDelivr; the page has inline <script>/<style>; audio uses MediaSource.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; worker-src 'self' blob:; child-src blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		# Strip server banners (e.g. Icecast version) on every response.
+		-Server
+	}
+
 	handle / {
 		root * /srv
 		rewrite * /index.html
@@ -36,40 +56,22 @@
 	handle /ws {
 		reverse_proxy goaccess:7890
 	}
-	handle {
-		reverse_proxy icecast:8000 {
-			header_up -Range
-			flush_interval -1
-		}
-	}
-}
-
-http://{$DOMAIN:localhost} {
-	import access_log
-	handle /admin* {
-		reverse_proxy icecast:8000
-	}
 	handle /stream {
 		reverse_proxy icecast:8000 {
+			header_down -Server
 			header_up -Range
 			flush_interval -1
 		}
 	}
-	handle /favicon.ico {
-		respond 204
+	handle /stats/* {
+		reverse_proxy icecast:8000 {
+			header_down -Server
+		}
 	}
-	handle /cover.jpg {
-		header Cache-Control "public, max-age=30"
-		root * /srv/covers
-		file_server
-	}
-	handle / {
-		root * /srv
-		rewrite * /index.html
-		templates
-		file_server
+	handle /admin* {
+		respond 403
 	}
 	handle {
-		redir https://{host}{uri} permanent
+		respond 404
 	}
 }

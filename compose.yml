@@ -1,5 +1,51 @@
+# ── Security model ────────────────────────────────────────────────────────────
+# Every long-running service: no privilege escalation + all Linux capabilities
+# dropped. None run as root:
+#   - icecast / liquidsoap / ddns keep their image's built-in non-root user
+#     (icecast / liquidsoap / curl_user) and join the shared app group (GID
+#     10001) so they can reach the shared volumes and bind-mounted dirs.
+#   - caddy / goaccess run as a dedicated non-root UID:GID 10001:10001.
+# The one-shot `init` service runs as root once at startup to set ownership on
+# the named volumes and bind-mounted dirs to the app UID/GID, then exits. It is
+# the only root container and holds only the capabilities needed to chown.
+# Caddy binds privileged port 443 as non-root via an unprivileged-port sysctl.
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
 services:
+  init:
+    image: busybox:1.37.0
+    user: "0:0"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - FOWNER
+      - DAC_OVERRIDE
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        chown -R 10001:10001 /data /stats /db /logs /covers
+        chmod -R u+rwX,g+rwX /logs /covers /stats /db /data
+        chmod g+s /logs /covers
+    volumes:
+      - caddy:/data
+      - stats:/stats
+      - db:/db
+      - ./logs:/logs
+      - ./covers:/covers
+    restart: "no"
+
   icecast:
+    <<: *hardening
+    group_add: ["10001"]
     restart: unless-stopped
     image: libretime/icecast:2.4.4
     command:
@@ -15,8 +61,12 @@ services:
     volumes:
       - ./logs:/var/log/icecast
       - stats:/usr/share/icecast/web/stats
+    depends_on:
+      init: { condition: service_completed_successfully }
 
   liquidsoap:
+    <<: *hardening
+    group_add: ["10001"]
     restart: unless-stopped
     image: savonet/liquidsoap:v2.3.3
     command: ["/radio.liq"]
@@ -28,9 +78,13 @@ services:
       - ./radio.liq:/radio.liq:ro
       - ./music:/music:ro
       - ./covers:/covers
-    depends_on: [icecast]
+    depends_on:
+      init: { condition: service_completed_successfully }
+      icecast: { condition: service_started }
 
   goaccess:
+    <<: *hardening
+    user: "10001:10001"
     restart: unless-stopped
     image: allinurl/goaccess@sha256:20072eca570093cf6dcadb17856d90d48cd9e8a9e114b8f539c2ebefec99c63e
     command:
@@ -54,9 +108,11 @@ services:
       - stats:/stats
       - db:/db
     depends_on:
+      init: { condition: service_completed_successfully }
       caddy: { condition: service_started }
 
   ddns:
+    <<: *hardening
     restart: unless-stopped
     image: curlimages/curl@sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93
     entrypoint:
@@ -70,6 +126,11 @@ services:
       DDNS_PASSWORD: ${DDNS_PASSWORD:?Set DDNS_PASSWORD in .env}
 
   caddy:
+    <<: *hardening
+    user: "10001:10001"
+    # Allow the non-root user to bind privileged port 443.
+    sysctls:
+      - net.ipv4.ip_unprivileged_port_start=443
     restart: unless-stopped
     image: caddy:2.11.9
     command:
@@ -78,17 +139,21 @@ services:
         "-c",
         'export STATS_PASSWORD_HASH="$$(caddy hash-password --plaintext "$$PASSWORD")" && exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile',
       ]
-    ports: ["80:80", "443:443"]
+    ports: ["443:443"]
     environment:
       DOMAIN: ${DOMAIN:-localhost}
       PASSWORD: *password
+      # Keep Caddy's config/data under the writable /data volume (non-root).
+      XDG_CONFIG_HOME: /data
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./index.html:/srv/index.html:ro
       - ./logs:/srv/logs
       - ./covers:/srv/covers:ro
       - caddy:/data
-    depends_on: [icecast]
+    depends_on:
+      init: { condition: service_completed_successfully }
+      icecast: { condition: service_started }
 
 volumes:
   caddy: {}

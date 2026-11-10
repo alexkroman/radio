@@ -81,9 +81,9 @@
             {{if $log}}{{$f := index $log 0 | splitn "|" 4}}{{if ge (len $f) 4}}{{$s
             := $f._3 | splitn " - " 2}}
             <hgroup>
-              <h2>{{if $s._1}}{{$s._1 | html}}{{else}}{{$s._0 | html}}{{end}}</h2>
+              <h2>{{if $s._1}}{{$s._1}}{{else}}{{$s._0}}{{end}}</h2>
               {{if $s._1}}
-              <p>{{$s._0 | html}}</p>
+              <p>{{$s._0}}</p>
               {{end}}
             </hgroup>
             {{end}}{{end}}
@@ -104,9 +104,8 @@
             </time>
           </td>
           <td>
-            {{if $s._1}}{{$s._1 | html}}
-            <span class="muted">· {{$s._0 | html}}</span>{{else}}{{$s._0 |
-            html}}{{end}}
+            {{if $s._1}}{{$s._1}}
+            <span class="muted">· {{$s._0}}</span>{{else}}{{$s._0}}{{end}}
           </td>
         </tr>
         {{end}}{{end}}{{end}}

@@ -21,6 +21,7 @@ import:
   write: yes
   timid: no # auto-accept matches above the confidence threshold
   incremental: yes # skip files already processed in a prior run
+  quiet_fallback: asis # import with existing tags when no MusicBrainz match found
 
 plugins: chroma fetchart scrub mbsync
 

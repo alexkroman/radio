@@ -1,9 +1,9 @@
 enable_autocue_metadata()
 live = blank.strip(input.harbor("live", port=8005, password=environment.get("LIVE_PASSWORD")))
-music = crossfade(amplify(1., playlist(mode="randomize", reload_mode="watch", check_next=fun(r) -> not string.contains(suffix=".gitkeep", request.uri(r)), "/music")))
+music = crossfade(duration=12., fade_in=6., fade_out=6., amplify(1., playlist(mode="randomize", reload_mode="watch", check_next=fun(r) -> not string.contains(suffix=".gitkeep", request.uri(r)), "/music")))
 fade = fun (a, b) -> add(normalize=false, [fade.out(a), fade.in(b)])
 radio = mksafe(fallback(track_sensitive=false, transitions=[fade, fade], [live, music]))
-radio = map_metadata(fun(m) -> list.map(fun(kv) -> (fst(kv), string.recode(snd(kv))), m), radio)
+radio = map_metadata(fun(m) -> list.map(fun(kv) -> (fst(kv), if string.length(snd(kv)) > 1024 then snd(kv) else string.recode(snd(kv)) end), m), radio)
 radio.on_track(fun(m) ->
   begin
     cover = metadata.cover(m)

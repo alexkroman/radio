@@ -29,6 +29,7 @@
 		respond 204
 	}
 	handle /cover.jpg {
+		header Cache-Control "public, max-age=30"
 		root * /srv/covers
 		file_server
 	}
@@ -58,6 +59,7 @@ http://{$DOMAIN:localhost} {
 		respond 204
 	}
 	handle /cover.jpg {
+		header Cache-Control "public, max-age=30"
 		root * /srv/covers
 		file_server
 	}

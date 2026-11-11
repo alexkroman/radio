@@ -1,0 +1,56 @@
+# Beets config for Mazes Radio.
+# Tags messy/untagged MP3s in-place using audio fingerprinting + MusicBrainz.
+# Run: scripts/import.sh [show-slug]
+#
+# One-time setup:
+#   brew install chromaprint pipx     # fpcalc fingerprinter + pipx
+#   pipx install beets && pipx inject beets pyacoustid
+#   pipx ensurepath                   # adds ~/.local/bin to PATH; restart shell
+#
+# If using Homebrew beets instead of pipx:
+#   /opt/homebrew/opt/beets/libexec/bin/pip install pyacoustid
+
+id3v23: yes # write ID3v2.3 (Picard default; broader compatibility than v2.4)
+
+directory: . # overridden per-show in import.sh with -d
+library: ~/.config/beets/radio-library.db # overridden per-show in import.sh with -l
+
+paths:
+  default: "%if{$artist,$artist - }$title" # Artist - Title.mp3 (or just Title.mp3)
+  singleton: "%if{$artist,$artist - }$title" # same flat format for singleton imports
+
+import:
+  copy: no # tag in-place; don't move files
+  move: no
+  write: yes
+  timid: no # auto-accept matches above the confidence threshold
+  duplicate_action: skip # skip tracks already in the library; use beet update to refresh
+  quiet_fallback: asis # import with existing tags when no MusicBrainz match found
+
+plugins: chroma fetchart scrub mbsync
+
+chroma:
+  auto: yes # fingerprint every track before MusicBrainz lookup
+
+fetchart:
+  auto: yes
+  enforce_ratio: no
+  min_width: 300
+  sources:
+    - coverart
+    - itunes
+    - amazon
+    - albumart
+
+scrub:
+  auto: yes # strip junk tags before writing clean ones
+
+
+# Tags the app / Liquidsoap care about:
+#   artist  → TPE1   artist  tag("artist", "")
+#   title   → TIT2   title   tag("title", "")
+#   album   → TALB   album   tag("album", "")
+#   label   → TPUB   label   tag("label", "publisher")
+#   isrc    → TSRC   isrc    tag("isrc", "tsrc")
+# Beets writes all of these by default via its MusicBrainz lookup.
+# mbsync re-syncs from MusicBrainz after import for more complete ISRC data.

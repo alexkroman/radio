@@ -24,7 +24,7 @@ test("report keeps unicode and the whole title when it contains a pipe", async (
 
 test("front matter with CRLF line endings and a quoted title", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("link", { name: "Edge Cases", exact: true })).toHaveAttribute("href", "/edge");
+  await expect(page.locator('a.show-card[href="/edge"]')).toBeVisible();
   await page.goto("/edge");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Edge Cases");
   await expect(page.locator("main")).not.toContainText("title:");

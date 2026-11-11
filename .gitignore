@@ -1,4 +1,6 @@
 /music/
+shows/*
+!shows/.gitkeep
 covers/*
 !covers/.gitkeep
 logs/*
@@ -13,3 +15,5 @@ test-results/
 playwright-report/
 plays/*
 !plays/.gitkeep
+scripts/beets/library*.db
+*.bak

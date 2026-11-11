@@ -3,10 +3,22 @@
 # published to the host, no DDNS, and a Playwright container driving it.
 services:
   init:
+    # Override command: seed the covers volume with pre-extracted fixture art
+    # (no caddy:/data in e2e, so the base chown for /data is dropped too).
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        cp -r /fixture-covers/. /covers/
+        chown -R 10001:10001 /logs /covers /plays
+        chmod -R u+rwX,g+rwX /logs /covers /plays
+        chmod g+s /logs /covers /plays
     volumes:
       - e2e-logs:/logs
       - e2e-covers:/covers
       - e2e-plays:/plays
+      - ./test/fixtures/covers:/fixture-covers:ro
   icecast:
     volumes:
       - e2e-logs:/var/log/icecast

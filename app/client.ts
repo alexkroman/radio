@@ -1,5 +1,5 @@
 // Browser code for the site, bundled by esbuild into /assets/app.js (+ app.css).
-import "@picocss/pico/css/pico.jade.min.css";
+import "@picocss/pico/css/pico.zinc.min.css";
 import "./style.css";
 import htmx from "htmx.org";
 import IcecastMetadataPlayer from "icecast-metadata-player";

@@ -40,6 +40,18 @@ test("home page lists every show with its description", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName("Mazes Radio, all stations");
 });
 
+test("tapping anywhere on a station card opens it, but play plays in place", async ({ page }) => {
+  await page.goto("/");
+  const night = page.locator(".station", { has: page.locator('a[href="/night"]') });
+  await night.getByRole("button", { name: "Play Fixture Night" }).click();
+  await expect(night.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+  await night.getByRole("button", { name: "Pause Fixture Night" }).click();
+  // The card's link covers the description, so a real click there lands on it.
+  await night.locator(".station-desc").click({ force: true });
+  await expect(page).toHaveURL(/\/night$/);
+});
+
 test("about page lists every stream", async ({ page }) => {
   await page.goto("/about");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("About");

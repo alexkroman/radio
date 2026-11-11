@@ -25,7 +25,7 @@ import {
 
 const SHOWS = process.env.SHOWS_DIR ?? "/shows";
 const COVERS = process.env.COVERS_DIR ?? "/covers";
-const CONTACT_EMAIL = process.env.CONTACT_EMAIL ?? "";
+const CONTACT_EMAIL = process.env.CONTACT_EMAIL || "hello@example.com";
 const SLUG = "[a-z0-9-]+";
 // Pages with their own routes; a show with one of these slugs isn't listed.
 const RESERVED = new Set(["about", "admin", "assets", "covers", "login"]);
@@ -188,19 +188,23 @@ app.get("/about", async (c) => {
     <main class="page page-about">
       <SiteHeader current="about" />
       <h1 class="display">About</h1>
+      {/* Sample copy: placeholder text until the real About copy is written. */}
       <p class="lead">
-        {SITE_TITLE} is a small internet radio station:{" "}
-        {shows.length === 1 ? "one station" : `${shows.length} stations`}, each playing its own music around
-        the clock.
+        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis
+        dapibus, a pellentesque sem lacinia quam.
       </p>
       <section class="prose" aria-labelledby="about-stations">
         <h2 id="about-stations" class="label">
           The stations
         </h2>
         <p>
-          Each station plays its own library on shuffle, 24 hours a day, with crossfades between tracks and
-          the loudness levelled so nothing jumps out. A station’s page shows what’s on now and what played
-          recently.
+          Sed posuere consectetur est at lobortis. Cras mattis consectetur purus sit amet fermentum. Donec
+          ullamcorper nulla non metus auctor fringilla. Vestibulum id ligula porta felis euismod semper,
+          nullam quis risus eget urna mollis ornare vel eu leo.
+        </p>
+        <p>
+          Maecenas faucibus mollis interdum, with an <a href="/">inline link</a> to the stations. Aenean eu
+          leo quam pellentesque ornare sem lacinia quam venenatis vestibulum.
         </p>
       </section>
       <section class="prose" aria-labelledby="about-listen">
@@ -208,8 +212,8 @@ app.get("/about", async (c) => {
           Listening
         </h2>
         <p>
-          Every station has a direct stream URL. Open it in VLC, a phone radio app or any player that takes an
-          internet radio stream; track titles come with it.
+          Curabitur blandit tempus porttitor. Nulla vitae elit libero, a pharetra augue: each station has a
+          direct stream URL for apps and players.
         </p>
         <dl class="streams">
           {shows.map((s) => (
@@ -226,17 +230,15 @@ app.get("/about", async (c) => {
           </div>
         </dl>
       </section>
-      {CONTACT_EMAIL && (
-        <section class="prose" aria-labelledby="about-contact">
-          <h2 id="about-contact" class="label">
-            Contact
-          </h2>
-          <p>
-            Questions, suggestions or music to share? Write to{" "}
-            <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
-          </p>
-        </section>
-      )}
+      <section class="prose" aria-labelledby="about-contact">
+        <h2 id="about-contact" class="label">
+          Contact
+        </h2>
+        <p>
+          Donec id elit non mi porta gravida at eget metus:{" "}
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
+        </p>
+      </section>
       <footer class="footer footer-rule">{host}</footer>
     </main>,
     { title: "About" },

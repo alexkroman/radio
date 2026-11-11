@@ -1,9 +1,8 @@
 // Shared page parts for the public site (DESIGN: a printed radio listing).
 import type { Play } from "./plays.ts";
+import type { DjRef, Show } from "./shows.ts";
 
 export const SITE_TITLE = process.env.SITE_TITLE || "Mazes Radio";
-
-export type Show = { slug: string; title: string; description: string };
 
 // The labyrinth mark (design hand-off assets/logo-mark.svg), decorative here:
 // the link around it carries the name. The lines follow --color-ink (via the
@@ -26,7 +25,7 @@ export const Lockup = () => (
 );
 
 // `home`: the stations list, where the lockup is the page's <h1>.
-export const SiteHeader = ({ current, home }: { current: "stations" | "about"; home?: boolean }) => (
+export const SiteHeader = ({ current, home }: { current?: "stations" | "about"; home?: boolean }) => (
   <header class="site-header">
     {home ? (
       <h1>
@@ -73,6 +72,20 @@ export const PlayButton = ({ show, large }: { show: Show; large?: boolean }) => 
     <PauseIcon size={large ? 20 : 14} />
   </button>
 );
+
+// "with A", "with A & B", "with A, B & C": each name links to its DJ page.
+export const DjCredit = ({ djs, class: cls }: { djs: DjRef[]; class: string }) =>
+  djs.length === 0 ? null : (
+    <p class={`credit ${cls}`}>
+      with{" "}
+      {djs.map((d, i) => (
+        <>
+          {i > 0 && (i === djs.length - 1 ? " & " : ", ")}
+          <a href={`/djs/${d.slug}`}>{d.name}</a>
+        </>
+      ))}
+    </p>
+  );
 
 export const coverUrl = (cover: string) => `/covers/${encodeURI(cover)}`;
 

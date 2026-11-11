@@ -1,6 +1,6 @@
 # End-to-end overlay for compose.yml (run with test/e2e.sh): the real stack on
 # fixture shows/music, with logs/covers/plays in throwaway volumes, nothing
-# published to the host, no DDNS, and a Playwright container driving it.
+# published to the host, and a Playwright container driving it.
 services:
   init:
     # Override command: seed the covers volume with pre-extracted fixture art
@@ -37,8 +37,6 @@ services:
     ports: !reset []
     volumes:
       - e2e-logs:/srv/logs
-  ddns:
-    profiles: [disabled]
   e2e:
     image: radio-e2e
     build: { context: ., target: e2e }

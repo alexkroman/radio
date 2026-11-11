@@ -54,6 +54,7 @@ services:
         set -e
         sed \
           -e "s|<hostname>localhost</hostname>|<hostname>$$DOMAIN</hostname>|" \
+          -e 's|<errorlog>-</errorlog>|<errorlog>error.log</errorlog>|' \
           -e 's|</icecast>|<mount type="default"><charset>UTF-8</charset></mount></icecast>|' \
           /etc/icecast.xml > /tmp/icecast.xml
         grep -q '<charset>UTF-8' /tmp/icecast.xml
@@ -137,12 +138,12 @@ services:
   caddy:
     <<: *hardening
     user: "10001:10001"
-    # Allow the non-root user to bind privileged port 443.
+    # Allow the non-root user to bind ports 80 and 443.
     sysctls:
-      - net.ipv4.ip_unprivileged_port_start=443
+      - net.ipv4.ip_unprivileged_port_start=80
     restart: unless-stopped
     image: caddy:2.11.9
-    ports: ["443:443"]
+    ports: ["443:443", "80:80"]
     environment:
       DOMAIN: ${DOMAIN:-localhost}
       # Keep Caddy's config/data under the writable /data volume (non-root).

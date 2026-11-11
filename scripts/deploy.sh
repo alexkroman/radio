@@ -1,61 +1,52 @@
 #!/bin/sh
-# Deploy the station to an OVHcloud Public Cloud server in Hillsboro, Oregon
-# (region US-WEST-OR-1), using only stock tools: the OpenStack CLI to create the
-# server (once), cloud-init to install Docker, rsync + ssh to ship and start it.
-#
-#   pipx install python-openstackclient     # once
-#   . ./openrc.sh                           # OVHcloud: Public Cloud → Users & Roles → OpenStack RC (region US-WEST-OR-1)
-#   scripts/deploy.sh                       # first run creates the server; later runs just update it
-#   scripts/deploy.sh media                 # only music/, covers/ and shows/ (no rebuild)
-#
-# Override with NAME, FLAVOR (`openstack flavor list`), IMAGE, SSH_KEY, or set
-# IP=<server address> to skip the OpenStack CLI (and openrc) on later runs.
+# Deploy to OVHcloud Public Cloud in Hillsboro (US-WEST-OR-1); see README.md
+# "Deploy to OVHcloud". `scripts/deploy.sh` deploys everything (creating the
+# server on first run); `scripts/deploy.sh media` only syncs music/, covers/
+# and shows/. Set FLAVOR for another server size, or IP=<address> to skip the
+# OpenStack CLI.
 set -eu
 cd "$(dirname "$0")/.."
-: "${OS_REGION_NAME:=US-WEST-OR-1}"
-export OS_REGION_NAME
-NAME=${NAME:-radio} FLAVOR=${FLAVOR:-b3-8} IMAGE=${IMAGE:-Ubuntu 24.04}
-SSH_KEY=${SSH_KEY:-$HOME/.ssh/id_ed25519.pub}
+export OS_REGION_NAME="${OS_REGION_NAME:-US-WEST-OR-1}"
 [ -f .env ] || { echo "Create .env first (see .env.example)" >&2 && exit 1; }
+SSH="ssh -o StrictHostKeyChecking=accept-new -o ControlMaster=auto -o ControlPath=$HOME/.ssh/radio-%C -o ControlPersist=60"
+ipv4() { grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -n1; }
 
-if [ -z "${IP:-}" ] && ! openstack server show "$NAME" >/dev/null 2>&1; then
-  openstack keypair show "$NAME" >/dev/null 2>&1 ||
-    openstack keypair create --public-key "$SSH_KEY" "$NAME" >/dev/null
-  # Only SSH and HTTPS (Caddy) are reachable from outside.
-  if ! openstack security group show "$NAME" >/dev/null 2>&1; then
-    openstack security group create "$NAME" >/dev/null
-    for port in 22 443; do
-      openstack security group rule create --protocol tcp --dst-port "$port" "$NAME" >/dev/null
-    done
-  fi
-  openstack server create --wait --flavor "$FLAVOR" --image "$IMAGE" \
-    --network Ext-Net --key-name "$NAME" --security-group "$NAME" \
-    --user-data scripts/cloud-init.yml "$NAME" >/dev/null
+if [ -z "${IP:-}" ]; then
+  IP=$(openstack server show radio -f value -c addresses 2>/dev/null | ipv4 || true)
 fi
-
-IP=${IP:-$(openstack server show "$NAME" -f value -c addresses | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -n1)}
+if [ -z "$IP" ]; then
+  openstack keypair show radio >/dev/null 2>&1 ||
+    openstack keypair create --public-key "${SSH_KEY:-$HOME/.ssh/id_ed25519.pub}" radio >/dev/null
+  # Only SSH and HTTPS (Caddy) are reachable from outside.
+  openstack security group show radio >/dev/null 2>&1 || {
+    openstack security group create radio >/dev/null
+    openstack security group rule create --protocol tcp --dst-port 22 radio >/dev/null
+    openstack security group rule create --protocol tcp --dst-port 443 radio >/dev/null
+  }
+  IP=$(openstack server create --wait --flavor "${FLAVOR:-b3-8}" --image "Ubuntu 24.04" \
+    --network Ext-Net --key-name radio --security-group radio \
+    --user-data scripts/cloud-init.yml -f value -c addresses radio | ipv4)
+  until $SSH "ubuntu@$IP" cloud-init status --wait >/dev/null 2>&1; do sleep 5; done
+fi
 HOST=ubuntu@$IP
-SSH="ssh -o StrictHostKeyChecking=accept-new"
-until $SSH "$HOST" cloud-init status --wait >/dev/null 2>&1; do sleep 5; done
 
-# Mirror local files to the server (deletions too). -O: the dirs the init
-# service owns can't have their times set by the ubuntu user.
+# Mirror local files to the server. -O: the ubuntu user can't set times on the
+# dirs compose.yml's init service owns.
 rs() { rsync -rltO --delete --chmod=D755,F644 -e "$SSH" "$@"; }
 
-if [ "${1:-}" = media ]; then
-  rs music covers "$HOST:radio/"
-  # Liquidsoap only needs a restart when a show is added or removed.
-  if rs -i shows "$HOST:radio/" | grep -qE '^(>f\+|\*deleting)'; then
+# music/, covers/ and shows/ (deletions too). Liquidsoap reads the show list
+# at startup, so restart it when a show is added or removed.
+media() {
+  out=$(rs -i music covers shows "$HOST:radio/")
+  if printf '%s\n' "$out" | grep -qE '^(>f\+|\*deleting) +shows/'; then
     $SSH "$HOST" 'cd radio && docker compose restart liquidsoap'
   fi
-  echo "Media synced to $IP" && exit
-fi
+}
 
-# Everything. The station's own data (logs/, plays/) lives only on the server
-# and is never overwritten.
-rs \
-  --exclude=.git --exclude=node_modules --exclude=dist --exclude=test-results \
-  --exclude=playwright-report --exclude='/logs/*' --exclude='/plays/*' \
-  ./ "$HOST:radio/"
-$SSH "$HOST" 'chmod 600 radio/.env && cd radio && docker compose up -d --build --remove-orphans'
+if [ "${1:-}" != media ]; then
+  # The code is what git tracks (commit or `git add` new files), plus .env.
+  { git ls-files -z && printf '.env\0'; } | rs --from0 --files-from=- ./ "$HOST:radio/"
+  $SSH "$HOST" 'chmod 600 radio/.env && cd radio && docker compose up -d --build --remove-orphans'
+fi
+media
 echo "Deployed to $IP"

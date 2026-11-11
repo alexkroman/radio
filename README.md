@@ -62,7 +62,7 @@ Set `SITE_PASSWORD` in `.env` to put the show pages behind a login form; the str
 
 ## Deploy to OVHcloud (Hillsboro)
 
-`scripts/deploy.sh` puts the station on an OVHcloud Public Cloud server in Hillsboro, Oregon (region `US-WEST-OR-1`). It uses only stock tools: the OpenStack CLI creates the server (once), [`scripts/cloud-init.yml`](scripts/cloud-init.yml) installs Docker from Ubuntu's packages, and rsync + ssh copy this directory (with `.env`, `shows/`, `music/` and `covers/`) and run `docker compose up -d --build`. The station's `logs/` and `plays/` stay on the server and are never overwritten.
+`scripts/deploy.sh` puts the station on an OVHcloud Public Cloud server in Hillsboro, Oregon (region `US-WEST-OR-1`). It uses only stock tools: the OpenStack CLI creates the server (once), [`scripts/cloud-init.yml`](scripts/cloud-init.yml) installs Docker from Ubuntu's packages, and rsync + ssh copy the files git tracks (commit or `git add` new ones) plus `.env`, `shows/`, `music/` and `covers/`, then run `docker compose up -d --build`. The station's `logs/` and `plays/` stay on the server and are never overwritten.
 
 ```sh
 pipx install python-openstackclient   # once
@@ -71,7 +71,7 @@ scripts/deploy.sh                     # run again after any change to redeploy
 scripts/deploy.sh media               # after scripts/import.sh or editing shows: copy just music/, covers/, shows/
 ```
 
-`deploy.sh media` mirrors your `music/`, `covers/` and `shows/` to the server, so files you delete locally go from the server too. It restarts Liquidsoap only when a show was added or removed. Set `IP=<server address>` to run it without the OpenStack CLI or `openrc.sh`.
+Both mirror your `music/`, `covers/` and `shows/` to the server, so files you delete locally go from the server too, and restart Liquidsoap when a show was added or removed. Set `IP=<server address>` to run it without the OpenStack CLI or `openrc.sh`.
 
 Set `DOMAIN` in `.env`. The `ddns` service then points the domain at the server, so stop it on any other machine running the station. Only ports 22 and 443 are open. To change the size, set `FLAVOR` (`openstack flavor list`; default `b3-8`).
 

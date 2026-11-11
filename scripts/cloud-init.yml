@@ -1,12 +1,10 @@
 #cloud-config
 # First boot of the OVHcloud server (scripts/deploy.sh): Docker from Ubuntu's
-# own packages. Nothing else; the station itself is plain `docker compose`.
+# own packages (the image already has rsync and unattended-upgrades).
 package_update: true
-package_upgrade: true
-packages: [docker.io, docker-compose-v2, docker-buildx, rsync, unattended-upgrades]
+packages: [docker.io, docker-compose-v2, docker-buildx]
 runcmd:
   # Group 10001 owns the data dirs (compose.yml's init service), so rsync can
   # update covers/.
   - groupadd -g 10001 radio
   - usermod -aG docker,radio ubuntu
-  - systemctl enable --now docker

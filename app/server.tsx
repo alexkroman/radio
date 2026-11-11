@@ -3,7 +3,7 @@
 // Shows are shows/<slug>.md; Liquidsoap serves their streams via Caddy.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
@@ -46,28 +46,9 @@ declare module "hono" {
   }
 }
 
-// Parsed shows, by slug, kept until the file changes: every open page polls,
-// so a request costs a stat per show, not a re-read and re-render of each.
-const parsed = new Map<string, { version: string; show: Show }>();
-
 async function getShow(slug: string): Promise<Show | undefined> {
   if (RESERVED.has(slug)) return undefined;
-  const path = `${SHOWS}/${slug}.md`;
-  const info = await stat(path).catch(() => undefined);
-  if (!info?.isFile()) {
-    parsed.delete(slug);
-    return undefined;
-  }
-  const version = `${info.mtimeMs}:${info.size}`;
-  const hit = parsed.get(slug);
-  if (hit?.version === version) return hit.show;
-  const show = await parseShow(slug, path);
-  if (show) parsed.set(slug, { version, show });
-  return show;
-}
-
-async function parseShow(slug: string, path: string): Promise<Show | undefined> {
-  const text = await readFile(path, "utf8").catch(() => undefined);
+  const text = await readFile(`${SHOWS}/${slug}.md`, "utf8").catch(() => undefined);
   if (text === undefined) return undefined;
   const md = text.replace(/\r\n?/g, "\n");
   const [, front = "", body = md] = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(md) ?? [];

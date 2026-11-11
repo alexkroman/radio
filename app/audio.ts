@@ -9,13 +9,12 @@
 // for resumeAudio(), which start() calls in the click.
 const contexts: AudioContext[] = [];
 const Base = window.AudioContext;
-if (Base)
-  window.AudioContext = class extends Base {
-    constructor(options?: AudioContextOptions) {
-      super(options);
-      contexts.push(this);
-    }
-  };
+window.AudioContext = class extends Base {
+  constructor(options?: AudioContextOptions) {
+    super(options);
+    contexts.push(this);
+  }
+};
 
 export function resumeAudio() {
   for (const c of contexts) if (c.state !== "running") c.resume().catch(() => {});

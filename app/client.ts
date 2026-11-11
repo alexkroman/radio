@@ -21,7 +21,7 @@ import { mountBar, setBar } from "./bar.tsx";
 type Station = { slug: string; title: string; player: IcecastMetadataPlayer; stopping?: Promise<void> };
 
 const audio = new Audio();
-const session = "mediaSession" in navigator ? navigator.mediaSession : undefined;
+const session = navigator.mediaSession;
 let station: Station | undefined;
 // The station shown as playing (and its title): set on click, cleared when it stops.
 let active: string | undefined;
@@ -32,17 +32,16 @@ let now = { track: "", artist: "", cover: "" };
 function localTimes() {
   document.querySelectorAll("time[datetime]").forEach((el) => {
     const d = new Date(el.getAttribute("datetime")!);
-    if (!isNaN(d.valueOf()))
-      el.textContent = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    el.textContent = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   });
 }
 
 // Take the playing station's track and cover from the page when it has them.
 function readPage() {
   if (!active) return;
-  const el = document.querySelector<HTMLElement>(`[data-np="${active}"]`);
-  if (el?.dataset.track)
-    now = { track: el.dataset.track, artist: el.dataset.artist ?? "", cover: el.dataset.cover ?? "" };
+  // ui.tsx npData sets all three.
+  const np = document.querySelector<HTMLElement>(`[data-np="${active}"]`)?.dataset as typeof now | undefined;
+  if (np?.track) now = { track: np.track, artist: np.artist, cover: np.cover };
 }
 
 // The playing track's cover: from the page, else the station's current cover
@@ -67,7 +66,7 @@ function sync() {
 function stopped(p: IcecastMetadataPlayer) {
   if (station?.player !== p || station.stopping) return;
   active = undefined;
-  if (session) session.playbackState = "paused";
+  session.playbackState = "paused";
   sync();
 }
 
@@ -115,17 +114,16 @@ async function start(slug: string, title: string) {
       sync();
       // The page's now playing (and with it the cover) catches up.
       if (document.getElementById("poll")) htmx.trigger("#poll", "refresh");
-      if (session)
-        session.metadata = new MediaMetadata({
-          title: now.track,
-          artist: now.artist,
-          album: title,
-          artwork: [{ src: coverSrc(slug), sizes: "512x512", type: "image/jpeg" }],
-        });
+      session.metadata = new MediaMetadata({
+        title: now.track,
+        artist: now.artist,
+        album: title,
+        artwork: [{ src: coverSrc(slug), sizes: "512x512", type: "image/jpeg" }],
+      });
     },
     onPlay: () => {
       if (station?.player !== p) return;
-      if (session) session.playbackState = "playing";
+      session.playbackState = "playing";
     },
     onStop: () => stopped(p),
     onError: () => {
@@ -141,7 +139,7 @@ async function start(slug: string, title: string) {
 
 function stop() {
   active = undefined;
-  if (session) session.playbackState = "paused";
+  session.playbackState = "paused";
   sync();
   if (station) station.stopping ??= station.player.stop();
 }
@@ -151,14 +149,14 @@ function toggle(slug: string, title: string) {
   else void start(slug, title);
 }
 
-session?.setActionHandler("play", () => station && void start(station.slug, station.title));
-session?.setActionHandler("pause", stop);
-session?.setActionHandler("stop", stop);
+session.setActionHandler("play", () => station && void start(station.slug, station.title));
+session.setActionHandler("pause", stop);
+session.setActionHandler("stop", stop);
 
 document.addEventListener("click", (e) => {
   const button = (e.target as Element).closest<HTMLButtonElement>("button[data-play], button[data-copy]");
   if (!button) return;
-  if (button.dataset.play) return toggle(button.dataset.play, button.dataset.title ?? button.dataset.play);
+  if (button.dataset.play) return toggle(button.dataset.play, button.dataset.title!);
   const url = button.dataset.copy!;
   navigator.clipboard.writeText(url).then(
     () => {
@@ -167,8 +165,7 @@ document.addEventListener("click", (e) => {
     },
     () => {
       // No clipboard access: select the URL so it can be copied by hand.
-      const link = button.parentElement?.querySelector("a");
-      if (link) getSelection()?.selectAllChildren(link);
+      getSelection()!.selectAllChildren(button.parentElement!.querySelector("a")!);
     },
   );
 });
@@ -185,8 +182,7 @@ document.addEventListener("htmx:beforeRequest", (e) => {
   poll.addEventListener("htmx:beforeOnLoad", (l) => poll.isConnected || l.preventDefault(), { once: true });
 });
 
-const player = document.getElementById("player");
-if (player) mountBar(player, stop);
+mountBar(document.getElementById("player")!, stop);
 
 function settle() {
   localTimes();

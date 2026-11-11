@@ -1,7 +1,7 @@
 # ── Security model ────────────────────────────────────────────────────────────
 # Every long-running service: no privilege escalation + all Linux capabilities
 # dropped. None run as root:
-#   - icecast / liquidsoap / ddns keep their image's built-in non-root user and
+#   - icecast / liquidsoap keep their image's built-in non-root user and
 #     join the shared app group (GID 10001) so they can reach the bind mounts.
 #   - app (Node, built from ./Dockerfile) runs as the image's `node` user.
 #   - caddy runs as a dedicated non-root UID:GID 10001:10001.
@@ -117,24 +117,6 @@ services:
       - ./plays:/plays:ro
     depends_on:
       init: { condition: service_completed_successfully }
-
-  # Namecheap Dynamic DNS, for a station on a home connection. Off unless
-  # COMPOSE_PROFILES=ddns; the OVHcloud server (scripts/deploy.sh) has a fixed
-  # IP, so point the domain's A record at it instead.
-  ddns:
-    <<: *hardening
-    profiles: [ddns]
-    restart: unless-stopped
-    image: curlimages/curl@sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93
-    entrypoint:
-      [
-        "sh",
-        "-c",
-        '[ -n "$$DDNS_PASSWORD" ] || { echo "Set DDNS_PASSWORD in .env" >&2; exit 1; }; while true; do [ "$$DOMAIN" != "localhost" ] && curl -fsS "https://dynamicdns.park-your-domain.com/update?host=@&domain=$$DOMAIN&password=$$DDNS_PASSWORD" && echo; sleep 300; done',
-      ]
-    environment:
-      DOMAIN: ${DOMAIN:-localhost}
-      DDNS_PASSWORD: ${DDNS_PASSWORD:-}
 
   caddy:
     <<: *hardening

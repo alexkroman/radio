@@ -12,10 +12,7 @@
 //     - name: 李小龙
 //       slug: bruce-lee            # for a name that makes no usable slug
 //
-// `djs:` can also be a single DJ (a name or a mapping) instead of a list, and
-// `dj:` is the same key under another name, for a show with one DJ:
-//
-//   dj: Ana Ruiz
+// A show with one DJ lists just them (`djs: [Ana Ruiz]` on one line).
 //
 // The slug is the name lowercased, without accents, non-alphanumerics as "-"
 // ("Zoë Ñandú" → zoe-nandu); a DJ with no usable slug is left out, as is a
@@ -102,8 +99,8 @@ export async function getShow(slug: string): Promise<Show | undefined> {
   } catch {
     // Invalid front matter: fall back to the slug as the title.
   }
-  const djs = meta["djs"] ?? meta["dj"];
-  const entries: DjEntry[] = (Array.isArray(djs) ? djs : djs === undefined ? [] : [djs])
+  const djs = meta["djs"];
+  const entries: DjEntry[] = (Array.isArray(djs) ? djs : [])
     .map(djEntry)
     .filter((d) => d !== undefined)
     .filter((d, i, all) => all.findIndex((e) => e.slug === d.slug) === i);

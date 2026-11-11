@@ -30,28 +30,35 @@ djs:
 ---
 The **first** show.
 `,
-  // \`dj:\` with one name.
+  // One DJ, on one line.
   "b-dj.md": `---
 title: B Dj
-dj: Ana Ruiz
+djs: [Ana Ruiz]
 ---
 `,
-  // \`dj:\` with a mapping, and a slug of the DJ's own.
+  // One DJ with a slug of their own.
   "c-dj-map.md": `---
 title: C Dj Map
-dj:
-  name: 李小龙
-  slug: bruce-lee
-  tagline: Hong Kong
+djs:
+  - name: 李小龙
+    slug: bruce-lee
+    tagline: Hong Kong
 ---
 `,
-  // \`djs:\` with one name instead of a list, and details for a DJ another show named first.
+  // Details for a DJ another show named first.
   "d-djs-one.md": `---
 title: D Djs One
 djs:
-  name: Ben Cho
-  tagline: Queens, NY
-  photo: ../outside.jpg
+  - name: Ben Cho
+    tagline: Queens, NY
+    photo: ../outside.jpg
+---
+`,
+  // Not a list: no DJs.
+  "h-not-list.md": `---
+title: H Not A List
+djs: Ana Ruiz
+dj: Ben Cho
 ---
 `,
   // Accents, punctuation, and details a show earlier by slug already set.
@@ -64,7 +71,7 @@ djs:
 ---
 `,
   "f-bad-yaml.md": "---\ntitle: [unclosed\n---\nBody.\n",
-  "g-crlf.md": "---\r\ntitle: Windows\r\ndj: Ana Ruiz\r\n---\r\nBody.\r\n",
+  "g-crlf.md": "---\r\ntitle: Windows\r\ndjs:\r\n  - Ana Ruiz\r\n---\r\nBody.\r\n",
   "about.md": "---\ntitle: Reserved\n---\n",
   "Not-A-Show.md": "---\ntitle: Ignored\n---\n",
 };
@@ -89,6 +96,7 @@ describe("shows", () => {
       "e-accents",
       "f-bad-yaml",
       "g-crlf",
+      "h-not-list",
     ]);
     expect(await shows.getShow("about")).toBeUndefined();
     expect(await shows.getShow("nope")).toBeUndefined();
@@ -124,16 +132,16 @@ describe("a show's DJs", () => {
     ]);
   });
 
-  test("dj: one name", async () => {
+  test("one DJ on one line", async () => {
     expect(await djs("b-dj")).toEqual([{ slug: "ana-ruiz", name: "Ana Ruiz" }]);
   });
 
-  test("dj: one mapping, with its own slug", async () => {
+  test("one DJ with a slug of their own", async () => {
     expect(await djs("c-dj-map")).toEqual([{ slug: "bruce-lee", name: "李小龙" }]);
   });
 
-  test("djs: one mapping instead of a list", async () => {
-    expect(await djs("d-djs-one")).toEqual([{ slug: "ben-cho", name: "Ben Cho" }]);
+  test("djs: that isn't a list, or dj:, is no DJs", async () => {
+    expect(await djs("h-not-list")).toEqual([]);
   });
 
   test("slugs drop accents and punctuation, names are trimmed", async () => {
@@ -143,7 +151,7 @@ describe("a show's DJs", () => {
     ]);
   });
 
-  test("no djs: or dj: is none", async () => {
+  test("no djs: is none", async () => {
     expect(await djs("f-bad-yaml")).toEqual([]);
   });
 });

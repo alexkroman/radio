@@ -75,12 +75,12 @@ djs:
   slug: bruce-lee
 ```
 
-A show with one DJ can write it on one line with `dj:` (the same key as `djs:`, which also takes a single DJ instead of a list):
+A show with one DJ lists just them, on one line if you like:
 
 ```md
 ---
 title: My Show
-dj: Ana Ruiz
+djs: [Ana Ruiz]
 ---
 ```
 

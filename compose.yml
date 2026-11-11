@@ -57,6 +57,7 @@ services:
           -e 's|<errorlog>-</errorlog>|<errorlog>error.log</errorlog>|' \
           -e 's|</icecast>|<mount type="default"><charset>UTF-8</charset></mount></icecast>|' \
           /etc/icecast.xml > /tmp/icecast.xml
+        chmod 600 /tmp/icecast.xml
         grep -q '<charset>UTF-8' /tmp/icecast.xml
         exec icecast -c /tmp/icecast.xml
     environment:

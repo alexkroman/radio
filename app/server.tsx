@@ -331,7 +331,9 @@ app.get(`/djs/:dj{${SLUG}}/photo`, async (c) => {
 app.get(`/:slug{${SLUG}}/cover.jpg`, async (c) => {
   const cover = (await recentPlays(c.req.param("slug"), 1))[0]?.cover;
   if (!cover) return c.notFound();
-  c.header("Cache-Control", "no-cache");
+  // ?t= includes the track title so this URL is unique per track; short cache
+  // prevents the browser from refetching the same redirect in rapid succession.
+  c.header("Cache-Control", "private, max-age=15");
   return c.redirect(coverUrl(cover));
 });
 

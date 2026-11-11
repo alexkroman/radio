@@ -10,6 +10,8 @@ import "@fontsource/jetbrains-mono/500.css";
 import "@fontsource/jetbrains-mono/700.css";
 import "./tokens.css";
 import "./style.css";
+// Before icecast-metadata-player, which reads window.AudioContext when loaded.
+import { resumeAudio } from "./audio.ts";
 import htmx from "htmx.org";
 import IcecastMetadataPlayer, { type IcyMetadata } from "icecast-metadata-player";
 
@@ -96,6 +98,8 @@ function unlock() {
 }
 
 async function start(slug: string, title: string) {
+  // Synchronously, in the click: iOS allows it only there.
+  resumeAudio();
   active = slug;
   now = { track: "", artist: "", cover: "" };
   readPage();

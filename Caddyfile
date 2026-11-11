@@ -1,17 +1,30 @@
 {
-	# Port 80 is not published or bound: no HTTP listener, no HTTP->HTTPS
-	# redirect server. Certificates are issued/renewed over TLS-ALPN-01 on 443.
-	auto_https disable_redirects
+	# Port 80 redirects HTTP to HTTPS and is used for ACME HTTP-01 challenges.
+	# Certificates are issued/renewed over HTTP-01 (port 80) on first run.
 }
 
 (access_log) {
 	log {
-		output file /srv/logs/caddy-access.log
+		output file /srv/logs/caddy-access.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+	}
+}
+
+(error_log) {
+	log {
+		output file /srv/logs/caddy-error.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+		level ERROR
 	}
 }
 
 {$DOMAIN:localhost} {
 	import access_log
+	import error_log
 
 	@htmx {
 		method GET
@@ -28,7 +41,7 @@
 	}
 
 	header {
-		# Force HTTPS for a year (renewal is TLS-ALPN-01 on 443, no port 80).
+		# Force HTTPS for a year.
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "SAMEORIGIN"

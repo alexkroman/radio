@@ -68,7 +68,10 @@ Set `SITE_PASSWORD` in `.env` to put the show pages behind a login form; the str
 pipx install python-openstackclient   # once
 . ./openrc.sh                         # from the OVHcloud control panel: Public Cloud → Users & Roles → download OpenStack RC, region US-WEST-OR-1
 scripts/deploy.sh                     # run again after any change to redeploy
+scripts/deploy.sh music               # after adding music: copy just music/ (no restart)
 ```
+
+`deploy.sh music` mirrors your `music/` to the server, so tracks you delete locally go from the server too. Set `IP=<server address>` to run it without the OpenStack CLI or `openrc.sh`.
 
 Set `DOMAIN` in `.env`. The `ddns` service then points the domain at the server, so stop it on any other machine running the station. Only ports 22 and 443 are open. To change the size, set `FLAVOR` (`openstack flavor list`; default `b3-8`).
 

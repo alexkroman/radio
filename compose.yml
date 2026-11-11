@@ -19,12 +19,9 @@ x-hardening: &hardening
 
 services:
   init:
-    image: busybox:1.37.0
+    image: busybox:1.38.0
+    <<: *hardening
     user: "0:0"
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
     cap_add:
       - CHOWN
       - FOWNER
@@ -49,7 +46,7 @@ services:
     <<: *hardening
     group_add: ["10001"]
     restart: unless-stopped
-    image: libretime/icecast:2.4.4
+    image: libretime/icecast:2.5.0
     command:
       - sh
       - -c
@@ -79,7 +76,7 @@ services:
     <<: *hardening
     group_add: ["10001"]
     restart: unless-stopped
-    image: savonet/liquidsoap:v2.3.3
+    image: savonet/liquidsoap:v2.4.6
     command: ["/radio.liq"]
     environment:
       TZ: ${TZ:-UTC}

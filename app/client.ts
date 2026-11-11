@@ -43,6 +43,10 @@ function readPage() {
     now = { track: el.dataset.track, artist: el.dataset.artist ?? "", cover: el.dataset.cover ?? "" };
 }
 
+// The playing track's cover: from the page, else the station's current cover
+// (keyed by track so a browser fetches it once per track).
+const coverSrc = (slug: string) => now.cover || `/${slug}/cover.jpg?t=${encodeURIComponent(now.track)}`;
+
 // Show the play state everywhere: play buttons, "Live" labels, the phone bar.
 function sync() {
   document.querySelectorAll<HTMLButtonElement>("button[data-play]").forEach((b) => {
@@ -60,7 +64,7 @@ function sync() {
   $("bar-station").textContent = `${station.title} · Live`;
   $("bar-button").setAttribute("aria-label", `Pause ${station.title}`);
   const img = $<HTMLImageElement>("bar-cover");
-  const src = now.cover || `/${station.slug}/cover.jpg?t=${encodeURIComponent(now.track)}`;
+  const src = coverSrc(station.slug);
   if (img.getAttribute("src") !== src) {
     img.hidden = true;
     $("bar-ph").hidden = false;
@@ -130,7 +134,7 @@ async function start(slug: string, title: string) {
           title: now.track,
           artist: now.artist,
           album: title,
-          artwork: [{ src: `/${slug}/cover.jpg?t=${Date.now()}`, sizes: "512x512", type: "image/jpeg" }],
+          artwork: [{ src: coverSrc(slug), sizes: "512x512", type: "image/jpeg" }],
         });
     },
     onPlay: () => {

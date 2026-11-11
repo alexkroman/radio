@@ -2,7 +2,9 @@
 // login hardening and report edge cases. Fixtures: shows/{odd,long}.
 import { request as https } from "node:https";
 import { expect, test } from "@playwright/test";
+import { STATE } from "./global-setup.ts";
 import {
+  ADMIN,
   adminRequest,
   BASE,
   icyTitle,
@@ -54,8 +56,8 @@ test("pages fit a 320 px wide phone, even with very long titles", async ({ brows
     baseURL: BASE,
     ignoreHTTPSErrors: true,
     viewport: { width: 320, height: 640 },
-    storageState: "test-results/.auth.json",
-    httpCredentials: { username: "admin", password: process.env.ADMIN_PASSWORD ?? "" },
+    storageState: STATE,
+    httpCredentials: ADMIN,
   });
   const page = await context.newPage();
   for (const path of ["/", "/long", "/edge", "/admin/"]) {

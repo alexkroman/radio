@@ -1,5 +1,6 @@
 import { defineConfig } from "@playwright/test";
 import { STATE } from "./test/global-setup.ts";
+import { BASE } from "./test/helpers.ts";
 
 export default defineConfig({
   testDir: "test",
@@ -10,7 +11,7 @@ export default defineConfig({
   workers: 1,
   globalSetup: "./test/global-setup.ts",
   use: {
-    baseURL: process.env.BASE_URL ?? "https://localhost",
+    baseURL: BASE,
     ignoreHTTPSErrors: true,
     storageState: STATE,
     launchOptions: { args: ["--autoplay-policy=no-user-gesture-required"] },

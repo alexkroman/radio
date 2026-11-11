@@ -1,7 +1,9 @@
 // Shared helpers for the end-to-end specs.
+import { readFile } from "node:fs/promises";
 import { request as https } from "node:https";
-import { type APIRequestContext, request } from "@playwright/test";
+import { type APIRequestContext, expect, type Page, request } from "@playwright/test";
 import { IcecastMetadataReader } from "icecast-metadata-js";
+import type { Play } from "../app/plays.ts";
 
 export const BASE = process.env.BASE_URL ?? "https://localhost";
 export const SITE_PASSWORD = process.env.SITE_PASSWORD ?? "";
@@ -82,14 +84,27 @@ export function icyTitle(path: string): Promise<string> {
   });
 }
 
-export type LoggedPlay = { time: number; show: string; artist: string; title: string; listeners: number };
-
-// Every play logged this month (the e2e container mounts the play log).
-export async function loggedPlays(): Promise<LoggedPlay[]> {
-  const { readFile } = await import("node:fs/promises");
+// Every play logged this month (the e2e container mounts the play log),
+// skipping a line that is still being written.
+export async function loggedPlays(): Promise<Play[]> {
   const text = await readFile(`/plays/${month}.jsonl`, "utf8").catch(() => "");
-  return text
-    .split("\n")
-    .filter(Boolean)
-    .map((l) => JSON.parse(l) as LoggedPlay);
+  return text.split("\n").flatMap((l) => {
+    try {
+      return l ? [JSON.parse(l) as Play] : [];
+    } catch {
+      return [];
+    }
+  });
 }
+
+// Reload until the now playing track matches (the show may not have logged it yet).
+export async function waitForTrack(page: Page, text: string | RegExp, selector = "#np .np-track") {
+  await expect(async () => {
+    await page.reload();
+    await expect(page.locator(selector)).toHaveText(text, { timeout: 1000 });
+  }).toPass();
+}
+
+// The state of the site's icecast-metadata-player (app/client.ts exposes it).
+export const playerState = (page: Page) =>
+  page.evaluate(() => (window as unknown as { player: { state: string } }).player.state);

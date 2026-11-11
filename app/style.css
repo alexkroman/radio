@@ -278,6 +278,7 @@ img.cover {
 }
 
 .station {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -305,6 +306,33 @@ img.cover {
   font: var(--type-station-name);
   letter-spacing: -0.02em;
   text-decoration: none;
+}
+
+/* The name's link covers the whole card, so a tap anywhere opens the
+   station; the play button and any links in the description sit above it. */
+.station-name::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.station-name:focus-visible {
+  outline: none;
+}
+
+.station:hover .station-name {
+  color: var(--color-link-hover);
+}
+
+.station:has(.station-name:focus-visible) {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+.station .play,
+.station-desc :any-link {
+  position: relative;
+  z-index: 1;
 }
 
 .station-desc,

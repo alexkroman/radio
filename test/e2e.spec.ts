@@ -40,6 +40,18 @@ test("home page lists every show with its description", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName("Mazes Radio, all stations");
 });
 
+test("tapping anywhere on a station card opens it, but play plays in place", async ({ page }) => {
+  await page.goto("/");
+  const night = page.locator(".station", { has: page.locator('a[href="/night"]') });
+  await night.getByRole("button", { name: "Play Fixture Night" }).click();
+  await expect(night.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+  await night.getByRole("button", { name: "Pause Fixture Night" }).click();
+  // The card's link covers the description, so a real click there lands on it.
+  await night.locator(".station-desc").click({ force: true });
+  await expect(page).toHaveURL(/\/night$/);
+});
+
 test("about page lists every stream", async ({ page }) => {
   await page.goto("/about");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("About");
@@ -258,6 +270,48 @@ test("pausing and playing again at once keeps playing", async ({ page }) => {
   await page.waitForTimeout(2000);
   expect(await state()).toBe("playing");
   await expect(page.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+});
+
+// An iPhone has no MediaSource, so the player decodes into one AudioContext,
+// which iOS suspends when the audio stops with the phone locked (a server
+// restart, say) and lets resume only during a tap.
+test("play resumes an AudioContext that iOS suspended", async ({ page }) => {
+  await page.addInitScript(() => {
+    delete (window as { MediaSource?: unknown }).MediaSource;
+    const w = window as unknown as { inTap: boolean; ctx: AudioContext };
+    for (const e of ["touchstart", "touchend", "mousedown", "click", "keydown"])
+      addEventListener(e, () => ((w.inTap = true), setTimeout(() => (w.inTap = false))), true);
+    window.AudioContext = class extends AudioContext {
+      constructor(options?: AudioContextOptions) {
+        super(options);
+        w.ctx = this;
+      }
+      override resume() {
+        return w.inTap ? super.resume() : Promise.reject(new DOMException("not in a tap", "NotAllowedError"));
+      }
+    };
+  });
+  const audible = () =>
+    page.evaluate(async () => {
+      const { ctx } = window as unknown as { ctx: AudioContext };
+      const t = ctx.currentTime;
+      await new Promise((r) => setTimeout(r, 500));
+      return ctx.state === "running" && ctx.currentTime > t;
+    });
+  await page.goto("/night");
+  await page.getByRole("button", { name: "Play Fixture Night" }).click();
+  await expect.poll(() => playerState(page)).toBe("playing");
+  expect(await audible()).toBe(true);
+  await page.getByRole("button", { name: "Pause Fixture Night" }).click();
+  await expect.poll(() => playerState(page)).toBe("stopped");
+  // Outside a tap (an evaluate counts as one), as iOS does it.
+  await page.evaluate(() =>
+    setTimeout(() => void (window as unknown as { ctx: AudioContext }).ctx.suspend()),
+  );
+  await expect.poll(audible).toBe(false);
+  await page.getByRole("button", { name: "Play Fixture Night" }).click();
+  await expect.poll(() => playerState(page)).toBe("playing");
+  await expect.poll(audible).toBe(true);
 });
 
 test("pausing one station and playing another at once plays the other", async ({ page }) => {

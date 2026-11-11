@@ -3,6 +3,13 @@
 # own packages (the image already has rsync and unattended-upgrades).
 package_update: true
 packages: [docker.io, docker-compose-v2, docker-buildx]
+write_files:
+  # Reboot after security updates that need it (kernel, libc), at 11:00 UTC
+  # (3-4 am Pacific). Docker restarts the station afterwards.
+  - path: /etc/apt/apt.conf.d/52unattended-reboot
+    content: |
+      Unattended-Upgrade::Automatic-Reboot "true";
+      Unattended-Upgrade::Automatic-Reboot-Time "11:00";
 runcmd:
   # Group 10001 owns the data dirs (compose.yml's init service), so rsync can
   # update covers/.

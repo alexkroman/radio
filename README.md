@@ -73,6 +73,8 @@ scripts/deploy.sh media               # after scripts/import.sh or editing shows
 
 Both mirror your `music/`, `covers/` and `shows/` to the server, so files you delete locally go from the server too, and restart Liquidsoap when a show was added or removed. Set `IP=<server address>` to run it without the OpenStack CLI or `openrc.sh`.
 
+Every run also copies the server's play log to `backup/plays/` on your computer (it's the only record for SoundExchange reports), so deploy or sync now and then. The server installs security updates by itself and, when one needs it, reboots at 11:00 UTC (3–4 am Pacific); Docker brings the station back up.
+
 Set `DOMAIN` in `.env`. The `ddns` service then points the domain at the server, so stop it on any other machine running the station. Only ports 22 and 443 are open. To change the size, set `FLAVOR` (`openstack flavor list`; default `b3-8`).
 
 ## Development

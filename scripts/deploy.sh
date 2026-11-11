@@ -49,4 +49,8 @@ if [ "${1:-}" != media ]; then
   $SSH "$HOST" 'chmod 600 radio/.env && cd radio && docker compose up -d --build --remove-orphans'
 fi
 media
+# Back up the play log (the only record for SoundExchange reports) to
+# backup/plays/. Never deletes, and never touches the local plays/.
+mkdir -p backup/plays
+rsync -rt -e "$SSH" "$HOST:radio/plays/" backup/plays/
 echo "Deployed to $IP"

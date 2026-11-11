@@ -17,3 +17,4 @@ plays/*
 !plays/.gitkeep
 scripts/beets/library*.db
 *.bak
+/backup/

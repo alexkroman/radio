@@ -11,7 +11,7 @@ import "@fontsource/jetbrains-mono/700.css";
 import "./tokens.css";
 import "./style.css";
 import htmx from "htmx.org";
-import IcecastMetadataPlayer from "icecast-metadata-player";
+import IcecastMetadataPlayer, { type IcyMetadata } from "icecast-metadata-player";
 
 type Station = { slug: string; title: string; player: IcecastMetadataPlayer };
 
@@ -94,7 +94,7 @@ async function start(slug: string, title: string) {
   const p: IcecastMetadataPlayer = new IcecastMetadataPlayer(`/${slug}/stream`, {
     audioElement: audio,
     retryTimeout: 120,
-    onMetadata: (metadata: { StreamTitle?: string }) => {
+    onMetadata: (metadata: IcyMetadata) => {
       if (station?.player !== p) return;
       const raw = metadata.StreamTitle ?? "";
       const dash = raw.indexOf(" - ");

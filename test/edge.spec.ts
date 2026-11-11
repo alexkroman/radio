@@ -16,6 +16,18 @@ test("titles with unicode, pipes and HTML show exactly as tagged", async ({ page
   await expect(page.locator("main b")).toHaveCount(0);
 });
 
+test('cover art with a unicode or "&" file name is served', async ({ request }) => {
+  expect((await request.get("/covers/default/Beta%20&%20Band-%20Second%20Wind.jpg")).status()).toBe(200);
+  await expect(async () => {
+    const res = await request.get("/edge/cover.jpg");
+    expect(res.url()).toContain(
+      "/covers/edge/Zo%C3%AB%20%C3%91and%C3%BA-%20Caf%C3%A9%20_%20Ol%C3%A9%20_b_.jpg",
+    );
+    expect(res.status()).toBe(200);
+    expect(res.headers()["content-type"]).toBe("image/jpeg");
+  }).toPass();
+});
+
 test("report keeps unicode and the whole title when it contains a pipe", async () => {
   const admin = await adminRequest();
   await expect.poll(() => performances(admin, "ZOË ÑANDÚ", "CAFÉ  OLÉ <B>")).toBeGreaterThan(0);

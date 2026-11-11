@@ -2,7 +2,6 @@
 // ADMIN_PASSWORD): SoundExchange Report of Use from the play log.
 import { Hono } from "hono";
 import { basicAuth } from "hono/basic-auth";
-import { validator } from "hono/validator";
 import { monthOf, monthPlays } from "./plays.ts";
 
 const PASSWORD = process.env.ADMIN_PASSWORD;
@@ -75,18 +74,11 @@ admin.get("/", (c) => {
   );
 });
 
-admin.get(
-  "/report",
-  validator("query", (q, c) => {
-    const month = typeof q.month === "string" ? q.month : "";
-    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return c.text("month must be YYYY-MM", 400);
-    return { month };
-  }),
-  async (c) => {
-    const { month } = c.req.valid("query");
-    const [y, m] = month.split("-");
-    const last = new Date(Number(y), Number(m), 0).getDate();
-    c.header("Content-Disposition", `attachment; filename="${SHORT}01${m}${y}-${last}${m}${y}_A.txt"`);
-    return c.text(await report(month));
-  },
-);
+admin.get("/report", async (c) => {
+  const month = c.req.query("month") ?? "";
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return c.text("month must be YYYY-MM", 400);
+  const [y, m] = month.split("-");
+  const last = new Date(Number(y), Number(m), 0).getDate();
+  c.header("Content-Disposition", `attachment; filename="${SHORT}01${m}${y}-${last}${m}${y}_A.txt"`);
+  return c.text(await report(month));
+});

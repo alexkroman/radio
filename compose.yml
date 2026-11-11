@@ -65,6 +65,10 @@ services:
       ICECAST_RELAY_PASSWORD: *password
       # One source per show (the image's default is 2).
       ICECAST_MAX_SOURCES: 100
+      # Every connection across all mounts (listeners, sources, Liquidsoap's
+      # status checks); the image's default is 100. Each listener takes 256
+      # kbps of upload, so set this to what the connection can carry.
+      ICECAST_MAX_CLIENTS: ${MAX_LISTENERS:-100}
     volumes:
       - ./logs:/var/log/icecast
     depends_on:

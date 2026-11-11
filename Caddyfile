@@ -50,7 +50,9 @@
 			flush_interval -1
 		}
 	}
+	# Compress the pages and assets (not the streams: MP3 doesn't compress).
 	handle {
+		encode zstd gzip
 		reverse_proxy app:3000
 	}
 }

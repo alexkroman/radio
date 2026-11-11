@@ -340,6 +340,13 @@ test("the stream URL can be copied", async ({ browser }) => {
   await context.close();
 });
 
+test("pages and assets are compressed", async ({ request }) => {
+  for (const path of ["/", "/assets/app.js"]) {
+    const res = await request.get(path, { headers: { "Accept-Encoding": "gzip" } });
+    expect(res.headers()["content-encoding"]).toBe("gzip");
+  }
+});
+
 test.describe("site password", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 

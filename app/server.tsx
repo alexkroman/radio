@@ -1,37 +1,33 @@
 // The web app behind Caddy: the stations list (/), each show's station page
-// (/<slug>) and current cover (/<slug>/cover.jpg), /about, and the admin pages (/admin).
-// Shows are shows/<slug>.md; Liquidsoap serves their streams via Caddy.
-import { readdir, readFile } from "node:fs/promises";
+// (/<slug>) and current cover (/<slug>/cover.jpg), DJ pages (/djs/<dj>), /about,
+// and the admin pages (/admin). Shows are shows/<slug>.md (app/shows.ts), with
+// their DJs in the front matter; Liquidsoap serves their streams via Caddy.
+import { readFile } from "node:fs/promises";
+import { extname } from "node:path";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { jsxRenderer } from "hono/jsx-renderer";
-import { marked } from "marked";
-import { parse as parseYaml } from "yaml";
 import { admin } from "./admin.tsx";
 import { login, throttle } from "./login.tsx";
 import { latestPlays, type Play, recentPlays } from "./plays.ts";
+import { getDj, getShow, getShows, PHOTO_TYPES, type Show, SLUG } from "./shows.ts";
 import {
   Cover,
   coverUrl,
+  DjCredit,
   Markdown,
   npData,
   PlayButton,
   PlayerBar,
   Poll,
-  type Show,
   SITE_TITLE,
   SiteHeader,
   Time,
 } from "./ui.tsx";
 
-const SHOWS = process.env.SHOWS_DIR ?? "/shows";
 const COVERS = process.env.COVERS_DIR ?? "/covers";
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL || "hello@example.com";
-const SLUG = "[a-z0-9-]+";
-const SHOW_FILE = new RegExp(`^${SLUG}\\.md$`);
-// Pages with their own routes; a show with one of these slugs isn't listed.
-const RESERVED = new Set(["about", "admin", "assets", "covers", "login"]);
 // radio.liq: %mp3(bitrate = 256).
 const FORMAT = "MP3 · 256 kbps";
 
@@ -44,37 +40,34 @@ declare module "hono" {
   }
 }
 
-async function getShow(slug: string): Promise<Show | undefined> {
-  if (RESERVED.has(slug)) return undefined;
-  const text = await readFile(`${SHOWS}/${slug}.md`, "utf8").catch(() => undefined);
-  if (text === undefined) return undefined;
-  const md = text.replace(/\r\n?/g, "\n");
-  const [, front = "", body = md] = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(md) ?? [];
-  let meta: unknown;
-  try {
-    meta = parseYaml(front);
-  } catch {
-    // Invalid front matter: fall back to the slug as the title.
-  }
-  const title = (meta as { title?: unknown } | null)?.title;
-  return {
-    slug,
-    title: (typeof title === "string" || typeof title === "number" ? String(title) : "").trim() || slug,
-    description: await marked.parse(body),
-  };
-}
-
-async function getShows(): Promise<Show[]> {
-  const files = (await readdir(SHOWS)).filter((f) => SHOW_FILE.test(f)).sort();
-  return (await Promise.all(files.map((f) => getShow(f.slice(0, -3))))).filter((s) => s !== undefined);
-}
-
 // Track title and artist; `cls` prefixes their classes (np-track, h-artist, …).
 const TrackLines = ({ play, cls }: { play?: Play; cls: string }) => (
   <>
     {play && <span class={`${cls}-track`}>{play.title}</span>}
     {play?.artist && <span class={`${cls}-artist`}>{play.artist}</span>}
   </>
+);
+
+// One station in a list: the stations list (numbered, with its DJs) or a DJ's
+// page (neither, since the DJ is the page's subject).
+const StationRow = ({ show, play, num }: { show: Show; play?: Play; num?: number }) => (
+  <div class="station">
+    {num !== undefined && <span class="station-num">{String(num).padStart(2, "0")}</span>}
+    <div class="station-info">
+      <a class="station-name" href={`/${show.slug}`}>
+        {show.title}
+      </a>
+      <Markdown class="station-desc" html={show.description} />
+      {num !== undefined && <DjCredit djs={show.djs} class="station-credit" />}
+    </div>
+    <div id={`np-${show.slug}`} class="station-np" {...npData(show.slug, play)}>
+      <Cover play={play} size="cover-56" labelled />
+      <div class="np-lines">
+        <TrackLines play={play} cls="np" />
+      </div>
+    </div>
+    <PlayButton show={show} />
+  </div>
 );
 
 // The station page's cover and text (the play button stays put when this is refreshed).
@@ -164,22 +157,7 @@ app.get("/", async (c) => {
       <SiteHeader current="stations" home />
       <section id="stations" class="stations" aria-label="Stations">
         {rows.map((s, i) => (
-          <div class="station">
-            <span class="station-num">{String(i + 1).padStart(2, "0")}</span>
-            <div class="station-info">
-              <a class="station-name" href={`/${s.slug}`}>
-                {s.title}
-              </a>
-              <Markdown class="station-desc" html={s.description} />
-            </div>
-            <div id={`np-${s.slug}`} class="station-np" {...npData(s.slug, s.play)}>
-              <Cover play={s.play} size="cover-56" labelled />
-              <div class="np-lines">
-                <TrackLines play={s.play} cls="np" />
-              </div>
-            </div>
-            <PlayButton show={s} />
-          </div>
+          <StationRow show={s} play={s.play} num={i + 1} />
         ))}
       </section>
       <footer class="footer">{c.req.header("host")}</footer>
@@ -264,6 +242,7 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
       <header class="title-block">
         <h1 class="display">{show.title}</h1>
         <Markdown class="subtitle" html={show.description} />
+        <DjCredit djs={show.djs} class="title-credit" />
       </header>
       <section class="np-block" aria-label="Now playing">
         <PlayButton show={show} large />
@@ -281,6 +260,71 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
     </main>,
     { title: show.title },
   );
+});
+
+app.get(`/djs/:dj{${SLUG}}`, async (c) => {
+  const [dj, latest] = await Promise.all([getDj(c.req.param("dj")), latestPlays()]);
+  if (!dj) return c.notFound();
+  return c.render(
+    <main class="page page-dj">
+      <SiteHeader />
+      <section class="profile" aria-label="Profile">
+        {dj.photo ? (
+          <img class="cover photo" src={`/djs/${dj.slug}/photo`} alt={`Photo of ${dj.name}`} />
+        ) : (
+          <span class="cover photo cover-ph" aria-hidden="true" />
+        )}
+        <div class="profile-text">
+          <span class="label">DJ</span>
+          <h1 class="display">{dj.name}</h1>
+          {dj.tagline && <p class="subtitle">{dj.tagline}</p>}
+        </div>
+      </section>
+      {dj.bio && <Markdown class="lead" html={dj.bio} />}
+      <section class="dj-shows" aria-labelledby="dj-shows">
+        <h2 id="dj-shows" class="label">
+          Shows
+        </h2>
+        <div class="stations">
+          {dj.shows.map((s) => (
+            <StationRow show={s} play={latest.get(s.slug)} />
+          ))}
+        </div>
+      </section>
+      {dj.links.length > 0 && (
+        <section class="prose" aria-labelledby="dj-links">
+          <h2 id="dj-links" class="label">
+            Elsewhere
+          </h2>
+          <dl class="streams">
+            {dj.links.map((l) => (
+              <div>
+                <dt class="label">{l.label}</dt>
+                <dd>
+                  <a class="url" href={l.url} rel="me noopener" hx-boost="false">
+                    {l.url.replace(/^https?:\/\//i, "").replace(/\/$/, "")}
+                  </a>
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
+      <footer class="footer footer-rule">{c.req.header("host")}</footer>
+      <Poll path={`/djs/${dj.slug}`} ids={dj.shows.map((s) => `np-${s.slug}`)} />
+    </main>,
+    { title: dj.name },
+  );
+});
+
+// A DJ's photo: the file named by `photo:` in a show's front matter.
+app.get(`/djs/:dj{${SLUG}}/photo`, async (c) => {
+  const photo = (await getDj(c.req.param("dj")))?.photo;
+  const body = photo && (await readFile(photo).catch(() => undefined));
+  if (!photo || !body) return c.notFound();
+  c.header("Content-Type", PHOTO_TYPES[extname(photo).toLowerCase()]);
+  c.header("Cache-Control", "public, max-age=300");
+  return c.body(body);
 });
 
 // The current track's cover: a redirect to its pre-extracted art (play log).

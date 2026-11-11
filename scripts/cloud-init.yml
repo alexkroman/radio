@@ -1,0 +1,9 @@
+#cloud-config
+# First boot of the OVHcloud server (scripts/deploy.sh): Docker from Ubuntu's
+# own packages. Nothing else; the station itself is plain `docker compose`.
+package_update: true
+package_upgrade: true
+packages: [docker.io, docker-compose-v2, docker-buildx, rsync, unattended-upgrades]
+runcmd:
+  - usermod -aG docker ubuntu
+  - systemctl enable --now docker

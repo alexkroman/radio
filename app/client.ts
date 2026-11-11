@@ -81,12 +81,22 @@ function stopped(p: IcecastMetadataPlayer) {
   sync();
 }
 
+// Start the audio element, as icecast-metadata-player's play() would (to keep
+// iOS's permission from the click), but catch the rejection when the player
+// then loads the stream into it: the player's own call leaves that unhandled.
+function unlock() {
+  audio.play().catch(() => {});
+}
+
 async function start(slug: string, title: string) {
   active = slug;
   now = { track: "", artist: "", cover: "" };
   readPage();
   sync();
-  if (station?.slug === slug) return void station.player.play();
+  if (station?.slug === slug) {
+    unlock();
+    return void station.player.play();
+  }
   const old = station;
   station = undefined;
   if (old) await old.player.detachAudioElement();
@@ -126,6 +136,7 @@ async function start(slug: string, title: string) {
   station = { slug, title, player: p };
   (window as unknown as { player: unknown }).player = p;
   sync();
+  unlock();
   await p.play();
 }
 

@@ -49,7 +49,7 @@ function readPage() {
 // (keyed by track so a browser fetches it once per track).
 const coverSrc = (slug: string) => now.cover || `/${slug}/cover.jpg?t=${encodeURIComponent(now.track)}`;
 
-// Show the play state everywhere: play buttons, "Live" labels, the phone bar.
+// Show the play state everywhere: play buttons, "Live" labels, the player bar.
 function sync() {
   document.querySelectorAll<HTMLButtonElement>("button[data-play]").forEach((b) => {
     const on = b.dataset.play === active;

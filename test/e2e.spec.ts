@@ -25,7 +25,30 @@ test("home page lists every show with its description", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("link", { name: "Fixture Default" })).toHaveAttribute("href", "/default");
   await expect(page.getByRole("link", { name: "Fixture Night" })).toHaveAttribute("href", "/night");
-  await expect(page.locator("strong.show-name", { hasText: "default" })).toBeVisible();
+  await expect(page.locator(".station-desc", { hasText: "default" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Play Fixture Night" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName("Mazes Radio, all stations");
+});
+
+test("about page lists every stream", async ({ page }) => {
+  await page.goto("/about");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("About");
+  await expect(page.getByRole("link", { name: /\/night\/stream$/ })).toHaveAttribute("href", "/night/stream");
+  await expect(page.locator(".streams")).toContainText("MP3 · 256 kbps");
+});
+
+test("favicons are served without a login", async ({ playwright }) => {
+  const request = await playwright.request.newContext({ baseURL: BASE, ignoreHTTPSErrors: true });
+  for (const [path, type] of [
+    ["/favicon.ico", "image/"],
+    ["/favicon.svg", "image/svg+xml"],
+    ["/apple-touch-icon.png", "image/png"],
+  ]) {
+    const res = await request.get(path);
+    expect(res.status(), path).toBe(200);
+    expect(res.headers()["content-type"], path).toContain(type);
+  }
+  await request.dispose();
 });
 
 test("show page shows its own now playing and history", async ({ page }) => {
@@ -33,17 +56,17 @@ test("show page shows its own now playing and history", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Fixture Night");
   await expect(async () => {
     await page.reload();
-    await expect(page.locator("#np h2")).toHaveText("Midnight", {
+    await expect(page.locator("#np .np-track")).toHaveText("Midnight", {
       timeout: 1000,
     });
   }).toPass();
-  await expect(page.locator("#np p")).toHaveText("Gamma");
+  await expect(page.locator("#np .np-artist")).toHaveText("Gamma");
   await expect(page.getByRole("link", { name: /\/night\/stream$/ })).toHaveAttribute("href", "/night/stream");
 
   await page.goto("/default");
   await expect(async () => {
     await page.reload();
-    await expect(page.locator("#np h2")).toHaveText(/First Light|Second Wind/, {
+    await expect(page.locator("#np .np-track")).toHaveText(/First Light|Second Wind/, {
       timeout: 1000,
     });
   }).toPass();
@@ -172,16 +195,67 @@ test("player plays the stream using only self-hosted assets", async ({ page }) =
       !r.url().startsWith("https://fonts.gstatic.com") &&
       problems.push(`external request: ${r.url()}`),
   );
+  const state = () => page.evaluate(() => (window as unknown as { player: { state: string } }).player.state);
   await page.goto("/night");
-  await page.getByRole("button", { name: "Play" }).click();
-  await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
-  await expect
-    .poll(() => page.evaluate(() => (window as unknown as { player: { state: string } }).player.state))
-    .toBe("playing");
-  await expect(page.locator("#album-art")).toBeVisible();
-  await page.getByRole("button", { name: "Stop" }).click();
-  await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
+  await page.getByRole("button", { name: "Play Fixture Night" }).click();
+  await expect(page.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+  await expect(page.locator("[data-status=night]")).toHaveText("Listening · Live");
+  await expect.poll(state).toBe("playing");
+  await expect(page.locator("#np img")).toBeVisible();
+
+  // Browsing keeps it playing, and the list shows which station is on.
+  await page.getByRole("link", { name: "About", exact: true }).click();
+  await expect(page).toHaveURL(/\/about$/);
+  await expect(page).toHaveTitle(/^About/);
+  await page.getByRole("link", { name: "Stations", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Play Fixture Default" })).toBeVisible();
+  expect(await state()).toBe("playing");
+
+  // Starting another station stops this one.
+  await page.getByRole("button", { name: "Play Fixture Default" }).click();
+  await expect(page.getByRole("button", { name: "Pause Fixture Default" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Play Fixture Night" })).toBeVisible();
+  await expect.poll(state).toBe("playing");
+  await page.getByRole("button", { name: "Pause Fixture Default" }).click();
+  await expect(page.getByRole("button", { name: "Play Fixture Default" })).toBeVisible();
   expect(problems).toEqual([]);
+});
+
+test("the phone player bar shows while playing", async ({ browser }) => {
+  const context = await browser.newContext({
+    baseURL: BASE,
+    ignoreHTTPSErrors: true,
+    viewport: { width: 390, height: 844 },
+    storageState: "test-results/.auth.json",
+  });
+  const page = await context.newPage();
+  await page.goto("/");
+  const bar = page.getByRole("region", { name: "Player" });
+  await expect(bar).toBeHidden();
+  await page.getByRole("button", { name: "Play Fixture Night" }).click();
+  await expect(bar).toBeVisible();
+  await expect(bar).toContainText("Fixture Night · Live");
+  await expect(bar).toContainText("Midnight · Gamma");
+  await bar.getByRole("button", { name: "Pause Fixture Night" }).click();
+  await expect(bar).toBeHidden();
+  await context.close();
+});
+
+test("the stream URL can be copied", async ({ browser }) => {
+  const context = await browser.newContext({
+    baseURL: BASE,
+    ignoreHTTPSErrors: true,
+    storageState: "test-results/.auth.json",
+  });
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const page = await context.newPage();
+  await page.goto("/night");
+  await page.getByRole("button", { name: "Copy" }).click();
+  await expect(page.getByRole("button", { name: "Copied" })).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${BASE}/night/stream`);
+  await expect(page.getByRole("button", { name: "Copy" })).toBeVisible();
+  await context.close();
 });
 
 test.describe("site password", () => {

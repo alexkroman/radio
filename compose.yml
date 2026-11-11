@@ -104,7 +104,8 @@ services:
     build: { context: ., target: app }
     environment:
       TZ: ${TZ:-UTC}
-      SITE_TITLE: ${SITE_TITLE:-Radio}
+      SITE_TITLE: ${SITE_TITLE:-Mazes Radio}
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       SITE_PASSWORD: ${SITE_PASSWORD:-}
     volumes:

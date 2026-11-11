@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "format": "prettier --write --ignore-unknown .",
-    "build": "esbuild app/server.tsx --bundle --platform=node --format=esm --packages=external --outdir=dist && esbuild app/client.ts --bundle --minify --outfile=dist/public/app.js",
+    "build": "esbuild app/server.tsx --bundle --platform=node --format=esm --packages=external --outdir=dist && esbuild app/client.ts --bundle --minify --outfile=dist/public/app.js && cp app/public/* dist/public/",
     "typecheck": "tsc",
     "lint": "eslint .",
     "e2e": "bash test/e2e.sh",
@@ -17,7 +17,6 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@picocss/pico": "2.1.1",
     "@playwright/test": "1.65.0",
     "@types/node": "22.20.5",
     "esbuild": "0.28.2",

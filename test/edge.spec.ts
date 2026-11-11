@@ -8,11 +8,11 @@ test("titles with unicode, pipes and HTML show exactly as tagged", async ({ page
   await page.goto("/edge");
   await expect(async () => {
     await page.reload();
-    await expect(page.locator("#np h2")).toHaveText("Café | Olé <b>", {
+    await expect(page.locator("#np .np-track")).toHaveText("Café | Olé <b>", {
       timeout: 1000,
     });
   }).toPass();
-  await expect(page.locator("#np p")).toHaveText("Zoë Ñandú");
+  await expect(page.locator("#np .np-artist")).toHaveText("Zoë Ñandú");
   await expect(page.locator("main b")).toHaveCount(0);
 });
 
@@ -24,7 +24,7 @@ test("report keeps unicode and the whole title when it contains a pipe", async (
 
 test("front matter with CRLF line endings and a quoted title", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator('a.show-card[href="/edge"]')).toBeVisible();
+  await expect(page.locator('a.station-name[href="/edge"]')).toBeVisible();
   await page.goto("/edge");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Edge Cases");
   await expect(page.locator("main")).not.toContainText("title:");
@@ -40,12 +40,13 @@ test("an untagged track is shown by its file name, without cover art", async ({ 
   await page.goto("/plain");
   await expect(async () => {
     await page.reload();
-    await expect(page.locator("#np h2")).toHaveText("Untitled Thing", {
+    await expect(page.locator("#np .np-track")).toHaveText("Untitled Thing", {
       timeout: 1000,
     });
   }).toPass();
   expect((await request.get("/plain/cover.jpg")).status()).toBe(404);
-  await expect(page.locator("#album-art")).toBeHidden();
+  await expect(page.locator("#np img")).toHaveCount(0);
+  await expect(page.locator("#np .cover-ph")).toBeVisible();
 });
 
 test("a show with no music folder still streams and renders", async ({ page }) => {
@@ -56,7 +57,7 @@ test("a show with no music folder still streams and renders", async ({ page }) =
   });
   await page.goto("/empty");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Empty");
-  await expect(page.locator("#np h2")).toHaveCount(0);
+  await expect(page.locator("#np .np-track")).toHaveCount(0);
 });
 
 test("admin rejects malformed months", async () => {

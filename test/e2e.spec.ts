@@ -97,6 +97,39 @@ test("now playing refreshes itself", async ({ page }) => {
   expect(problems).toEqual([]);
 });
 
+test("home page now playing and cover follow the track without a reload", async ({ page }) => {
+  // The default fixture plays two 20 s tracks, each with its own cover, in
+  // random order: with only two artists, artist separation gives up and the
+  // same track can repeat several times, so allow a few minutes for a change.
+  test.setTimeout(300_000);
+  await page.goto("/");
+  await page.evaluate(() => ((window as unknown as { loaded: boolean }).loaded = true));
+  const np = page.locator("#np-default");
+  const shown = async () => ({
+    track: await np
+      .locator(".np-track")
+      .textContent({ timeout: 1000 })
+      .catch(() => null),
+    cover: await np
+      .locator("img.cover")
+      .getAttribute("src", { timeout: 1000 })
+      .catch(() => null),
+  });
+  let before = await shown();
+  await expect
+    .poll(async () => (before = await shown()).track, { timeout: 60_000 })
+    .toMatch(/First Light|Second Wind/);
+  expect(before.cover).toContain(encodeURIComponent(before.track!));
+
+  await expect.poll(async () => (await shown()).track, { timeout: 240_000 }).not.toBe(before.track);
+  const after = await shown();
+  expect(after.track).toMatch(/First Light|Second Wind/);
+  expect(after.cover).toContain(encodeURIComponent(after.track!));
+  expect(after.cover).not.toBe(before.cover);
+  // Swapped in by the poll, not a page load.
+  expect(await page.evaluate(() => (window as unknown as { loaded?: boolean }).loaded)).toBe(true);
+});
+
 test("cover art of the current track is served", async ({ request }) => {
   await expect(async () => {
     const res = await request.get("/night/cover.jpg");

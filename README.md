@@ -47,6 +47,25 @@ title: My Show
 A description shown on the player page.
 ```
 
+### DJs
+
+List a show's DJs in its front matter. Each DJ gets a page at `/djs/<name-slug>` (e.g. `/djs/ana-ruiz`), linked from "with …" under the show's name; a DJ on several shows has one page listing them all. A bare name is enough; the other fields are optional and can be written on any one of the DJ's shows:
+
+```md
+---
+title: My Show
+djs:
+  - name: Ana Ruiz
+    tagline: Brooklyn, NY # one line under the name
+    photo: djs/ana-ruiz.jpg # an image file in shows/ (jpg, png, webp, avif or gif)
+    bio: Two or three sentences, in Markdown.
+    links: # the "Elsewhere" list; http(s) links only
+      Instagram: https://instagram.com/anaruiz
+      Mixcloud: https://www.mixcloud.com/anaruiz/
+  - Ben Cho
+---
+```
+
 `shows/` is gitignored — create your own show files after cloning. Adding or removing a show needs `docker compose restart liquidsoap`; editing a title or description shows up immediately.
 
 ## Where things are
@@ -56,6 +75,7 @@ A description shown on the player page.
 | `https://localhost/`              | List of shows                                                  |
 | `https://localhost/<slug>`        | A show's player, now playing, history                          |
 | `https://localhost/<slug>/stream` | A show's stream for apps and VLC                               |
+| `https://localhost/djs/<dj>`      | A DJ's profile and shows                                       |
 | `https://localhost/admin/`        | Admin site (SoundExchange reports), `admin` / `ADMIN_PASSWORD` |
 
 Set `SITE_PASSWORD` in `.env` to put the show pages behind a login form; the streams stay public so apps can play them. After 10 wrong passwords (site or admin) from one address, logins are refused for 15 minutes. Nothing else is public.

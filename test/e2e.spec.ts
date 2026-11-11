@@ -52,6 +52,50 @@ test("tapping anywhere on a station card opens it, but play plays in place", asy
   await expect(page).toHaveURL(/\/night$/);
 });
 
+test("shows credit their DJs, each linked to a DJ page", async ({ page }) => {
+  await page.goto("/");
+  const night = page.locator(".station", { has: page.locator('a[href="/night"]') });
+  await expect(night.locator(".credit")).toHaveText("with Ana Ruiz, Ben Cho & Zoë Ñandú");
+  await expect(night.getByRole("link", { name: "Zoë Ñandú" })).toHaveAttribute("href", "/djs/zoe-nandu");
+  // The credit's links sit above the card's link.
+  await night.getByRole("link", { name: "Ben Cho" }).click();
+  await expect(page).toHaveURL(/\/djs\/ben-cho$/);
+  await page.goto("/default");
+  await expect(page.locator(".title-block .credit")).toHaveText("with Ana Ruiz & Ben Cho");
+});
+
+test("a DJ page has their profile, shows and links", async ({ page, request }) => {
+  await page.goto("/djs/ana-ruiz");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Ana Ruiz");
+  await expect(page.locator(".profile")).toContainText("Brooklyn, NY");
+  await expect(page.locator(".lead strong")).toHaveText("records");
+  const img = page.getByRole("img", { name: "Photo of Ana Ruiz" });
+  await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
+  const shows = page.locator(".dj-shows .station");
+  await expect(shows.locator(".station-name")).toHaveText(["Fixture Default", "Fixture Night"]);
+  await expect(shows.locator(".credit, .station-num")).toHaveCount(0);
+  await expect(page.locator(".site-header nav a[aria-current]")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "instagram.com/anaruiz" })).toHaveAttribute(
+    "href",
+    "https://instagram.com/anaruiz",
+  );
+  await expect(page.locator(".streams dt")).toHaveText(["Instagram"]);
+  await page.getByRole("button", { name: "Play Fixture Night" }).click();
+  await expect(page.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+  await page.getByRole("button", { name: "Pause Fixture Night" }).click();
+
+  // Just a name: a placeholder photo, no bio or links. A photo outside the
+  // allowed image types isn't served.
+  await page.goto("/djs/zoe-nandu");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Zoë Ñandú");
+  await expect(page.locator(".photo.cover-ph")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Elsewhere" })).toHaveCount(0);
+  expect((await request.get("/djs/zoe-nandu/photo")).status()).toBe(404);
+  expect((await request.get("/djs/nobody")).status()).toBe(404);
+  const photo = await request.get("/djs/ana-ruiz/photo");
+  expect(photo.headers()["content-type"]).toBe("image/jpeg");
+});
+
 test("about page lists every stream", async ({ page }) => {
   await page.goto("/about");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("About");

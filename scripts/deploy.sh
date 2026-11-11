@@ -6,7 +6,7 @@
 #   pipx install python-openstackclient     # once
 #   . ./openrc.sh                           # OVHcloud: Public Cloud → Users & Roles → OpenStack RC (region US-WEST-OR-1)
 #   scripts/deploy.sh                       # first run creates the server; later runs just update it
-#   scripts/deploy.sh music                 # only copy new/removed music (no restart needed)
+#   scripts/deploy.sh media                 # only music/, covers/ and shows/ (no rebuild)
 #
 # Override with NAME, FLAVOR (`openstack flavor list`), IMAGE, SSH_KEY, or set
 # IP=<server address> to skip the OpenStack CLI (and openrc) on later runs.
@@ -38,17 +38,24 @@ HOST=ubuntu@$IP
 SSH="ssh -o StrictHostKeyChecking=accept-new"
 until $SSH "$HOST" cloud-init status --wait >/dev/null 2>&1; do sleep 5; done
 
-RSYNC="rsync -rlt --delete --chmod=D755,F644 -e"
-if [ "${1:-}" = music ]; then
-  $RSYNC "$SSH" music/ "$HOST:radio/music/"
-  echo "Music synced to $IP" && exit
+# Mirror local files to the server (deletions too). -O: the dirs the init
+# service owns can't have their times set by the ubuntu user.
+rs() { rsync -rltO --delete --chmod=D755,F644 -e "$SSH" "$@"; }
+
+if [ "${1:-}" = media ]; then
+  rs music covers "$HOST:radio/"
+  # Liquidsoap only needs a restart when a show is added or removed.
+  if rs -i shows "$HOST:radio/" | grep -qE '^(>f\+|\*deleting)'; then
+    $SSH "$HOST" 'cd radio && docker compose restart liquidsoap'
+  fi
+  echo "Media synced to $IP" && exit
 fi
 
-# Code, config, shows/ and music/. The station's own data (logs/, covers/,
-# plays/) lives only on the server and is never overwritten.
-$RSYNC "$SSH" \
+# Everything. The station's own data (logs/, plays/) lives only on the server
+# and is never overwritten.
+rs \
   --exclude=.git --exclude=node_modules --exclude=dist --exclude=test-results \
-  --exclude=playwright-report --exclude='/logs/*' --exclude='/covers/*' --exclude='/plays/*' \
+  --exclude=playwright-report --exclude='/logs/*' --exclude='/plays/*' \
   ./ "$HOST:radio/"
 $SSH "$HOST" 'chmod 600 radio/.env && cd radio && docker compose up -d --build --remove-orphans'
 echo "Deployed to $IP"

@@ -75,8 +75,8 @@ test("a DJ page has their profile, shows and links", async ({ page, request }) =
   );
   await expect(page.locator(".streams dt")).toHaveText(["Instagram"]);
   await page.getByRole("button", { name: "Play Fixture Night" }).click();
-  await expect(page.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
-  await page.getByRole("button", { name: "Pause Fixture Night" }).click();
+  await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+  await page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" }).click();
 
   // Just a name: a placeholder photo, no bio or links. A photo outside the
   // allowed image types isn't served.
@@ -268,7 +268,7 @@ test("player plays the stream using only self-hosted assets", async ({ page }) =
   const state = () => playerState(page);
   await page.goto("/night");
   await page.getByRole("button", { name: "Play Fixture Night" }).click();
-  await expect(page.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
   await expect(page.locator("[data-status=night]")).toHaveText("Listening · Live");
   await expect.poll(state).toBe("playing");
   await expect(page.locator("#np img")).toBeVisible();
@@ -278,16 +278,16 @@ test("player plays the stream using only self-hosted assets", async ({ page }) =
   await expect(page).toHaveURL(/\/about$/);
   await expect(page).toHaveTitle(/^About/);
   await page.getByRole("link", { name: "Stations", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Play Fixture Default" })).toBeVisible();
   expect(await state()).toBe("playing");
 
   // Starting another station stops this one.
   await page.getByRole("button", { name: "Play Fixture Default" }).click();
-  await expect(page.getByRole("button", { name: "Pause Fixture Default" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Default" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Play Fixture Night" })).toBeVisible();
   await expect.poll(state).toBe("playing");
-  await page.getByRole("button", { name: "Pause Fixture Default" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Pause Fixture Default" }).click();
   await expect(page.getByRole("button", { name: "Play Fixture Default" })).toBeVisible();
   expect(problems).toEqual([]);
 });
@@ -303,11 +303,11 @@ test("pausing and playing again at once keeps playing", async ({ page }) => {
     b.click();
     b.click();
   });
-  await expect(page.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
   await expect.poll(state).toBe("playing");
   await page.waitForTimeout(2000);
   expect(await state()).toBe("playing");
-  await expect(page.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
 });
 
 // An iPhone has no MediaSource, so the player decodes into one AudioContext,
@@ -340,7 +340,7 @@ test("play resumes an AudioContext that iOS suspended", async ({ page }) => {
   await page.getByRole("button", { name: "Play Fixture Night" }).click();
   await expect.poll(() => playerState(page)).toBe("playing");
   expect(await audible()).toBe(true);
-  await page.getByRole("button", { name: "Pause Fixture Night" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" }).click();
   await expect.poll(() => playerState(page)).toBe("stopped");
   // Outside a tap (an evaluate counts as one), as iOS does it.
   await page.evaluate(() =>
@@ -365,7 +365,7 @@ test("pausing one station and playing another at once plays the other", async ({
   // The old player's late cleanup must not take over the audio element.
   await page.waitForTimeout(2000);
   expect(await state()).toBe("playing");
-  await expect(page.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
 });
 
 test("a refresh still in flight when you leave a station page isn't swapped into the next", async ({
@@ -396,30 +396,34 @@ test("a refresh still in flight when you leave a station page isn't swapped into
   expect(await page.locator("#history").textContent()).not.toContain("Midnight");
 });
 
-test("the phone player bar shows while playing", async ({ browser }) => {
-  const context = await browser.newContext({
-    baseURL: BASE,
-    ignoreHTTPSErrors: true,
-    viewport: { width: 390, height: 844 },
-    storageState: STATE,
+for (const [name, viewport] of [
+  ["phone", { width: 390, height: 844 }],
+  ["desktop", { width: 1440, height: 900 }],
+] as const)
+  test(`the player bar shows while playing (${name})`, async ({ browser }) => {
+    const context = await browser.newContext({
+      baseURL: BASE,
+      ignoreHTTPSErrors: true,
+      viewport,
+      storageState: STATE,
+    });
+    const page = await context.newPage();
+    await page.goto("/");
+    const bar = page.getByRole("region", { name: "Player" });
+    await expect(bar).toBeHidden();
+    await page.getByRole("button", { name: "Play Fixture Night" }).click();
+    await expect(bar).toBeVisible();
+    await expect(bar).toContainText("Fixture Night · Live");
+    await expect(bar).toContainText("Midnight · Gamma");
+    await expect(bar.getByRole("img", { name: "Cover art: Midnight, Gamma" })).toBeVisible();
+    // It (and the stream) stays through navigation.
+    await page.getByRole("link", { name: "About" }).click();
+    await expect(page).toHaveURL(/\/about$/);
+    await expect(bar).toContainText("Fixture Night · Live");
+    await bar.getByRole("button", { name: "Pause Fixture Night" }).click();
+    await expect(bar).toBeHidden();
+    await context.close();
   });
-  const page = await context.newPage();
-  await page.goto("/");
-  const bar = page.getByRole("region", { name: "Player" });
-  await expect(bar).toBeHidden();
-  await page.getByRole("button", { name: "Play Fixture Night" }).click();
-  await expect(bar).toBeVisible();
-  await expect(bar).toContainText("Fixture Night · Live");
-  await expect(bar).toContainText("Midnight · Gamma");
-  await expect(bar.getByRole("img", { name: "Cover art: Midnight, Gamma" })).toBeVisible();
-  // It (and the stream) stays through navigation.
-  await page.getByRole("link", { name: "About" }).click();
-  await expect(page).toHaveURL(/\/about$/);
-  await expect(bar).toContainText("Fixture Night · Live");
-  await bar.getByRole("button", { name: "Pause Fixture Night" }).click();
-  await expect(bar).toBeHidden();
-  await context.close();
-});
 
 test("the stream URL can be copied", async ({ browser }) => {
   const context = await browser.newContext({

@@ -162,7 +162,7 @@ app.use(
         >
           {children}
         </div>
-        {/* The phone player bar (app/bar.tsx), rendered by the client. */}
+        {/* The player bar (app/bar.tsx), rendered by the client. */}
         {script && <div id="player" />}
       </body>
     </html>

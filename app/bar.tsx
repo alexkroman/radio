@@ -1,5 +1,5 @@
 /** @jsxImportSource hono/jsx/dom */
-// The fixed player bar for phones, rendered in the browser with hono/jsx/dom
+// The fixed player bar, rendered in the browser with hono/jsx/dom
 // into #player (outside the swapped page, so it and the audio survive
 // navigation). app/client.ts sets what it shows with setBar(); it shows only
 // while a station is playing.

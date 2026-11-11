@@ -102,7 +102,7 @@ export const Cover = ({ play, size, labelled }: { play?: Play; size: string; lab
     <span class={`cover ${size} cover-ph`} aria-hidden="true" />
   );
 
-// Data the client reads to fill the phone player bar for a station.
+// Data the client reads to fill the player bar for a station.
 export const npData = (slug: string, play?: Play) => ({
   "data-np": slug,
   "data-track": play?.title ?? "",

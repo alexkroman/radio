@@ -127,6 +127,15 @@ describe("pages", () => {
     expect(html).not.toContain("javascript:");
   });
 
+  test("a DJ's photo is revalidated by its ETag", async () => {
+    const res = await page("/djs/ana-ruiz/photo");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/jpeg");
+    expect(res.headers.get("cache-control")).toBeNull();
+    const again = await page("/djs/ana-ruiz/photo", { "if-none-match": res.headers.get("etag")! });
+    expect(again.status).toBe(304);
+  });
+
   test("unknown pages are 404", async () => {
     for (const path of ["/nope", "/djs/nobody", "/djs/nobody/photo", "/empty/cover.jpg"])
       expect((await page(path)).status, path).toBe(404);

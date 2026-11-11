@@ -326,8 +326,8 @@ app.get(`/djs/:dj{${SLUG}}/photo`, async (c) => {
   const photo = (await getDj(c.req.param("dj")))?.photo;
   const body = photo && (await readFile(photo).catch(() => undefined));
   if (!photo || !body) return c.notFound();
+  // No max-age: the ETag makes a repeat a 304, and an edited photo shows at once.
   c.header("Content-Type", PHOTO_TYPES[extname(photo).toLowerCase()]);
-  c.header("Cache-Control", "public, max-age=300");
   return c.body(body);
 });
 

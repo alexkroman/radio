@@ -19,4 +19,8 @@ set -a
 . ./test/test.env
 set +a
 docker buildx bake --load "${bake_flags[@]}" "${files[@]}" app e2e
-dc run --rm e2e npx playwright test "$@"
+# Start the stack from those images, then the tests. Plain `compose run` would
+# rebuild the app (pull_policy: build) without E2E_BAKE_FLAGS, which fails in
+# cloud sessions, and `run` has no --no-build.
+dc up -d --no-build caddy liquidsoap
+dc run --rm --no-deps e2e npx playwright test "$@"

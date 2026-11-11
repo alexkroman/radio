@@ -1,18 +1,20 @@
 // Optional site password (SITE_PASSWORD): every page then needs a signed
-// cookie, set by a small login form. /admin has its own basic auth; the
-// streams (Caddy → Liquidsoap) stay public so apps like VLC can play them.
+// cookie, set by a small login form. /admin has its own basic auth; assets,
+// favicons and the streams (Caddy → Liquidsoap) stay public so apps like VLC
+// can play them.
 import type { Hono } from "hono";
 import { getSignedCookie, setSignedCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import { timingSafeEqual } from "hono/utils/buffer";
+import { Lockup } from "./ui.tsx";
 
 const PASSWORD = process.env.SITE_PASSWORD;
 const COOKIE = "radio_auth";
 
 const Login = ({ next, error }: { next: string; error?: boolean }) => (
-  <article id="login">
-    <h2>Radio</h2>
-    <form method="post" action="/login">
+  <main class="page page-login">
+    <Lockup />
+    <form method="post" action="/login" class="login">
       <input type="hidden" name="next" value={next} />
       <input
         type="password"
@@ -23,9 +25,9 @@ const Login = ({ next, error }: { next: string; error?: boolean }) => (
         required
       />
       <button type="submit">Enter</button>
-      {error && <p>Wrong password</p>}
+      {error && <p class="error">Wrong password</p>}
     </form>
-  </article>
+  </main>
 );
 
 // At most 10 failed logins (site form or admin basic auth) per client IP per
@@ -64,7 +66,10 @@ export function login(app: Hono) {
   });
 
   app.use(async (c, next) => {
-    if (/^\/(assets|admin)(\/|$)/.test(c.req.path) || (await getSignedCookie(c, PASSWORD, COOKIE)) === "1")
+    if (
+      /^\/((assets|admin)(\/|$)|favicon\.(ico|svg)$|apple-touch-icon\.png$)/.test(c.req.path) ||
+      (await getSignedCookie(c, PASSWORD, COOKIE)) === "1"
+    )
       return next();
     c.status(401);
     return c.render(<Login next={c.req.path} />, { script: false });

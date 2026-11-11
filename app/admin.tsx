@@ -57,10 +57,10 @@ admin.get("/", (c) => {
     monthOf(new Date(now.getFullYear(), now.getMonth() - i, 1)),
   );
   return c.render(
-    <>
-      <h1>Radio admin</h1>
-      <h2>SoundExchange reports</h2>
-      <table class="striped">
+    <main class="page page-station">
+      <h1 class="display">Admin</h1>
+      <h2 class="label">SoundExchange reports</h2>
+      <table class="admin-table">
         {months.map((m) => (
           <tr>
             <td>{m}</td>
@@ -70,7 +70,7 @@ admin.get("/", (c) => {
           </tr>
         ))}
       </table>
-    </>,
+    </main>,
     { title: "Radio admin", script: false },
   );
 });

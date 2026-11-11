@@ -23,7 +23,7 @@ test("in-stream (ICY) metadata is the current track, in UTF-8", async () => {
 
 test("the player picks up track metadata from the stream", async ({ page }) => {
   await page.goto("/edge");
-  await page.getByRole("button", { name: "Play" }).click();
+  await page.getByRole("button", { name: "Play Edge Cases" }).click();
   await expect
     .poll(() =>
       page.evaluate(
@@ -42,8 +42,8 @@ test("quotes and backslashes survive the log, the page and the report", async ({
     .poll(async () => (await loggedPlays()).find((p) => p.show === "odd"))
     .toMatchObject({ artist: ODD_ARTIST, title: ODD_TITLE });
   await page.goto("/odd");
-  await expect(page.locator("#np h2")).toHaveText(ODD_TITLE);
-  await expect(page.locator("#np p")).toHaveText(ODD_ARTIST);
+  await expect(page.locator("#np .np-track")).toHaveText(ODD_TITLE);
+  await expect(page.locator("#np .np-artist")).toHaveText(ODD_ARTIST);
   const admin = await adminRequest();
   expect(await performances(admin, 'Q "THE" ARTIST', "BACK\\SLASH \"QUOTES\" & 'TICKS'")).toBeGreaterThan(0);
   await admin.dispose();
@@ -61,7 +61,7 @@ test("pages fit a 320 px wide phone, even with very long titles", async ({ brows
   for (const path of ["/", "/long", "/edge", "/admin/"]) {
     await page.goto(path);
     if (path === "/long")
-      await expect(page.locator("#np h2")).toContainText("Supercalifragilisticexpialidocious");
+      await expect(page.locator("#np .np-track")).toContainText("Supercalifragilisticexpialidocious");
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow, path).toBeLessThanOrEqual(0);
   }

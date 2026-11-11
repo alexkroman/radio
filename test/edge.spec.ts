@@ -1,15 +1,7 @@
-// Edge cases: odd titles and show files, missing music, bad input, traversal,
+// Edge cases: odd titles and show files, missing music, traversal,
 // listener counting. Fixtures: test/fixtures/{shows,music}/{edge,plain,empty}.
 import { expect, test } from "@playwright/test";
-import {
-  adminRequest,
-  BASE,
-  listen,
-  loggedPlays,
-  performances,
-  streamHead,
-  waitForTrack,
-} from "./helpers.ts";
+import { adminRequest, listen, loggedPlays, performances, streamHead, waitForTrack } from "./helpers.ts";
 
 test("titles with unicode, pipes and HTML show exactly as tagged", async ({ page }) => {
   await page.goto("/edge");
@@ -48,20 +40,6 @@ test("report keeps unicode and the whole title when it contains a pipe", async (
   await admin.dispose();
 });
 
-test("front matter with CRLF line endings and a quoted title", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.locator('a.station-name[href="/edge"]')).toBeVisible();
-  await page.goto("/edge");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Edge Cases");
-  await expect(page.locator("main")).not.toContainText("title:");
-});
-
-test("a show without front matter is titled by its slug", async ({ page }) => {
-  await page.goto("/plain");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("plain");
-  await expect(page.locator("main")).toContainText("Just a description, no front matter.");
-});
-
 test("an untagged track is shown by its file name, without cover art", async ({ page, request }) => {
   await page.goto("/plain");
   await waitForTrack(page, "Untitled Thing");
@@ -79,25 +57,6 @@ test("a show with no music folder still streams and renders", async ({ page }) =
   await page.goto("/empty");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Empty");
   await expect(page.locator("#np .np-track")).toHaveCount(0);
-});
-
-test("admin rejects malformed months", async () => {
-  const admin = await adminRequest();
-  for (const m of ["2026-13", "2026-00", "26-01", "2026-1", "", "2026-01x"]) {
-    expect((await admin.get(`/admin/report?month=${encodeURIComponent(m)}`)).status(), m).toBe(400);
-  }
-  expect((await admin.get("/admin/report")).status()).toBe(400);
-  await admin.dispose();
-});
-
-test("admin rejects a wrong password", async ({ playwright }) => {
-  const wrong = await playwright.request.newContext({
-    baseURL: BASE,
-    ignoreHTTPSErrors: true,
-    httpCredentials: { username: "admin", password: "wrong" },
-  });
-  expect((await wrong.get("/admin/")).status()).toBe(401);
-  await wrong.dispose();
 });
 
 test("encoded and dotted paths don't leak files", async ({ request }) => {

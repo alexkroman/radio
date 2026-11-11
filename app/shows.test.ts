@@ -70,6 +70,7 @@ djs:
     photo: djs/notes.txt
 ---
 `,
+  "e-plain.md": "Just a description.\n",
   "f-bad-yaml.md": "---\ntitle: [unclosed\n---\nBody.\n",
   "g-crlf.md": "---\r\ntitle: Windows\r\ndjs:\r\n  - Ana Ruiz\r\n---\r\nBody.\r\n",
   "about.md": "---\ntitle: Reserved\n---\n",
@@ -94,6 +95,7 @@ describe("shows", () => {
       "c-dj-map",
       "d-djs-one",
       "e-accents",
+      "e-plain",
       "f-bad-yaml",
       "g-crlf",
       "h-not-list",
@@ -108,7 +110,9 @@ describe("shows", () => {
     expect(show?.description).toBe("<p>The <strong>first</strong> show.</p>\n");
   });
 
-  test("without a title, or with bad front matter, are titled by their slug", async () => {
+  test("without front matter, a title, or with bad front matter, are titled by their slug", async () => {
+    const plain = await shows.getShow("e-plain");
+    expect(plain).toMatchObject({ title: "e-plain", description: "<p>Just a description.</p>\n" });
     expect((await shows.getShow("e-accents"))?.title).toBe("e-accents");
     expect((await shows.getShow("f-bad-yaml"))?.title).toBe("f-bad-yaml");
   });

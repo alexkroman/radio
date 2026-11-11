@@ -1,5 +1,5 @@
 // Bug hunt: in-stream metadata, escaping, layout, listener counting, load,
-// login hardening and report edge cases. Fixtures: shows/{odd,long}.
+// and the login throttle. Fixtures: shows/{odd,long}.
 import { request as https } from "node:https";
 import { expect, test } from "@playwright/test";
 import { STATE } from "./global-setup.ts";
@@ -11,7 +11,6 @@ import {
   listen,
   loggedPlays,
   performances,
-  SITE_PASSWORD,
   streamHead,
 } from "./helpers.ts";
 
@@ -111,44 +110,6 @@ test("listener counts return to zero after listeners leave", async () => {
 test("50 simultaneous listeners all get audio", async () => {
   const results = await Promise.all(Array.from({ length: 50 }, () => streamHead("/default/stream")));
   expect(results.filter((r) => r.status === 200 && r.type === "audio/mpeg")).toHaveLength(50);
-});
-
-test.describe("logged out", () => {
-  test.use({ storageState: { cookies: [], origins: [] } });
-
-  test("the login page doesn't reflect markup from the URL", async ({ request }) => {
-    const res = await request.get("/%22%3E%3Cscript%3Ealert(1)%3C%2Fscript%3E");
-    expect(await res.text()).not.toContain("<script>alert(1)");
-  });
-
-  test("login can't inject headers through next", async ({ request }) => {
-    for (const next of ["/\r\nSet-Cookie: pwned=1", "/x\nX-Injected: 1"]) {
-      const res = await request.post("/login", { form: { password: SITE_PASSWORD, next }, maxRedirects: 0 });
-      expect(res.status(), JSON.stringify(next)).toBe(303);
-      expect(res.headers()["x-injected"]).toBeUndefined();
-      expect(
-        res.headersArray().filter((h) => h.name.toLowerCase() === "set-cookie" && h.value.includes("pwned")),
-      ).toEqual([]);
-    }
-  });
-
-  test("an unknown asset is 404, not the login page", async ({ request }) => {
-    expect((await request.get("/assets/nope.js")).status()).toBe(404);
-  });
-});
-
-test("admin report: empty months and leap-year February", async () => {
-  const admin = await adminRequest();
-  const res = await admin.get("/admin/report?month=2028-02");
-  expect(res.status()).toBe(200);
-  expect(res.headers()["content-disposition"]).toBe(
-    'attachment; filename="MAZESRADIO01022028-29022028_A.txt"',
-  );
-  expect((await res.text()).trim().split("\n")).toHaveLength(1);
-  expect((await admin.get("/admin/report?month=2026-02")).headers()["content-disposition"]).toContain(
-    "-28022026_A.txt",
-  );
-  await admin.dispose();
 });
 
 // Last: it locks this client out of logging in for a while.

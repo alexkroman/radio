@@ -74,11 +74,21 @@ describe("site login", () => {
     ["/\\evil.example", "/"],
     ["https://evil.example", "/"],
     ["/a\nb", "/"],
+    ["/\r\nSet-Cookie: pwned=1", "/"],
   ])("next %j redirects to %j", async (next, to) => {
     const res = await login({ password: "unit-site", next });
     expect(res.status).toBe(303);
     expect(res.headers.get("location")).toBe(to);
     expect(res.headers.get("set-cookie")).toMatch(/HttpOnly.*Secure|Secure.*HttpOnly/);
+  });
+
+  test("a forged cookie is refused", async () => {
+    expect((await req("/night", {}, { cookie: "radio_auth=1" })).status).toBe(401);
+  });
+
+  test("the login page doesn't reflect markup from the URL", async () => {
+    const res = await req("/%22%3E%3Cscript%3Ealert(1)%3C%2Fscript%3E");
+    expect(await res.text()).not.toContain("<script>alert(1)");
   });
 
   test("a large form isn't read", async () => {
@@ -96,6 +106,7 @@ describe("site login", () => {
   test("assets and favicons stay public", async () => {
     expect((await req("/favicon.ico")).status).not.toBe(401);
     expect((await req("/assets/app.js")).status).not.toBe(401);
+    expect((await req("/assets/nope.js")).status).toBe(404);
   });
 });
 
@@ -163,7 +174,9 @@ describe("pages", () => {
 describe("admin", () => {
   test("needs the admin password", async () => {
     expect((await admin("/admin", "nope")).status).toBe(401);
-    expect((await admin("/admin")).status).toBe(200);
+    const res = await admin("/admin");
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain(`/admin/report?month=${month}`);
   });
 
   test("the SoundExchange report counts each play's listeners (at least 1)", async () => {
@@ -179,7 +192,18 @@ describe("admin", () => {
     ]);
   });
 
-  test("the report needs a valid month", async () => {
-    expect((await admin("/admin/report?month=2026-13")).status).toBe(400);
+  test.each(["2026-13", "2026-00", "26-01", "2026-1", "", "2026-01x"])("month %j is refused", async (m) => {
+    expect((await admin(`/admin/report?month=${encodeURIComponent(m)}`)).status).toBe(400);
+  });
+
+  test("a month without plays is just the header, named for its days", async () => {
+    const res = await admin("/admin/report?month=2028-02");
+    expect(res.headers.get("content-disposition")).toBe(
+      'attachment; filename="MAZESRADIO01022028-29022028_A.txt"',
+    );
+    expect((await res.text()).trim().split("\n")).toHaveLength(1);
+    expect((await admin("/admin/report?month=2026-02")).headers.get("content-disposition")).toContain(
+      "-28022026_A.txt",
+    );
   });
 });

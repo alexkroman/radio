@@ -478,7 +478,12 @@ img.cover {
 
 .h-artist {
   flex: 0 1 auto;
+  min-width: 0;
+  max-width: 45%;
   color: var(--color-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── About ── */
@@ -724,6 +729,7 @@ img.cover {
 
   .h-artist {
     grid-area: artist;
+    max-width: none;
   }
 }
 

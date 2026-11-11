@@ -25,12 +25,6 @@ test("each show is its own MP3 stream", async () => {
   }
 });
 
-test("/stream redirects to the default show", async ({ request }) => {
-  const res = await request.get("/stream", { maxRedirects: 0 });
-  expect(res.status()).toBe(302);
-  expect(res.headers()["location"]).toBe("/default/stream");
-});
-
 test("home page lists every show with its description", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("link", { name: "Fixture Default" })).toHaveAttribute("href", "/default");

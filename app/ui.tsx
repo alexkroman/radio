@@ -102,7 +102,7 @@ export const Cover = ({ play, size, labelled }: { play?: Play; size: string; lab
     <span class={`cover ${size} cover-ph`} aria-hidden="true" />
   );
 
-// Data the client reads to fill the phone player bar for a station.
+// Data the client reads to fill the player bar for a station.
 export const npData = (slug: string, play?: Play) => ({
   "data-np": slug,
   "data-track": play?.title ?? "",
@@ -139,7 +139,7 @@ export const Markdown = ({ html, class: cls }: { html: string; class?: string })
   <div class={cls} dangerouslySetInnerHTML={{ __html: html }} />
 );
 
-// The fixed player bar for phones, outside the swapped page so it (and the
+// The fixed player bar, outside the swapped page so it (and the
 // audio) survive navigation. The client fills it in and shows it while playing.
 export const PlayerBar = () => (
   <div id="bar" role="region" aria-label="Player" hidden>

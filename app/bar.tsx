@@ -3,22 +3,13 @@
 // into #player (outside the swapped page, so it and the audio survive
 // navigation). app/client.ts sets what it shows with setBar(); it shows only
 // while a station is playing.
-import { render, useLayoutEffect, useRef, useState, useSyncExternalStore } from "hono/jsx/dom";
+import { render, useLayoutEffect, useRef, useState } from "hono/jsx/dom";
 
 export type BarState = { title: string; track: string; artist: string; cover: string };
 
-let state: BarState | undefined;
-const listeners = new Set<() => void>();
-const subscribe = (l: () => void) => {
-  listeners.add(l);
-  return () => void listeners.delete(l);
-};
-
-export function setBar(next: BarState | undefined) {
-  if (next && state && (Object.keys(next) as (keyof BarState)[]).every((k) => next[k] === state![k])) return;
-  state = next;
-  listeners.forEach((l) => l());
-}
+// Bar's state setter, once it has rendered.
+let setState: ((s: BarState | undefined) => void) | undefined;
+export const setBar = (s: BarState | undefined) => setState?.(s);
 
 // The placeholder square until (and unless) the cover loads. Keyed by src, so
 // a new cover starts out as the placeholder again.
@@ -45,32 +36,27 @@ function Cover({ src, alt }: { src: string; alt: string }) {
 }
 
 function Bar({ onPause }: { onPause: () => void }) {
-  const s = useSyncExternalStore(subscribe, () => state);
-  const track = s ? [s.track, s.artist].filter(Boolean).join(" · ") : "";
+  const [s, set] = useState<BarState>();
+  setState = set;
+  if (!s) return null;
+  const parts = [s.track, s.artist].filter(Boolean);
   return (
-    <div id="bar" role="region" aria-label="Player" hidden={!s}>
-      {s && (
-        <>
-          <Cover
-            key={s.cover}
-            src={s.cover}
-            alt={s.track ? `Cover art: ${[s.track, s.artist].filter(Boolean).join(", ")}` : ""}
-          />
-          <div class="bar-text">
-            <span id="bar-track">{track}</span>
-            <span class="bar-status">
-              <span class="dot" aria-hidden="true" />
-              <span>{`${s.title} · Live`}</span>
-            </span>
-          </div>
-          <button type="button" class="play play-bar" aria-label={`Pause ${s.title}`} onClick={onPause}>
-            <svg class="i-pause" width={14} height={14} viewBox="0 0 14 14" aria-hidden="true">
-              <rect x="3" y="2" width="2.5" height="10" fill="currentColor" />
-              <rect x="8.5" y="2" width="2.5" height="10" fill="currentColor" />
-            </svg>
-          </button>
-        </>
-      )}
+    <div id="bar" role="region" aria-label="Player">
+      <Cover key={s.cover} src={s.cover} alt={s.track ? `Cover art: ${parts.join(", ")}` : ""} />
+      <div class="bar-text">
+        <span id="bar-track">{parts.join(" · ")}</span>
+        <span class="bar-status">
+          <span class="dot" aria-hidden="true" />
+          <span>{`${s.title} · Live`}</span>
+        </span>
+      </div>
+      <button type="button" class="play play-bar" aria-label={`Pause ${s.title}`} onClick={onPause}>
+        {/* ui.tsx PauseIcon (server JSX, so not shared). */}
+        <svg class="i-pause" width={14} height={14} viewBox="0 0 14 14" aria-hidden="true">
+          <rect x="3" y="2" width="2.5" height="10" fill="currentColor" />
+          <rect x="8.5" y="2" width="2.5" height="10" fill="currentColor" />
+        </svg>
+      </button>
     </div>
   );
 }

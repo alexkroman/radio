@@ -2,11 +2,15 @@
 // (/<slug>) and current cover (/<slug>/cover.jpg), DJ pages (/djs/<dj>), /about,
 // and the admin pages (/admin). Shows are shows/<slug>.md (app/shows.ts), with
 // their DJs in the front matter; Liquidsoap serves their streams via Caddy.
-import { readFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
 import { extname } from "node:path";
+import { Readable } from "node:stream";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { etag } from "hono/etag";
+import { createMiddleware } from "hono/factory";
 import { jsxRenderer } from "hono/jsx-renderer";
 import { admin } from "./admin.tsx";
 import { login, throttle } from "./login.tsx";
@@ -107,9 +111,28 @@ const History = ({ plays }: { plays: Play[] }) => (
 export const app = new Hono({ strict: false });
 
 // Every GET gets an ETag, so a repeat (the now-playing poll, the unhashed
-// app.js/app.css) is answered 304 when nothing changed.
+// app.js/app.css) is answered 304 when nothing changed. Files (serveStatic,
+// DJ photos) send Last-Modified and Content-Length, so their ETag is made from
+// those instead of etag() hashing the whole file.
 app.use(etag());
+app.use(async (c, next) => {
+  await next();
+  const h = c.res.headers;
+  const modified = h.get("Last-Modified");
+  if (modified && !h.has("ETag")) h.set("ETag", `W/"${h.get("Content-Length")}-${Date.parse(modified)}"`);
+});
+// The only form is the login (a password and a path): no bigger body is read.
+app.use(bodyLimit({ maxSize: 4096, onError: (c) => c.text("Too large", 413) }));
 
+// Cache-Control for a file serveStatic found (its onFound runs too late to add one).
+const cacheFor = (value: string) =>
+  createMiddleware(async (c, next) => {
+    await next();
+    if (c.res.ok) c.res.headers.set("Cache-Control", value);
+  });
+
+// Fonts have content hashes in their names, so they never change.
+app.use("/assets/fonts/*", cacheFor("public, max-age=31536000, immutable"));
 app.use(
   "/assets/*",
   serveStatic({ root: "dist/public", rewriteRequestPath: (p) => p.replace(/^\/assets/, "") }),
@@ -324,11 +347,13 @@ app.get(`/djs/:dj{${SLUG}}`, async (c) => {
 // A DJ's photo: the file named by `photo:` in a show's front matter.
 app.get(`/djs/:dj{${SLUG}}/photo`, async (c) => {
   const photo = (await getDj(c.req.param("dj")))?.photo;
-  const body = photo && (await readFile(photo).catch(() => undefined));
-  if (!photo || !body) return c.notFound();
+  const file = photo ? await stat(photo).catch(() => undefined) : undefined;
+  if (!photo || !file?.isFile()) return c.notFound();
   // No max-age: the ETag makes a repeat a 304, and an edited photo shows at once.
   c.header("Content-Type", PHOTO_TYPES[extname(photo).toLowerCase()]);
-  return c.body(body);
+  c.header("Content-Length", String(file.size));
+  c.header("Last-Modified", file.mtime.toUTCString());
+  return c.body(Readable.toWeb(createReadStream(photo)) as ReadableStream);
 });
 
 // The current track's cover: a redirect to its pre-extracted art (play log).
@@ -344,11 +369,10 @@ app.get(`/:slug{${SLUG}}/cover.jpg`, async (c) => {
 // Per-track covers extracted by scripts/import.sh → covers/<show>/<stem>.jpg
 // (beets keeps "#" and "%" out of file names, so ui.tsx coverUrl's encodeURI
 // round-trips through serveStatic's decodeURI).
-// (serveStatic's onFound runs after the response is made, too late to add a header.)
-app.use("/covers/*", async (c, next) => {
-  await next();
-  if (c.res.ok) c.res.headers.set("Cache-Control", "public, max-age=3600");
-});
-app.use("/covers/*", serveStatic({ root: COVERS, rewriteRequestPath: (p) => p.replace(/^\/covers/, "") }));
+app.use(
+  "/covers/*",
+  cacheFor("public, max-age=3600"),
+  serveStatic({ root: COVERS, rewriteRequestPath: (p) => p.replace(/^\/covers/, "") }),
+);
 
 app.notFound((c) => c.text("Not found", 404));

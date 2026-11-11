@@ -23,9 +23,8 @@ type Station = { slug: string; title: string; player: IcecastMetadataPlayer; sto
 const audio = new Audio();
 const session = navigator.mediaSession;
 let station: Station | undefined;
-// The station shown as playing (and its title): set on click, cleared when it stops.
-let active: string | undefined;
-let activeTitle = "";
+// The station shown as playing: set on click, cleared when it stops.
+let active: { slug: string; title: string } | undefined;
 // The playing station's track, from the page or the stream's metadata.
 let now = { track: "", artist: "", cover: "" };
 
@@ -40,7 +39,8 @@ function localTimes() {
 function readPage() {
   if (!active) return;
   // ui.tsx npData sets all three.
-  const np = document.querySelector<HTMLElement>(`[data-np="${active}"]`)?.dataset as typeof now | undefined;
+  const np = document.querySelector<HTMLElement>(`[data-np="${active.slug}"]`)?.dataset as
+    typeof now | undefined;
   if (np?.track) now = { track: np.track, artist: np.artist, cover: np.cover };
 }
 
@@ -51,15 +51,15 @@ const coverSrc = (slug: string) => now.cover || `/${slug}/cover.jpg?t=${encodeUR
 // Show the play state everywhere: play buttons, "Live" labels, the phone bar (app/bar.tsx).
 function sync() {
   document.querySelectorAll<HTMLButtonElement>("button[data-play]").forEach((b) => {
-    const on = b.dataset.play === active;
+    const on = b.dataset.play === active?.slug;
     b.classList.toggle("playing", on);
     b.setAttribute("aria-label", `${on ? "Pause" : "Play"} ${b.dataset.title}`);
   });
   document.querySelectorAll<HTMLElement>("[data-status]").forEach((el) => {
-    el.textContent = el.dataset.status === active ? "Listening · Live" : "Live";
+    el.textContent = el.dataset.status === active?.slug ? "Listening · Live" : "Live";
   });
   document.body.classList.toggle("playing", !!active);
-  setBar(active ? { title: activeTitle, ...now, cover: coverSrc(active) } : undefined);
+  setBar(active && { title: active.title, ...now, cover: coverSrc(active.slug) });
 }
 
 // The stream stopped on its own (a pause is already shown by stop()).
@@ -80,8 +80,7 @@ function unlock() {
 async function start(slug: string, title: string) {
   // Synchronously, in the click: iOS allows it only there.
   resumeAudio();
-  active = slug;
-  activeTitle = title;
+  active = { slug, title };
   now = { track: "", artist: "", cover: "" };
   readPage();
   sync();
@@ -89,7 +88,7 @@ async function start(slug: string, title: string) {
   if (paused?.stopping) {
     await paused.stopping;
     paused.stopping = undefined;
-    if (active !== slug || station !== paused) return; // another click meanwhile
+    if (active?.slug !== slug || station !== paused) return; // another click meanwhile
   }
   if (station?.slug === slug && station.player.state !== "stopped") {
     unlock();
@@ -98,7 +97,7 @@ async function start(slug: string, title: string) {
   const old = station;
   station = undefined;
   if (old) await old.player.detachAudioElement();
-  if (active !== slug) return; // another click while the old one stopped
+  if (active?.slug !== slug) return; // another click while the old one stopped
   const p: IcecastMetadataPlayer = new IcecastMetadataPlayer(`/${slug}/stream`, {
     audioElement: audio,
     retryTimeout: 120,
@@ -145,7 +144,7 @@ function stop() {
 }
 
 function toggle(slug: string, title: string) {
-  if (active === slug) stop();
+  if (active?.slug === slug) stop();
   else void start(slug, title);
 }
 

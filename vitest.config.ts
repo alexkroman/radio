@@ -10,6 +10,7 @@ export default defineConfig({
       SITE_PASSWORD: "unit-site",
       SHOWS_DIR: "test/fixtures/shows",
       COVERS_DIR: "test/fixtures/covers",
+      TZ: "UTC",
     },
   },
 });

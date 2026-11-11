@@ -29,17 +29,14 @@ const PLAYS = [
   }),
   play({ time: now - 30, show: "night", artist: "Gamma", title: "Midnight", listeners: 2 }),
 ];
-const month = new Date().toISOString().slice(0, 7);
+let month = "";
 
 let app: (typeof import("./server.tsx"))["app"];
 let cookie = "";
 let ip = 0;
 // Each request from its own client address unless given one (the login throttle counts per IP).
 const req = (path: string, init: RequestInit = {}, headers: Record<string, string> = {}) =>
-  app.request(path, {
-    ...init,
-    headers: { "x-forwarded-for": `10.0.0.${++ip}`, ...headers, ...(init.headers as Record<string, string>) },
-  });
+  app.request(path, { ...init, headers: { "x-forwarded-for": `10.0.0.${++ip}`, ...headers } });
 const page = (path: string, headers: Record<string, string> = {}) => req(path, {}, { cookie, ...headers });
 const login = (body: Record<string, string>, headers: Record<string, string> = {}) =>
   req("/login", { method: "POST", body: new URLSearchParams(body) }, headers);
@@ -47,10 +44,11 @@ const admin = (path: string, password = "unit-admin") =>
   req(path, {}, { authorization: `Basic ${btoa(`admin:${password}`)}` });
 
 beforeAll(async () => {
+  // The modules read PLAYS_DIR when loaded.
   const dir = await mkdtemp(join(tmpdir(), "plays-"));
-  await writeFile(join(dir, `${month}.jsonl`), PLAYS.map((p) => JSON.stringify(p)).join("\n") + "\n");
   process.env.PLAYS_DIR = dir;
-  process.env.TZ = "UTC";
+  month = (await import("./plays.ts")).monthOf(new Date());
+  await writeFile(join(dir, `${month}.jsonl`), PLAYS.map((p) => JSON.stringify(p)).join("\n") + "\n");
   ({ app } = await import("./server.tsx"));
   const res = await login({ password: "unit-site", next: "/" });
   cookie = res.headers.get("set-cookie")!.split(";")[0]!;
@@ -149,6 +147,8 @@ describe("pages", () => {
     const art = await page(res.headers.get("location")!);
     expect(art.status).toBe(200);
     expect(art.headers.get("cache-control")).toBe("public, max-age=3600");
+    // From the file's size and date, not a hash of it.
+    expect(art.headers.get("etag")).toMatch(/^W\/"\d+-\d+"$/);
   });
 
   test("an unchanged page is 304 to a request with its ETag", async () => {

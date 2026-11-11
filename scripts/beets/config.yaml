@@ -17,6 +17,7 @@ library: ~/.config/beets/radio-library.db # overridden per-show in import.sh wit
 
 paths:
   default: "%if{$artist,$artist - }$title" # Artist - Title.mp3 (or just Title.mp3)
+  singleton: "%if{$artist,$artist - }$title" # same flat format for singleton imports
 
 import:
   copy: no # tag in-place; don't move files

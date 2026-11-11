@@ -75,7 +75,7 @@ Both mirror your `music/`, `covers/` and `shows/` to the server, so files you de
 
 Every run also copies the server's play log to `backup/plays/` on your computer (it's the only record for SoundExchange reports), so deploy or sync now and then. The server installs security updates by itself and, when one needs it, reboots at 11:00 UTC (3–4 am Pacific); Docker brings the station back up.
 
-Set `DOMAIN` in `.env`. The `ddns` service then points the domain at the server, so stop it on any other machine running the station. Only ports 22 and 443 are open. To change the size, set `FLAVOR` (`openstack flavor list`; default `b3-8`).
+Set `DOMAIN` in `.env` and point the domain's DNS A record at the server's address (the IP `scripts/deploy.sh` prints; it stays the same). The server never runs the `ddns` service, even if `.env` sets `COMPOSE_PROFILES=ddns`; stop it on any other machine still updating the domain. Only ports 22 and 443 are open. To change the size, set `FLAVOR` (`openstack flavor list`; default `b3-8`).
 
 ## Development
 

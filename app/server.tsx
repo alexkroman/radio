@@ -1,5 +1,5 @@
 // The web app behind Caddy: the stations list (/), each show's station page
-// (/<slug>) and cover (/<slug>/cover.jpg), /about, and the admin pages (/admin).
+// (/<slug>) and current cover (/<slug>/cover.jpg), /about, and the admin pages (/admin).
 // Shows are shows/<slug>.md; Liquidsoap serves their streams via Caddy.
 import { readdir, readFile } from "node:fs/promises";
 import { serve } from "@hono/node-server";
@@ -13,6 +13,7 @@ import { login, throttle } from "./login.tsx";
 import { type Play, recentPlays } from "./plays.ts";
 import {
   Cover,
+  coverUrl,
   Markdown,
   npData,
   PlayButton,
@@ -280,15 +281,13 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
   );
 });
 
-// The current track's cover, copied by radio.liq to covers/<slug>.jpg.
-app.get(
-  `/:slug{${SLUG}}/cover.jpg`,
-  serveStatic({
-    root: COVERS,
-    rewriteRequestPath: (_, c) => `/${c.req.param("slug")}.jpg`,
-    onFound: (_, c) => c.header("Cache-Control", "public, max-age=30"),
-  }),
-);
+// The current track's cover: a redirect to its pre-extracted art (play log).
+app.get(`/:slug{${SLUG}}/cover.jpg`, async (c) => {
+  const cover = (await recentPlays(c.req.param("slug"), 1))[0]?.cover;
+  if (!cover) return c.notFound();
+  c.header("Cache-Control", "no-cache");
+  return c.redirect(coverUrl(cover));
+});
 
 // Per-track covers extracted by scripts/import.sh → covers/<show>/<stem>.jpg.
 // File names are percent-encoded (ui.tsx coverUrl) and may hold "&", "#" or

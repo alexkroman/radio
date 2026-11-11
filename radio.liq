@@ -112,7 +112,6 @@ end
 
 def show(f) =
   slug = path.remove_extension(path.basename(f))
-  cover_file = "/covers/#{slug}.jpg"
 
   # Artist separation: reject a candidate if any of its artists was among the
   # last 20 artists played on this show; after 20 rejections in a row (a show
@@ -148,8 +147,8 @@ def show(f) =
     )
 
   # Per track (on the playlist: the crossfaded source doesn't mark every track),
-  # from the raw metadata before the text recode below: cover, artist
-  # separation and the play log.
+  # from the raw metadata before the text recode below: artist separation and
+  # the play log (with the track's cover, pre-extracted by scripts/import.sh).
   tracks.on_track(
     fun (m) ->
       begin
@@ -175,18 +174,6 @@ def show(f) =
           data="#{json.stringify(compact=true, play)}\n",
           "/plays/#{time.string('%Y-%m')}.jsonl"
         )
-
-        # Use covers pre-extracted by scripts/import.sh rather than reading
-        # embedded art at runtime. file.contents reads the JPEG as a byte string.
-        if
-          file.exists(track_cover)
-        then
-          file.write(data=file.contents(track_cover), cover_file)
-        elsif
-          file.exists(cover_file)
-        then
-          file.remove(cover_file)
-        end
         recent_artists :=
           list.prefix(20, list.append(artists_of(list.assoc(default="", "artist", m)), recent_artists()))
       end

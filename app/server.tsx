@@ -107,18 +107,8 @@ const History = ({ plays }: { plays: Play[] }) => (
 export const app = new Hono({ strict: false });
 
 // Every GET gets an ETag, so a repeat (the now-playing poll, the unhashed
-// app.js/app.css) is answered 304 when nothing changed. Files (serveStatic)
-// send Last-Modified and their size, so their ETag is made from those instead
-// of etag() hashing the whole file: the size is the whole file's (Content-Range
-// on a range request), so every range of it has the file's ETag.
+// app.js/app.css, a DJ photo) is answered 304 when nothing changed.
 app.use(etag());
-app.use(async (c, next) => {
-  await next();
-  const h = c.res.headers;
-  const modified = h.get("Last-Modified");
-  const size = h.get("Content-Range")?.split("/")[1] ?? h.get("Content-Length");
-  if (modified && size && !h.has("ETag")) h.set("ETag", `W/"${size}-${Date.parse(modified)}"`);
-});
 // The only form is the login (a password and a path): no bigger body is read.
 app.use(bodyLimit({ maxSize: 4096, onError: (c) => c.text("Too large", 413) }));
 

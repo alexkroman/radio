@@ -30,28 +30,35 @@ djs:
 ---
 The **first** show.
 `,
-  // \`dj:\` with one name.
+  // One DJ, on one line.
   "b-dj.md": `---
 title: B Dj
-dj: Ana Ruiz
+djs: [Ana Ruiz]
 ---
 `,
-  // \`dj:\` with a mapping, and a slug of the DJ's own.
+  // One DJ with a slug of their own.
   "c-dj-map.md": `---
 title: C Dj Map
-dj:
-  name: 李小龙
-  slug: bruce-lee
-  tagline: Hong Kong
+djs:
+  - name: 李小龙
+    slug: bruce-lee
+    tagline: Hong Kong
 ---
 `,
-  // \`djs:\` with one name instead of a list, and details for a DJ another show named first.
+  // Details for a DJ another show named first.
   "d-djs-one.md": `---
 title: D Djs One
 djs:
-  name: Ben Cho
-  tagline: Queens, NY
-  photo: ../outside.jpg
+  - name: Ben Cho
+    tagline: Queens, NY
+    photo: ../outside.jpg
+---
+`,
+  // Not a list: no DJs.
+  "h-not-list.md": `---
+title: H Not A List
+djs: Ana Ruiz
+dj: Ben Cho
 ---
 `,
   // Accents, punctuation, and details a show earlier by slug already set.
@@ -63,8 +70,9 @@ djs:
     photo: djs/notes.txt
 ---
 `,
+  "e-plain.md": "Just a description.\n",
   "f-bad-yaml.md": "---\ntitle: [unclosed\n---\nBody.\n",
-  "g-crlf.md": "---\r\ntitle: Windows\r\ndj: Ana Ruiz\r\n---\r\nBody.\r\n",
+  "g-crlf.md": "---\r\ntitle: Windows\r\ndjs:\r\n  - Ana Ruiz\r\n---\r\nBody.\r\n",
   "about.md": "---\ntitle: Reserved\n---\n",
   "Not-A-Show.md": "---\ntitle: Ignored\n---\n",
 };
@@ -87,8 +95,10 @@ describe("shows", () => {
       "c-dj-map",
       "d-djs-one",
       "e-accents",
+      "e-plain",
       "f-bad-yaml",
       "g-crlf",
+      "h-not-list",
     ]);
     expect(await shows.getShow("about")).toBeUndefined();
     expect(await shows.getShow("nope")).toBeUndefined();
@@ -100,7 +110,9 @@ describe("shows", () => {
     expect(show?.description).toBe("<p>The <strong>first</strong> show.</p>\n");
   });
 
-  test("without a title, or with bad front matter, are titled by their slug", async () => {
+  test("without front matter, a title, or with bad front matter, are titled by their slug", async () => {
+    const plain = await shows.getShow("e-plain");
+    expect(plain).toMatchObject({ title: "e-plain", description: "<p>Just a description.</p>\n" });
     expect((await shows.getShow("e-accents"))?.title).toBe("e-accents");
     expect((await shows.getShow("f-bad-yaml"))?.title).toBe("f-bad-yaml");
   });
@@ -108,12 +120,13 @@ describe("shows", () => {
   test("with CRLF line endings are read", async () => {
     const show = await shows.getShow("g-crlf");
     expect(show?.title).toBe("Windows");
-    expect(show?.djs).toEqual([{ slug: "ana-ruiz", name: "Ana Ruiz" }]);
+    expect(show?.djs).toMatchObject([{ slug: "ana-ruiz", name: "Ana Ruiz" }]);
   });
 });
 
 describe("a show's DJs", () => {
-  const djs = async (slug: string) => (await shows.getShow(slug))?.djs;
+  const djs = async (slug: string) =>
+    (await shows.getShow(slug))?.djs.map(({ slug, name }) => ({ slug, name }));
 
   test("djs: a list of names and mappings, in order, without repeats or unusable slugs", async () => {
     expect(await djs("a-list")).toEqual([
@@ -123,16 +136,16 @@ describe("a show's DJs", () => {
     ]);
   });
 
-  test("dj: one name", async () => {
+  test("one DJ on one line", async () => {
     expect(await djs("b-dj")).toEqual([{ slug: "ana-ruiz", name: "Ana Ruiz" }]);
   });
 
-  test("dj: one mapping, with its own slug", async () => {
+  test("one DJ with a slug of their own", async () => {
     expect(await djs("c-dj-map")).toEqual([{ slug: "bruce-lee", name: "李小龙" }]);
   });
 
-  test("djs: one mapping instead of a list", async () => {
-    expect(await djs("d-djs-one")).toEqual([{ slug: "ben-cho", name: "Ben Cho" }]);
+  test("djs: that isn't a list, or dj:, is no DJs", async () => {
+    expect(await djs("h-not-list")).toEqual([]);
   });
 
   test("slugs drop accents and punctuation, names are trimmed", async () => {
@@ -142,7 +155,7 @@ describe("a show's DJs", () => {
     ]);
   });
 
-  test("no djs: or dj: is none", async () => {
+  test("no djs: is none", async () => {
     expect(await djs("f-bad-yaml")).toEqual([]);
   });
 });

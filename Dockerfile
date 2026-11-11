@@ -1,6 +1,6 @@
 # The web app image (site + admin),
 # plus an `e2e` target with Playwright for the end-to-end suite.
-FROM node:22-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 # The two secrets are optional (normal builds have neither): an .npmrc and a CA
@@ -13,7 +13,7 @@ COPY tsconfig.json ./
 COPY app app
 RUN npm run build && npm prune --omit=dev
 
-FROM node:22-alpine AS app
+FROM node:26-alpine AS app
 WORKDIR /app
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules node_modules

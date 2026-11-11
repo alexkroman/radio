@@ -10,7 +10,7 @@ import { marked } from "marked";
 import { parse as parseYaml } from "yaml";
 import { admin } from "./admin.tsx";
 import { login, throttle } from "./login.tsx";
-import { type Play, recentPlays } from "./plays.ts";
+import { latestPlays, type Play, recentPlays } from "./plays.ts";
 import {
   Cover,
   coverUrl,
@@ -29,6 +29,7 @@ const SHOWS = process.env.SHOWS_DIR ?? "/shows";
 const COVERS = process.env.COVERS_DIR ?? "/covers";
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL || "hello@example.com";
 const SLUG = "[a-z0-9-]+";
+const SHOW_FILE = new RegExp(`^${SLUG}\\.md$`);
 // Pages with their own routes; a show with one of these slugs isn't listed.
 const RESERVED = new Set(["about", "admin", "assets", "covers", "login"]);
 // radio.liq: %mp3(bitrate = 256).
@@ -64,7 +65,7 @@ async function getShow(slug: string): Promise<Show | undefined> {
 }
 
 async function getShows(): Promise<Show[]> {
-  const files = (await readdir(SHOWS)).filter((f) => new RegExp(`^${SLUG}\\.md$`).test(f)).sort();
+  const files = (await readdir(SHOWS)).filter((f) => SHOW_FILE.test(f)).sort();
   return (await Promise.all(files.map((f) => getShow(f.slice(0, -3))))).filter((s) => s !== undefined);
 }
 
@@ -156,8 +157,8 @@ login(app);
 app.route("/admin", admin);
 
 app.get("/", async (c) => {
-  const shows = await getShows();
-  const rows = await Promise.all(shows.map(async (s) => ({ ...s, play: (await recentPlays(s.slug, 1))[0] })));
+  const [shows, latest] = await Promise.all([getShows(), latestPlays()]);
+  const rows = shows.map((s) => ({ ...s, play: latest.get(s.slug) }));
   return c.render(
     <main class="page page-index">
       <SiteHeader current="stations" home />
@@ -252,9 +253,9 @@ app.get("/about", async (c) => {
 });
 
 app.get(`/:slug{${SLUG}}`, async (c) => {
-  const show = await getShow(c.req.param("slug"));
+  const slug = c.req.param("slug");
+  const [show, [current, ...recent]] = await Promise.all([getShow(slug), recentPlays(slug, 11)]);
   if (!show) return c.notFound();
-  const [current, ...recent] = await recentPlays(show.slug, 11);
   const host = c.req.header("host") ?? "";
   const stream = `/${show.slug}/stream`;
   return c.render(

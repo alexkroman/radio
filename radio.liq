@@ -124,24 +124,26 @@ def show(f) =
   # Per track (on the playlist: the crossfaded source doesn't mark every track),
   # from the raw metadata before the text recode below: artist separation and
   # the play log (with the track's cover, pre-extracted by scripts/import.sh).
+  # Asynchronous, so the listener count's HTTP call never holds up the stream.
   tracks.on_track(
+    synchronous=false,
     fun (m) ->
       begin
-        def tag(key, fallback) =
-          safe_recode(list.assoc(default=list.assoc(default="", fallback, m), key, m))
+        def tag(~or_tag="", key) =
+          safe_recode(list.assoc(default=list.assoc(default="", or_tag, m), key, m))
         end
         track_stem = path.remove_extension(path.basename(list.assoc(default="", "filename", m)))
-        track_cover = "/covers/#{slug}/#{track_stem}.jpg"
+        cover = "#{slug}/#{track_stem}.jpg"
         play =
           {
             time = time(),
             show = slug,
-            artist = tag("artist", ""),
-            title = tag("title", ""),
-            album = tag("album", ""),
-            label = tag("label", "publisher"),
-            isrc = tag("isrc", "tsrc"),
-            cover = if file.exists(track_cover) then "#{slug}/#{track_stem}.jpg" else "" end,
+            artist = tag("artist"),
+            title = tag("title"),
+            album = tag("album"),
+            label = tag(or_tag="publisher", "label"),
+            isrc = tag(or_tag="tsrc", "isrc"),
+            cover = if file.exists("/covers/#{cover}") then cover else "" end,
             listeners = listeners(slug)
           }
         file.write(

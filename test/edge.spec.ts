@@ -1,17 +1,19 @@
 // Edge cases: odd titles and show files, missing music, bad input, traversal,
 // listener counting. Fixtures: test/fixtures/{shows,music}/{edge,plain,empty}.
-import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
-import { adminRequest, listen, month, performances, streamHead } from "./helpers.ts";
+import {
+  adminRequest,
+  BASE,
+  listen,
+  loggedPlays,
+  performances,
+  streamHead,
+  waitForTrack,
+} from "./helpers.ts";
 
 test("titles with unicode, pipes and HTML show exactly as tagged", async ({ page }) => {
   await page.goto("/edge");
-  await expect(async () => {
-    await page.reload();
-    await expect(page.locator("#np .np-track")).toHaveText("Café | Olé <b>", {
-      timeout: 1000,
-    });
-  }).toPass();
+  await waitForTrack(page, "Café | Olé <b>");
   await expect(page.locator("#np .np-artist")).toHaveText("Zoë Ñandú");
   await expect(page.locator("main b")).toHaveCount(0);
 });
@@ -50,12 +52,7 @@ test("a show without front matter is titled by its slug", async ({ page }) => {
 
 test("an untagged track is shown by its file name, without cover art", async ({ page, request }) => {
   await page.goto("/plain");
-  await expect(async () => {
-    await page.reload();
-    await expect(page.locator("#np .np-track")).toHaveText("Untitled Thing", {
-      timeout: 1000,
-    });
-  }).toPass();
+  await waitForTrack(page, "Untitled Thing");
   expect((await request.get("/plain/cover.jpg")).status()).toBe(404);
   await expect(page.locator("#np img")).toHaveCount(0);
   await expect(page.locator("#np .cover-ph")).toBeVisible();
@@ -83,7 +80,7 @@ test("admin rejects malformed months", async () => {
 
 test("admin rejects a wrong password", async ({ playwright }) => {
   const wrong = await playwright.request.newContext({
-    baseURL: process.env.BASE_URL ?? "https://localhost",
+    baseURL: BASE,
     ignoreHTTPSErrors: true,
     httpCredentials: { username: "admin", password: "wrong" },
   });
@@ -123,9 +120,7 @@ test("the report counts every listener connected when a track starts", async () 
 test("the report matches the play log", async () => {
   const admin = await adminRequest();
   await expect(async () => {
-    const lines = (await readFile(`/plays/${month}.jsonl`, "utf8")).trim().split("\n");
-    const plays = lines.map((l) => JSON.parse(l) as { show: string; title: string; listeners: number });
-    const expected = plays
+    const expected = (await loggedPlays())
       .filter((p) => p.show === "night" && p.title === "Midnight")
       .reduce((n, p) => n + Math.max(p.listeners, 1), 0);
     expect(expected).toBeGreaterThan(0);

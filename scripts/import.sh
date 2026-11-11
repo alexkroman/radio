@@ -46,11 +46,9 @@ done
 
 # Verify pyacoustid is installed in beets' Python environment (needed for chroma plugin).
 # Use a temp DB so beet doesn't prompt to create a directory.
-tmpdb=$(mktemp /tmp/beet-check-XXXXXX)
-rm -f "$tmpdb"
-tmpdb="${tmpdb}.db"
-beet_ver=$(beet -c "$CONFIG" -l "$tmpdb" version 2>&1 </dev/null || true)
-rm -f "$tmpdb" "${tmpdb%.*}"*.bak
+tmpdir=$(mktemp -d)
+beet_ver=$(beet -c "$CONFIG" -l "$tmpdir/check.db" version 2>&1 </dev/null || true)
+rm -rf "$tmpdir"
 if ! echo "$beet_ver" | grep -q "chroma"; then
   beet_bin=$(command -v beet)
   echo "ERROR: pyacoustid not installed in beets' Python environment." >&2

@@ -1,7 +1,17 @@
 // End-to-end tests against the real stack (Caddy, Liquidsoap, the app) running
 // on test/fixtures. Run with `npm run e2e`; test/global-setup.ts logs in.
 import { expect, test } from "@playwright/test";
-import { ADMIN, BASE, month, SITE_PASSWORD, streamHead } from "./helpers.ts";
+import { STATE } from "./global-setup.ts";
+import {
+  ADMIN,
+  adminRequest,
+  BASE,
+  month,
+  playerState,
+  SITE_PASSWORD,
+  streamHead,
+  waitForTrack,
+} from "./helpers.ts";
 
 test("each show is its own MP3 stream", async () => {
   for (const show of ["default", "night"]) {
@@ -54,30 +64,18 @@ test("favicons are served without a login", async ({ playwright }) => {
 test("show page shows its own now playing and history", async ({ page }) => {
   await page.goto("/night");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Fixture Night");
-  await expect(async () => {
-    await page.reload();
-    await expect(page.locator("#np .np-track")).toHaveText("Midnight", {
-      timeout: 1000,
-    });
-  }).toPass();
+  await waitForTrack(page, "Midnight");
   await expect(page.locator("#np .np-artist")).toHaveText("Gamma");
   await expect(page.getByRole("link", { name: /\/night\/stream$/ })).toHaveAttribute("href", "/night/stream");
 
   await page.goto("/default");
-  await expect(async () => {
-    await page.reload();
-    await expect(page.locator("#np .np-track")).toHaveText(/First Light|Second Wind/, {
-      timeout: 1000,
-    });
-  }).toPass();
+  await waitForTrack(page, /First Light|Second Wind/);
   await expect(page.locator("main")).not.toContainText("Midnight");
 
   // "&" must show once, unescaped.
   await expect(async () => {
     await page.reload();
-    await expect(page.locator("main")).toContainText("Beta & Band", {
-      timeout: 1000,
-    });
+    await expect(page.locator("main")).toContainText("Beta & Band", { timeout: 1000 });
   }).toPass();
   await expect(page.locator("main")).not.toContainText("&amp;");
 });
@@ -177,25 +175,17 @@ test("security headers are set and the server banner is stripped", async ({ requ
   expect(headers["server"]).toBeUndefined();
 });
 
-test("admin requires a password", async ({ request, playwright }) => {
+test("admin requires a password", async ({ request }) => {
   expect((await request.get("/admin/")).status()).toBe(401);
-  const authed = await playwright.request.newContext({
-    baseURL: BASE,
-    ignoreHTTPSErrors: true,
-    httpCredentials: ADMIN,
-  });
+  const authed = await adminRequest();
   const res = await authed.get("/admin/");
   expect(res.status()).toBe(200);
   expect(await res.text()).toContain(`/admin/report?month=${month}`);
   await authed.dispose();
 });
 
-test("SoundExchange report counts plays from every show with file tags", async ({ playwright }) => {
-  const request = await playwright.request.newContext({
-    baseURL: BASE,
-    ignoreHTTPSErrors: true,
-    httpCredentials: ADMIN,
-  });
+test("SoundExchange report counts plays from every show with file tags", async () => {
+  const request = await adminRequest();
   await expect(async () => {
     const res = await request.get(`/admin/report?month=${month}`);
     expect(res.headers()["content-disposition"]).toMatch(
@@ -225,7 +215,7 @@ test("player plays the stream using only self-hosted assets", async ({ page }) =
       !/^(blob|data):/.test(r.url()) &&
       problems.push(`external request: ${r.url()}`),
   );
-  const state = () => page.evaluate(() => (window as unknown as { player: { state: string } }).player.state);
+  const state = () => playerState(page);
   await page.goto("/night");
   await page.getByRole("button", { name: "Play Fixture Night" }).click();
   await expect(page.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
@@ -253,7 +243,7 @@ test("player plays the stream using only self-hosted assets", async ({ page }) =
 });
 
 test("pausing and playing again at once keeps playing", async ({ page }) => {
-  const state = () => page.evaluate(() => (window as unknown as { player: { state: string } }).player.state);
+  const state = () => playerState(page);
   await page.goto("/night");
   await page.getByRole("button", { name: "Play Fixture Night" }).click();
   await expect.poll(state).toBe("playing");
@@ -271,7 +261,7 @@ test("pausing and playing again at once keeps playing", async ({ page }) => {
 });
 
 test("pausing one station and playing another at once plays the other", async ({ page }) => {
-  const state = () => page.evaluate(() => (window as unknown as { player: { state: string } }).player.state);
+  const state = () => playerState(page);
   await page.goto("/");
   await page.getByRole("button", { name: "Play Fixture Default" }).click();
   await expect.poll(state).toBe("playing");
@@ -319,7 +309,7 @@ test("the phone player bar shows while playing", async ({ browser }) => {
     baseURL: BASE,
     ignoreHTTPSErrors: true,
     viewport: { width: 390, height: 844 },
-    storageState: "test-results/.auth.json",
+    storageState: STATE,
   });
   const page = await context.newPage();
   await page.goto("/");
@@ -338,7 +328,7 @@ test("the stream URL can be copied", async ({ browser }) => {
   const context = await browser.newContext({
     baseURL: BASE,
     ignoreHTTPSErrors: true,
-    storageState: "test-results/.auth.json",
+    storageState: STATE,
   });
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const page = await context.newPage();

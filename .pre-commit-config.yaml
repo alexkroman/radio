@@ -16,7 +16,7 @@ repos:
         args: [-d, relaxed]
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.11.0.1
+    rev: v0.11.0.1-1
     hooks:
       - id: shellcheck
 
@@ -92,7 +92,7 @@ repos:
       - id: liquidsoap
         name: liquidsoap --check
         language: docker_image
-        entry: savonet/liquidsoap:v2.3.3 --check
+        entry: savonet/liquidsoap:v2.4.6 --check
         files: \.liq$
 
       - id: caddy-fmt

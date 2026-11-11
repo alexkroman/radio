@@ -1,6 +1,13 @@
 // Browser code for the site, bundled by esbuild into /assets/app.js (+ app.css).
 // One audio element for the whole site; links swap only <main> (hx-boost), so
 // a station keeps playing while you browse.
+// Inter and JetBrains Mono, self-hosted (bundled into app.css + font files).
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
+import "@fontsource/inter/600.css";
+import "@fontsource/jetbrains-mono/400.css";
+import "@fontsource/jetbrains-mono/500.css";
+import "@fontsource/jetbrains-mono/700.css";
 import "./tokens.css";
 import "./style.css";
 import htmx from "htmx.org";

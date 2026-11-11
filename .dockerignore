@@ -7,3 +7,4 @@ covers
 .env
 test-results
 playwright-report
+backup

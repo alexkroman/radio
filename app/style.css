@@ -88,6 +88,12 @@ button {
   --width: var(--width-prose);
 }
 
+.page-dj {
+  --width: var(--width-station);
+
+  gap: 56px;
+}
+
 /* ── Site header + logo lockup ── */
 .site-header {
   display: flex;
@@ -330,7 +336,8 @@ img.cover {
 }
 
 .station .play,
-.station-desc :any-link {
+.station-desc :any-link,
+.station-credit :any-link {
   position: relative;
   z-index: 1;
 }
@@ -360,6 +367,29 @@ img.cover {
 
 .np-lines .np-artist {
   color: var(--color-muted);
+}
+
+/* ── DJ credit: "with A & B" ── */
+.credit {
+  color: var(--color-muted);
+}
+
+/* stylelint-disable-next-line no-descending-specificity -- unrelated links */
+.credit a {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--color-link-underline);
+}
+
+.station-credit {
+  margin-top: 2px;
+  font: var(--type-nav);
+}
+
+.title-credit {
+  font: var(--type-small);
+  font-size: 16px;
 }
 
 /* ── Station page ── */
@@ -484,6 +514,34 @@ img.cover {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ── DJ page ── */
+.profile {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 28px;
+}
+
+.photo {
+  width: 160px;
+  height: 160px;
+  border-radius: var(--radius-art-lg);
+}
+
+.profile-text {
+  flex: 1 1 280px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dj-shows {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 /* ── About ── */
@@ -678,6 +736,11 @@ img.cover {
   .station-desc *,
   .np-lines {
     font-size: 14px;
+  }
+
+  .station-credit {
+    margin-top: 0;
+    font-size: 13px;
   }
 
   .station-np {

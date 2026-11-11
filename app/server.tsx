@@ -1,8 +1,6 @@
 // The web app behind Caddy: the stations list (/), each show's station page
 // (/<slug>) and current cover (/<slug>/cover.jpg), /about, and the admin pages (/admin).
 // Shows are shows/<slug>.md; Liquidsoap serves their streams via Caddy.
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -116,23 +114,9 @@ const History = ({ plays }: { plays: Play[] }) => (
 
 const app = new Hono({ strict: false });
 
-// Assets are cached for a year: fonts have hashed names, and the bundle's
-// links carry a hash of its contents (?v=), so a new build gets new URLs.
-const asset = (name: string) =>
-  `/assets/${name}?v=${createHash("sha256")
-    .update(readFileSync(`dist/public/${name}`))
-    .digest("hex")
-    .slice(0, 12)}`;
-const APP_JS = asset("app.js");
-const APP_CSS = asset("app.css");
-
 app.use(
   "/assets/*",
-  serveStatic({
-    root: "dist/public",
-    rewriteRequestPath: (p) => p.replace(/^\/assets/, ""),
-    onFound: (_, c) => c.header("Cache-Control", "public, max-age=31536000, immutable"),
-  }),
+  serveStatic({ root: "dist/public", rewriteRequestPath: (p) => p.replace(/^\/assets/, "") }),
 );
 app.use("/:file{favicon\\.ico|favicon\\.svg|apple-touch-icon\\.png}", serveStatic({ root: "dist/public" }));
 
@@ -147,8 +131,8 @@ app.use(
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-        <link rel="stylesheet" href={APP_CSS} />
-        {script && <script src={APP_JS} defer />}
+        <link rel="stylesheet" href="/assets/app.css" />
+        {script && <script src="/assets/app.js" defer />}
       </head>
       <body>
         {/* Links swap just <main> in here, so the audio and the player bar keep going. */}

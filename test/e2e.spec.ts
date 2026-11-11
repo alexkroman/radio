@@ -340,15 +340,11 @@ test("the stream URL can be copied", async ({ browser }) => {
   await context.close();
 });
 
-test("assets are versioned, cached for a year and compressed", async ({ page, request }) => {
-  await page.goto("/");
-  const js = await page.locator("script[src^='/assets/app.js']").getAttribute("src");
-  expect(js).toMatch(/^\/assets\/app\.js\?v=[0-9a-f]{12}$/);
-  const res = await request.get(js!, { headers: { "Accept-Encoding": "gzip" } });
-  expect(res.headers()["cache-control"]).toBe("public, max-age=31536000, immutable");
-  expect(res.headers()["content-encoding"]).toBe("gzip");
-  const html = await request.get("/", { headers: { "Accept-Encoding": "gzip" } });
-  expect(html.headers()["content-encoding"]).toBe("gzip");
+test("pages and assets are compressed", async ({ request }) => {
+  for (const path of ["/", "/assets/app.js"]) {
+    const res = await request.get(path, { headers: { "Accept-Encoding": "gzip" } });
+    expect(res.headers()["content-encoding"]).toBe("gzip");
+  }
 });
 
 test.describe("site password", () => {

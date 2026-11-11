@@ -110,7 +110,7 @@ async function start(slug: string, title: string) {
     paused.stopping = undefined;
     if (active !== slug || station !== paused) return; // another click meanwhile
   }
-  if (station?.slug === slug) {
+  if (station?.slug === slug && station.player.state !== "stopped") {
     unlock();
     return void station.player.play();
   }

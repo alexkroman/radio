@@ -138,22 +138,3 @@ export const Time = ({ seconds }: { seconds: number }) => {
 export const Markdown = ({ html, class: cls }: { html: string; class?: string }) => (
   <div class={cls} dangerouslySetInnerHTML={{ __html: html }} />
 );
-
-// The fixed player bar for phones, outside the swapped page so it (and the
-// audio) survive navigation. The client fills it in and shows it while playing.
-export const PlayerBar = () => (
-  <div id="bar" role="region" aria-label="Player" hidden>
-    <img id="bar-cover" class="cover cover-44" alt="" hidden />
-    <span id="bar-ph" class="cover cover-44 cover-ph" aria-hidden="true" />
-    <div class="bar-text">
-      <span id="bar-track" />
-      <span class="bar-status">
-        <span class="dot" aria-hidden="true" />
-        <span id="bar-station" />
-      </span>
-    </div>
-    <button type="button" id="bar-button" class="play play-bar" aria-label="Pause">
-      <PauseIcon size={14} />
-    </button>
-  </div>
-);

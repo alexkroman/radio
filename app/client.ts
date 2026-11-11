@@ -14,6 +14,7 @@ import "./style.css";
 import { resumeAudio } from "./audio.ts";
 import htmx from "htmx.org";
 import IcecastMetadataPlayer, { type IcyMetadata } from "icecast-metadata-player";
+import { mountBar, setBar } from "./bar.tsx";
 
 // `stopping`: the player's stop() after a pause, awaited before the player
 // (or the audio element) is used again; its stop() returns early while stopping.
@@ -22,12 +23,11 @@ type Station = { slug: string; title: string; player: IcecastMetadataPlayer; sto
 const audio = new Audio();
 const session = "mediaSession" in navigator ? navigator.mediaSession : undefined;
 let station: Station | undefined;
-// The station shown as playing: set on click, cleared when it stops.
+// The station shown as playing (and its title): set on click, cleared when it stops.
 let active: string | undefined;
+let activeTitle = "";
 // The playing station's track, from the page or the stream's metadata.
 let now = { track: "", artist: "", cover: "" };
-
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 function localTimes() {
   document.querySelectorAll("time[datetime]").forEach((el) => {
@@ -49,7 +49,7 @@ function readPage() {
 // (keyed by track so a browser fetches it once per track).
 const coverSrc = (slug: string) => now.cover || `/${slug}/cover.jpg?t=${encodeURIComponent(now.track)}`;
 
-// Show the play state everywhere: play buttons, "Live" labels, the phone bar.
+// Show the play state everywhere: play buttons, "Live" labels, the phone bar (app/bar.tsx).
 function sync() {
   document.querySelectorAll<HTMLButtonElement>("button[data-play]").forEach((b) => {
     const on = b.dataset.play === active;
@@ -60,27 +60,8 @@ function sync() {
     el.textContent = el.dataset.status === active ? "Listening · Live" : "Live";
   });
   document.body.classList.toggle("playing", !!active);
-  $("bar").hidden = !active;
-  if (!station || !active) return;
-  $("bar-track").textContent = [now.track, now.artist].filter(Boolean).join(" · ");
-  $("bar-station").textContent = `${station.title} · Live`;
-  $("bar-button").setAttribute("aria-label", `Pause ${station.title}`);
-  const img = $<HTMLImageElement>("bar-cover");
-  const src = coverSrc(station.slug);
-  if (img.getAttribute("src") !== src) {
-    img.hidden = true;
-    $("bar-ph").hidden = false;
-    img.src = src;
-  }
-  img.alt = now.track ? `Cover art: ${[now.track, now.artist].filter(Boolean).join(", ")}` : "";
+  setBar(active ? { title: activeTitle, ...now, cover: coverSrc(active) } : undefined);
 }
-
-// The bar shows the placeholder square until (and unless) the cover loads.
-const barCover = $<HTMLImageElement>("bar-cover");
-barCover?.addEventListener("load", () => {
-  barCover.hidden = false;
-  $("bar-ph").hidden = true;
-});
 
 // The stream stopped on its own (a pause is already shown by stop()).
 function stopped(p: IcecastMetadataPlayer) {
@@ -101,6 +82,7 @@ async function start(slug: string, title: string) {
   // Synchronously, in the click: iOS allows it only there.
   resumeAudio();
   active = slug;
+  activeTitle = title;
   now = { track: "", artist: "", cover: "" };
   readPage();
   sync();
@@ -174,11 +156,8 @@ session?.setActionHandler("pause", stop);
 session?.setActionHandler("stop", stop);
 
 document.addEventListener("click", (e) => {
-  const button = (e.target as Element).closest<HTMLButtonElement>(
-    "button[data-play], button[data-copy], #bar-button",
-  );
+  const button = (e.target as Element).closest<HTMLButtonElement>("button[data-play], button[data-copy]");
   if (!button) return;
-  if (button.id === "bar-button") return stop();
   if (button.dataset.play) return toggle(button.dataset.play, button.dataset.title ?? button.dataset.play);
   const url = button.dataset.copy!;
   navigator.clipboard.writeText(url).then(
@@ -205,6 +184,9 @@ document.addEventListener("htmx:beforeRequest", (e) => {
   // hx-select-oob into the document. Its events no longer reach `document`.
   poll.addEventListener("htmx:beforeOnLoad", (l) => poll.isConnected || l.preventDefault(), { once: true });
 });
+
+const player = document.getElementById("player");
+if (player) mountBar(player, stop);
 
 function settle() {
   localTimes();

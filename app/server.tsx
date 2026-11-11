@@ -4,9 +4,9 @@
 // their DJs in the front matter; Liquidsoap serves their streams via Caddy.
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
+import { etag } from "hono/etag";
 import { jsxRenderer } from "hono/jsx-renderer";
 import { admin } from "./admin.tsx";
 import { login, throttle } from "./login.tsx";
@@ -19,7 +19,6 @@ import {
   Markdown,
   npData,
   PlayButton,
-  PlayerBar,
   Poll,
   SITE_TITLE,
   SiteHeader,
@@ -105,7 +104,11 @@ const History = ({ plays }: { plays: Play[] }) => (
   </section>
 );
 
-const app = new Hono({ strict: false });
+export const app = new Hono({ strict: false });
+
+// Every GET gets an ETag, so a repeat (the now-playing poll, the unhashed
+// app.js/app.css) is answered 304 when nothing changed.
+app.use(etag());
 
 app.use(
   "/assets/*",
@@ -138,7 +141,8 @@ app.use(
         >
           {children}
         </div>
-        {script && <PlayerBar />}
+        {/* The phone player bar (app/bar.tsx), rendered by the client. */}
+        {script && <div id="player" />}
       </body>
     </html>
   )),
@@ -340,15 +344,11 @@ app.get(`/:slug{${SLUG}}/cover.jpg`, async (c) => {
 // Per-track covers extracted by scripts/import.sh → covers/<show>/<stem>.jpg
 // (beets keeps "#" and "%" out of file names, so ui.tsx coverUrl's encodeURI
 // round-trips through serveStatic's decodeURI).
-app.use(
-  "/covers/*",
-  serveStatic({
-    root: COVERS,
-    rewriteRequestPath: (p) => p.replace(/^\/covers/, ""),
-    onFound: (_, c) => c.header("Cache-Control", "public, max-age=3600"),
-  }),
-);
+// (serveStatic's onFound runs after the response is made, too late to add a header.)
+app.use("/covers/*", async (c, next) => {
+  await next();
+  if (c.res.ok) c.res.headers.set("Cache-Control", "public, max-age=3600");
+});
+app.use("/covers/*", serveStatic({ root: COVERS, rewriteRequestPath: (p) => p.replace(/^\/covers/, "") }));
 
 app.notFound((c) => c.text("Not found", 404));
-
-serve({ fetch: app.fetch, port: 3000 });

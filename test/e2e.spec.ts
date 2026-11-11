@@ -417,6 +417,11 @@ test("the phone player bar shows while playing", async ({ browser }) => {
   await expect(bar).toBeVisible();
   await expect(bar).toContainText("Fixture Night · Live");
   await expect(bar).toContainText("Midnight · Gamma");
+  await expect(bar.getByRole("img", { name: "Cover art: Midnight, Gamma" })).toBeVisible();
+  // It (and the stream) stays through navigation.
+  await page.getByRole("link", { name: "About" }).click();
+  await expect(page).toHaveURL(/\/about$/);
+  await expect(bar).toContainText("Fixture Night · Live");
   await bar.getByRole("button", { name: "Pause Fixture Night" }).click();
   await expect(bar).toBeHidden();
   await context.close();

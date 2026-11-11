@@ -3,6 +3,7 @@
 // favicons and the streams (Caddy → Liquidsoap) stay public so apps like VLC
 // can play them.
 import type { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { except } from "hono/combine";
 import { getSignedCookie, setSignedCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
@@ -57,7 +58,9 @@ export const throttle = createMiddleware(async (c, next) => {
 export function login(app: Hono) {
   if (!PASSWORD) return;
 
-  app.post("/login", async (c) => {
+  // The form is a password and a path: anything bigger isn't read.
+  const limit = bodyLimit({ maxSize: 4096, onError: (c) => c.text("Too large", 413) });
+  app.post("/login", limit, async (c) => {
     const { password, next } = await c.req.parseBody();
     const to = typeof next === "string" && /^\/(?![/\\])/.test(next) && !/\p{Cc}/u.test(next) ? next : "/";
     if (typeof password !== "string" || !(await timingSafeEqual(password, PASSWORD))) {

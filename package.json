@@ -4,9 +4,10 @@
   "type": "module",
   "scripts": {
     "format": "prettier --write --ignore-unknown .",
-    "build": "esbuild app/server.tsx --bundle --platform=node --format=esm --packages=external --outdir=dist && esbuild app/client.ts --bundle --minify --outfile=dist/public/app.js --loader:.woff=file --loader:.woff2=file --asset-names=fonts/[name]-[hash] && cp app/public/* dist/public/",
+    "build": "esbuild app/main.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server.js && esbuild app/client.ts --bundle --minify --outfile=dist/public/app.js --loader:.woff=file --loader:.woff2=file --asset-names=fonts/[name]-[hash] && cp app/public/* dist/public/",
     "typecheck": "tsc",
     "lint": "eslint .",
+    "test": "vitest run",
     "e2e": "bash test/e2e.sh",
     "knip": "knip"
   },
@@ -34,7 +35,8 @@
     "stylelint": "18.0.0",
     "stylelint-config-standard": "41.0.0",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.72.2"
+    "typescript-eslint": "8.72.2",
+    "vitest": "5.1.0"
   },
   "allowScripts": {
     "esbuild@0.28.2": true

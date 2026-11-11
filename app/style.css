@@ -493,7 +493,7 @@ img.cover {
 
 .history li {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 4px 20px;
   padding: 12px 0;
@@ -508,7 +508,12 @@ img.cover {
 
 .h-artist {
   flex: 0 1 auto;
+  min-width: 0;
+  max-width: 45%;
   color: var(--color-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── DJ page ── */
@@ -787,6 +792,7 @@ img.cover {
 
   .h-artist {
     grid-area: artist;
+    max-width: none;
   }
 }
 

@@ -46,13 +46,10 @@ media() {
 if [ "${1:-}" != media ]; then
   # The code is what git tracks (commit or `git add` new files), plus .env.
   { git ls-files -z && printf '.env\0'; } | rs --from0 --files-from=- ./ "$HOST:radio/"
-  # The server's IP is fixed and DNS points at it, so never run the ddns
-  # service there: drop COMPOSE_PROFILES (which turns it on) from its .env and
-  # remove any ddns container left from before.
   # Pre-create bind-mounted dirs so Docker doesn't create them as root on first run.
-  $SSH "$HOST" 'chmod 600 radio/.env && sed -i "/^COMPOSE_PROFILES=/d" radio/.env && cd radio &&
+  $SSH "$HOST" 'chmod 600 radio/.env && cd radio &&
     mkdir -p music plays logs covers &&
-    docker compose rm -sf ddns && docker compose up -d --build --remove-orphans'
+    docker compose up -d --build --remove-orphans'
 fi
 media
 # Back up the play log (the only record for SoundExchange reports) to

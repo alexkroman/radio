@@ -69,6 +69,14 @@ repos:
         entry: npx eslint --fix
         files: \.tsx?$
 
+      # Server tests: the app in-process (app/*.test.ts, vitest.config.ts).
+      - id: vitest
+        name: vitest (server tests)
+        language: system
+        entry: npx vitest run
+        files: ^(app/|test/fixtures/|vitest\.config\.ts$|package)
+        pass_filenames: false
+
       - id: stylelint
         name: stylelint
         language: system

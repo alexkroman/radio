@@ -30,6 +30,18 @@ test('cover art with a unicode or "&" file name is served', async ({ request }) 
   }).toPass();
 });
 
+test("an unchanged page or asset is 304 through Caddy's compression", async ({ request }) => {
+  for (const path of ["/about", "/assets/app.js"]) {
+    const headers = { "accept-encoding": "gzip" };
+    const res = await request.get(path, { headers });
+    expect(res.headers()["content-encoding"], path).toBe("gzip");
+    const tag = res.headers()["etag"];
+    expect(tag, path).toBeTruthy();
+    const again = await request.get(path, { headers: { ...headers, "if-none-match": tag! } });
+    expect(again.status(), path).toBe(304);
+  }
+});
+
 test("report keeps unicode and the whole title when it contains a pipe", async () => {
   const admin = await adminRequest();
   await expect.poll(() => performances(admin, "ZOË ÑANDÚ", "CAFÉ  OLÉ <B>")).toBeGreaterThan(0);

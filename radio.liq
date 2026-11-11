@@ -118,12 +118,7 @@ def show(f) =
     metadata.map(
       insert_missing=true,
       title_from_filename,
-      playlist(
-        mode="randomize",
-        reload_mode="watch",
-        check_next=fun (r) -> not string.contains(suffix=".gitkeep", request.uri(r)) and artist_not_recent(r),
-        "/music/#{slug}"
-      )
+      playlist(mode="randomize", reload_mode="watch", check_next=artist_not_recent, "/music/#{slug}")
     )
 
   # Per track (on the playlist: the crossfaded source doesn't mark every track),

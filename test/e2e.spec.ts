@@ -25,12 +25,6 @@ test("each show is its own MP3 stream", async () => {
   }
 });
 
-test("/stream redirects to the default show", async ({ request }) => {
-  const res = await request.get("/stream", { maxRedirects: 0 });
-  expect(res.status()).toBe(302);
-  expect(res.headers()["location"]).toBe("/default/stream");
-});
-
 test("home page lists every show with its description", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("link", { name: "Fixture Default" })).toHaveAttribute("href", "/default");
@@ -421,6 +415,11 @@ for (const [name, viewport] of [
     await expect(bar).toBeVisible();
     await expect(bar).toContainText("Fixture Night · Live");
     await expect(bar).toContainText("Midnight · Gamma");
+    await expect(bar.getByRole("img", { name: "Cover art: Midnight, Gamma" })).toBeVisible();
+    // It (and the stream) stays through navigation.
+    await page.getByRole("link", { name: "About" }).click();
+    await expect(page).toHaveURL(/\/about$/);
+    await expect(bar).toContainText("Fixture Night · Live");
     await bar.getByRole("button", { name: "Pause Fixture Night" }).click();
     await expect(bar).toBeHidden();
     await context.close();

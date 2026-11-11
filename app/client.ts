@@ -14,79 +14,59 @@ import "./style.css";
 import { resumeAudio } from "./audio.ts";
 import htmx from "htmx.org";
 import IcecastMetadataPlayer, { type IcyMetadata } from "icecast-metadata-player";
+import { mountBar, setBar } from "./bar.tsx";
 
 // `stopping`: the player's stop() after a pause, awaited before the player
 // (or the audio element) is used again; its stop() returns early while stopping.
 type Station = { slug: string; title: string; player: IcecastMetadataPlayer; stopping?: Promise<void> };
 
 const audio = new Audio();
-const session = "mediaSession" in navigator ? navigator.mediaSession : undefined;
+const session = navigator.mediaSession;
 let station: Station | undefined;
 // The station shown as playing: set on click, cleared when it stops.
-let active: string | undefined;
+let active: { slug: string; title: string } | undefined;
 // The playing station's track, from the page or the stream's metadata.
 let now = { track: "", artist: "", cover: "" };
-
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 function localTimes() {
   document.querySelectorAll("time[datetime]").forEach((el) => {
     const d = new Date(el.getAttribute("datetime")!);
-    if (!isNaN(d.valueOf()))
-      el.textContent = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    el.textContent = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   });
 }
 
 // Take the playing station's track and cover from the page when it has them.
 function readPage() {
   if (!active) return;
-  const el = document.querySelector<HTMLElement>(`[data-np="${active}"]`);
-  if (el?.dataset.track)
-    now = { track: el.dataset.track, artist: el.dataset.artist ?? "", cover: el.dataset.cover ?? "" };
+  // ui.tsx npData sets all three.
+  const np = document.querySelector<HTMLElement>(`[data-np="${active.slug}"]`)?.dataset as
+    typeof now | undefined;
+  if (np?.track) now = { track: np.track, artist: np.artist, cover: np.cover };
 }
 
 // The playing track's cover: from the page, else the station's current cover
 // (keyed by track so a browser fetches it once per track).
 const coverSrc = (slug: string) => now.cover || `/${slug}/cover.jpg?t=${encodeURIComponent(now.track)}`;
 
-// Show the play state everywhere: play buttons, "Live" labels, the player bar.
+// Show the play state everywhere: play buttons, "Live" labels, the player bar (app/bar.tsx).
 function sync() {
   document.querySelectorAll<HTMLButtonElement>("button[data-play]").forEach((b) => {
-    const on = b.dataset.play === active;
+    const on = b.dataset.play === active?.slug;
     b.classList.toggle("playing", on);
     b.setAttribute("aria-label", `${on ? "Pause" : "Play"} ${b.dataset.title}`);
   });
   document.querySelectorAll<HTMLElement>("[data-status]").forEach((el) => {
-    el.textContent = el.dataset.status === active ? "Listening · Live" : "Live";
+    el.textContent = el.dataset.status === active?.slug ? "Listening · Live" : "Live";
   });
   document.body.classList.toggle("playing", !!active);
-  $("bar").hidden = !active;
-  if (!station || !active) return;
-  $("bar-track").textContent = [now.track, now.artist].filter(Boolean).join(" · ");
-  $("bar-station").textContent = `${station.title} · Live`;
-  $("bar-button").setAttribute("aria-label", `Pause ${station.title}`);
-  const img = $<HTMLImageElement>("bar-cover");
-  const src = coverSrc(station.slug);
-  if (img.getAttribute("src") !== src) {
-    img.hidden = true;
-    $("bar-ph").hidden = false;
-    img.src = src;
-  }
-  img.alt = now.track ? `Cover art: ${[now.track, now.artist].filter(Boolean).join(", ")}` : "";
+  setBar(active && { title: active.title, ...now, cover: coverSrc(active.slug) });
 }
-
-// The bar shows the placeholder square until (and unless) the cover loads.
-const barCover = $<HTMLImageElement>("bar-cover");
-barCover?.addEventListener("load", () => {
-  barCover.hidden = false;
-  $("bar-ph").hidden = true;
-});
 
 // The stream stopped on its own (a pause is already shown by stop()).
 function stopped(p: IcecastMetadataPlayer) {
   if (station?.player !== p || station.stopping) return;
   active = undefined;
-  if (session) session.playbackState = "paused";
+  session.playbackState = "paused";
   sync();
 }
 
@@ -100,7 +80,7 @@ function unlock() {
 async function start(slug: string, title: string) {
   // Synchronously, in the click: iOS allows it only there.
   resumeAudio();
-  active = slug;
+  active = { slug, title };
   now = { track: "", artist: "", cover: "" };
   readPage();
   sync();
@@ -108,7 +88,7 @@ async function start(slug: string, title: string) {
   if (paused?.stopping) {
     await paused.stopping;
     paused.stopping = undefined;
-    if (active !== slug || station !== paused) return; // another click meanwhile
+    if (active?.slug !== slug || station !== paused) return; // another click meanwhile
   }
   if (station?.slug === slug && station.player.state !== "stopped") {
     unlock();
@@ -117,7 +97,7 @@ async function start(slug: string, title: string) {
   const old = station;
   station = undefined;
   if (old) await old.player.detachAudioElement();
-  if (active !== slug) return; // another click while the old one stopped
+  if (active?.slug !== slug) return; // another click while the old one stopped
   const p: IcecastMetadataPlayer = new IcecastMetadataPlayer(`/${slug}/stream`, {
     audioElement: audio,
     retryTimeout: 120,
@@ -133,17 +113,16 @@ async function start(slug: string, title: string) {
       sync();
       // The page's now playing (and with it the cover) catches up.
       if (document.getElementById("poll")) htmx.trigger("#poll", "refresh");
-      if (session)
-        session.metadata = new MediaMetadata({
-          title: now.track,
-          artist: now.artist,
-          album: title,
-          artwork: [{ src: coverSrc(slug), sizes: "512x512", type: "image/jpeg" }],
-        });
+      session.metadata = new MediaMetadata({
+        title: now.track,
+        artist: now.artist,
+        album: title,
+        artwork: [{ src: coverSrc(slug), sizes: "512x512", type: "image/jpeg" }],
+      });
     },
     onPlay: () => {
       if (station?.player !== p) return;
-      if (session) session.playbackState = "playing";
+      session.playbackState = "playing";
     },
     onStop: () => stopped(p),
     onError: () => {
@@ -159,27 +138,24 @@ async function start(slug: string, title: string) {
 
 function stop() {
   active = undefined;
-  if (session) session.playbackState = "paused";
+  session.playbackState = "paused";
   sync();
   if (station) station.stopping ??= station.player.stop();
 }
 
 function toggle(slug: string, title: string) {
-  if (active === slug) stop();
+  if (active?.slug === slug) stop();
   else void start(slug, title);
 }
 
-session?.setActionHandler("play", () => station && void start(station.slug, station.title));
-session?.setActionHandler("pause", stop);
-session?.setActionHandler("stop", stop);
+session.setActionHandler("play", () => station && void start(station.slug, station.title));
+session.setActionHandler("pause", stop);
+session.setActionHandler("stop", stop);
 
 document.addEventListener("click", (e) => {
-  const button = (e.target as Element).closest<HTMLButtonElement>(
-    "button[data-play], button[data-copy], #bar-button",
-  );
+  const button = (e.target as Element).closest<HTMLButtonElement>("button[data-play], button[data-copy]");
   if (!button) return;
-  if (button.id === "bar-button") return stop();
-  if (button.dataset.play) return toggle(button.dataset.play, button.dataset.title ?? button.dataset.play);
+  if (button.dataset.play) return toggle(button.dataset.play, button.dataset.title!);
   const url = button.dataset.copy!;
   navigator.clipboard.writeText(url).then(
     () => {
@@ -188,8 +164,7 @@ document.addEventListener("click", (e) => {
     },
     () => {
       // No clipboard access: select the URL so it can be copied by hand.
-      const link = button.parentElement?.querySelector("a");
-      if (link) getSelection()?.selectAllChildren(link);
+      getSelection()!.selectAllChildren(button.parentElement!.querySelector("a")!);
     },
   );
 });
@@ -205,6 +180,8 @@ document.addEventListener("htmx:beforeRequest", (e) => {
   // hx-select-oob into the document. Its events no longer reach `document`.
   poll.addEventListener("htmx:beforeOnLoad", (l) => poll.isConnected || l.preventDefault(), { once: true });
 });
+
+mountBar(document.getElementById("player")!, stop);
 
 function settle() {
   localTimes();

@@ -54,7 +54,6 @@
 		-Server
 	}
 
-	redir /stream /default/stream
 	handle @stream {
 		rewrite * /{path.0}
 		reverse_proxy icecast:8000 {

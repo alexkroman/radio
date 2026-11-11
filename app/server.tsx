@@ -2,16 +2,16 @@
 // (/<slug>) and current cover (/<slug>/cover.jpg), DJ pages (/djs/<dj>), /about,
 // and the admin pages (/admin). Shows are shows/<slug>.md (app/shows.ts), with
 // their DJs in the front matter; Liquidsoap serves their streams via Caddy.
-import { readFile } from "node:fs/promises";
-import { extname } from "node:path";
-import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { etag } from "hono/etag";
+import { createMiddleware } from "hono/factory";
 import { jsxRenderer } from "hono/jsx-renderer";
 import { admin } from "./admin.tsx";
 import { login, throttle } from "./login.tsx";
 import { latestPlays, type Play, recentPlays } from "./plays.ts";
-import { getDj, getShow, getShows, PHOTO_TYPES, type Show, SLUG } from "./shows.ts";
+import { getDj, getShow, getShows, type Show, SLUG } from "./shows.ts";
 import {
   Cover,
   coverUrl,
@@ -19,7 +19,6 @@ import {
   Markdown,
   npData,
   PlayButton,
-  PlayerBar,
   Poll,
   SITE_TITLE,
   SiteHeader,
@@ -105,8 +104,33 @@ const History = ({ plays }: { plays: Play[] }) => (
   </section>
 );
 
-const app = new Hono({ strict: false });
+export const app = new Hono({ strict: false });
 
+// Every GET gets an ETag, so a repeat (the now-playing poll, the unhashed
+// app.js/app.css) is answered 304 when nothing changed. Files (serveStatic)
+// send Last-Modified and their size, so their ETag is made from those instead
+// of etag() hashing the whole file: the size is the whole file's (Content-Range
+// on a range request), so every range of it has the file's ETag.
+app.use(etag());
+app.use(async (c, next) => {
+  await next();
+  const h = c.res.headers;
+  const modified = h.get("Last-Modified");
+  const size = h.get("Content-Range")?.split("/")[1] ?? h.get("Content-Length");
+  if (modified && size && !h.has("ETag")) h.set("ETag", `W/"${size}-${Date.parse(modified)}"`);
+});
+// The only form is the login (a password and a path): no bigger body is read.
+app.use(bodyLimit({ maxSize: 4096, onError: (c) => c.text("Too large", 413) }));
+
+// Cache-Control for a file serveStatic found (its onFound runs too late to add one).
+const cacheFor = (value: string) =>
+  createMiddleware(async (c, next) => {
+    await next();
+    if (c.res.ok) c.res.headers.set("Cache-Control", value);
+  });
+
+// Fonts have content hashes in their names, so they never change.
+app.use("/assets/fonts/*", cacheFor("public, max-age=31536000, immutable"));
 app.use(
   "/assets/*",
   serveStatic({ root: "dist/public", rewriteRequestPath: (p) => p.replace(/^\/assets/, "") }),
@@ -138,7 +162,8 @@ app.use(
         >
           {children}
         </div>
-        {script && <PlayerBar />}
+        {/* The player bar (app/bar.tsx), rendered by the client. */}
+        {script && <div id="player" />}
       </body>
     </html>
   )),
@@ -320,11 +345,8 @@ app.get(`/djs/:dj{${SLUG}}`, async (c) => {
 // A DJ's photo: the file named by `photo:` in a show's front matter.
 app.get(`/djs/:dj{${SLUG}}/photo`, async (c) => {
   const photo = (await getDj(c.req.param("dj")))?.photo;
-  const body = photo && (await readFile(photo).catch(() => undefined));
-  if (!photo || !body) return c.notFound();
-  c.header("Content-Type", PHOTO_TYPES[extname(photo).toLowerCase()]);
-  c.header("Cache-Control", "public, max-age=300");
-  return c.body(body);
+  // No max-age: the ETag makes a repeat a 304, and an edited photo shows at once.
+  return (photo && (await serveStatic({ path: photo })(c, async () => {}))) || c.notFound();
 });
 
 // The current track's cover: a redirect to its pre-extracted art (play log).
@@ -342,13 +364,8 @@ app.get(`/:slug{${SLUG}}/cover.jpg`, async (c) => {
 // round-trips through serveStatic's decodeURI).
 app.use(
   "/covers/*",
-  serveStatic({
-    root: COVERS,
-    rewriteRequestPath: (p) => p.replace(/^\/covers/, ""),
-    onFound: (_, c) => c.header("Cache-Control", "public, max-age=3600"),
-  }),
+  cacheFor("public, max-age=3600"),
+  serveStatic({ root: COVERS, rewriteRequestPath: (p) => p.replace(/^\/covers/, "") }),
 );
 
 app.notFound((c) => c.text("Not found", 404));
-
-serve({ fetch: app.fetch, port: 3000 });

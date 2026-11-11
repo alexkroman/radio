@@ -66,6 +66,24 @@ djs:
 ---
 ```
 
+A DJ's page address comes from their name: lowercased, accents dropped, anything else between letters and digits turned into `-` (`Zoë Ñandú` → `/djs/zoe-nandu`). Set `slug:` to choose it yourself, e.g. for a name in a script without Latin letters, which otherwise makes no address and leaves the DJ out:
+
+```md
+djs:
+
+- name: 李小龙
+  slug: bruce-lee
+```
+
+A show with one DJ can write it on one line with `dj:` (the same key as `djs:`, which also takes a single DJ instead of a list):
+
+```md
+---
+title: My Show
+dj: Ana Ruiz
+---
+```
+
 `shows/` is gitignored — create your own show files after cloning. Adding or removing a show needs `docker compose restart liquidsoap`; editing a title or description shows up immediately.
 
 ## Where things are
@@ -95,7 +113,7 @@ Both mirror your `music/`, `covers/` and `shows/` to the server, so files you de
 
 Every run also copies the server's play log to `backup/plays/` on your computer (it's the only record for SoundExchange reports), so deploy or sync now and then. The server installs security updates by itself and, when one needs it, reboots at 11:00 UTC (3–4 am Pacific); Docker brings the station back up.
 
-Set `DOMAIN` in `.env` and point the domain's DNS A record at the server's address (the IP `scripts/deploy.sh` prints; it stays the same). The server never runs the `ddns` service, even if `.env` sets `COMPOSE_PROFILES=ddns`; stop it on any other machine still updating the domain. Only ports 22 and 443 are open. To change the size, set `FLAVOR` (`openstack flavor list`; default `b3-8`).
+Set `DOMAIN` in `.env` and point the domain's DNS A record at the server's address (the IP `scripts/deploy.sh` prints; it stays the same). Only ports 22 and 443 are open. To change the size, set `FLAVOR` (`openstack flavor list`; default `b3-8`).
 
 ## Development
 

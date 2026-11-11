@@ -12,6 +12,9 @@ SSH="ssh -o StrictHostKeyChecking=accept-new -o ControlMaster=auto -o ControlPat
 ipv4() { grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -n1; }
 
 if [ -z "${IP:-}" ]; then
+  IP=$(grep -E '^IP=' .env | cut -d= -f2- 2>/dev/null || true)
+fi
+if [ -z "${IP:-}" ]; then
   IP=$(openstack server show radio -f value -c addresses 2>/dev/null | ipv4 || true)
 fi
 if [ -z "$IP" ]; then

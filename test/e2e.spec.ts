@@ -190,9 +190,6 @@ test("player plays the stream using only self-hosted assets", async ({ page }) =
     (r) =>
       !r.url().startsWith(BASE) &&
       !/^(blob|data):/.test(r.url()) &&
-      // Google Fonts is intentionally allowed in the CSP for typography
-      !r.url().startsWith("https://fonts.googleapis.com") &&
-      !r.url().startsWith("https://fonts.gstatic.com") &&
       problems.push(`external request: ${r.url()}`),
   );
   const state = () => page.evaluate(() => (window as unknown as { player: { state: string } }).player.state);

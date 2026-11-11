@@ -1,6 +1,7 @@
 // Shared helpers for the end-to-end specs.
 import { request as https } from "node:https";
 import { type APIRequestContext, request } from "@playwright/test";
+import { IcecastMetadataReader } from "icecast-metadata-js";
 
 export const BASE = process.env.BASE_URL ?? "https://localhost";
 export const SITE_PASSWORD = process.env.SITE_PASSWORD ?? "";
@@ -62,25 +63,17 @@ export function icyTitle(path: string): Promise<string> {
       new URL(path, BASE),
       { rejectUnauthorized: false, timeout: 30_000, headers: { "Icy-MetaData": "1" } },
       (res) => {
-        const metaint = Number(res.headers["icy-metaint"]);
-        if (!metaint) return reject(new Error(`no icy-metaint (status ${res.statusCode})`));
-        let buf = Buffer.alloc(0);
-        let skip = metaint;
-        res.on("data", (chunk: Buffer) => {
-          buf = Buffer.concat([buf, chunk]);
-          while (buf.length > skip) {
-            const len = buf[skip]! * 16;
-            if (buf.length < skip + 1 + len) return;
-            const meta = buf.subarray(skip + 1, skip + 1 + len).toString("utf8");
-            buf = buf.subarray(skip + 1 + len);
-            skip = metaint;
-            const title = /StreamTitle='(.*?)';/s.exec(meta)?.[1];
-            if (title) {
-              req.destroy();
-              return resolve(title);
-            }
-          }
+        const icyMetaInt = Number(res.headers["icy-metaint"]);
+        if (!icyMetaInt) return reject(new Error(`no icy-metaint (status ${res.statusCode})`));
+        const reader = new IcecastMetadataReader({
+          icyMetaInt,
+          onMetadata: ({ metadata }) => {
+            if (!metadata.StreamTitle) return;
+            req.destroy();
+            resolve(metadata.StreamTitle);
+          },
         });
+        res.on("data", (chunk: Buffer) => reader.readAll(chunk));
       },
     );
     req.on("timeout", () => req.destroy(new Error(`no ICY title on ${path}`)));

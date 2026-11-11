@@ -7,6 +7,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { jsxRenderer } from "hono/jsx-renderer";
 import { marked } from "marked";
+import { parse as parseYaml } from "yaml";
 import { admin } from "./admin.tsx";
 import { login, throttle } from "./login.tsx";
 import { type Play, recentPlays } from "./plays.ts";
@@ -47,9 +48,18 @@ async function getShow(slug: string): Promise<Show | undefined> {
   if (text === undefined) return undefined;
   const md = text.replace(/\r\n?/g, "\n");
   const [, front = "", body = md] = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(md) ?? [];
-  // `title: x`, optionally quoted as in YAML.
-  const title = /^title:\s*(.*?)\s*$/m.exec(front)?.[1]?.replace(/^(["'])(.*)\1$/, "$2") || slug;
-  return { slug, title, description: await marked.parse(body) };
+  let meta: unknown;
+  try {
+    meta = parseYaml(front);
+  } catch {
+    // Invalid front matter: fall back to the slug as the title.
+  }
+  const title = (meta as { title?: unknown } | null)?.title;
+  return {
+    slug,
+    title: (typeof title === "string" || typeof title === "number" ? String(title) : "").trim() || slug,
+    description: await marked.parse(body),
+  };
 }
 
 async function getShows(): Promise<Show[]> {
@@ -121,12 +131,6 @@ app.use(
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap"
-        />
         <link rel="stylesheet" href="/assets/app.css" />
         {script && <script src="/assets/app.js" defer />}
       </head>
@@ -276,24 +280,30 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
   );
 });
 
-app.get(`/:slug{${SLUG}}/cover.jpg`, async (c) => {
-  const jpg = await readFile(`${COVERS}/${c.req.param("slug")}.jpg`).catch(() => undefined);
-  if (!jpg) return c.notFound();
-  c.header("Content-Type", "image/jpeg");
-  c.header("Cache-Control", "public, max-age=30");
-  return c.body(jpg);
-});
+// The current track's cover, copied by radio.liq to covers/<slug>.jpg.
+app.get(
+  `/:slug{${SLUG}}/cover.jpg`,
+  serveStatic({
+    root: COVERS,
+    rewriteRequestPath: (_, c) => `/${c.req.param("slug")}.jpg`,
+    onFound: (_, c) => c.header("Cache-Control", "public, max-age=30"),
+  }),
+);
 
-// Per-track covers extracted by scripts/import.sh → covers/<show>/<stem>.jpg
-app.get(`/covers/:slug{${SLUG}}/:file{[^/]+\\.jpg}`, async (c) => {
-  const { slug, file } = c.req.param();
-  if (/[/\\]|^\.\.?$/.test(file)) return c.notFound();
-  const jpg = await readFile(`${COVERS}/${slug}/${file}`).catch(() => undefined);
-  if (!jpg) return c.notFound();
-  c.header("Content-Type", "image/jpeg");
-  c.header("Cache-Control", "public, max-age=3600");
-  return c.body(jpg);
-});
+// Per-track covers extracted by scripts/import.sh → covers/<show>/<stem>.jpg.
+// File names are percent-encoded (ui.tsx coverUrl) and may hold "&", "#" or
+// "?", which serveStatic's decodeURI leaves encoded, so serve the fully decoded
+// :file param, refusing an encoded "/" or "\" in it.
+app.get(
+  `/covers/:slug{${SLUG}}/:file{[^/]+\\.jpg}`,
+  (c, next) => (/[/\\]/.test(c.req.param("file")) ? c.notFound() : next()),
+  serveStatic({
+    root: COVERS,
+    allowPercentInPath: true,
+    rewriteRequestPath: (_, c) => `/${c.req.param("slug")}/${c.req.param("file")}`,
+    onFound: (_, c) => c.header("Cache-Control", "public, max-age=3600"),
+  }),
+);
 
 app.notFound((c) => c.text("Not found", 404));
 

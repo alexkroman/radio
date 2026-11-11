@@ -4,16 +4,19 @@
   "type": "module",
   "scripts": {
     "format": "prettier --write --ignore-unknown .",
-    "build": "esbuild app/server.tsx --bundle --platform=node --format=esm --packages=external --outdir=dist && esbuild app/client.ts --bundle --minify --outfile=dist/public/app.js && cp app/public/* dist/public/",
+    "build": "esbuild app/server.tsx --bundle --platform=node --format=esm --packages=external --outdir=dist && esbuild app/client.ts --bundle --minify --outfile=dist/public/app.js --loader:.woff=file --loader:.woff2=file --asset-names=fonts/[name]-[hash] && cp app/public/* dist/public/",
     "typecheck": "tsc",
     "lint": "eslint .",
     "e2e": "bash test/e2e.sh",
     "knip": "knip"
   },
   "dependencies": {
+    "@fontsource/inter": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0",
     "@hono/node-server": "2.1.6",
     "hono": "4.13.17",
-    "marked": "18.2.0"
+    "marked": "18.2.0",
+    "yaml": "2.9.1"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -22,6 +25,7 @@
     "esbuild": "0.28.2",
     "eslint": "10.14.0",
     "htmx.org": "2.0.11",
+    "icecast-metadata-js": "1.2.9",
     "icecast-metadata-player": "1.17.13",
     "jiti": "2.7.0",
     "knip": "6.45.0",

@@ -14,7 +14,7 @@
 ## Layout
 
 - `shows/<slug>.md` is a show: a 24/7 MP3 stream (Liquidsoap → Icecast mount `/<slug>`, public at `/<slug>/stream` via Caddy) playing `music/<slug>/`. Icecast stays because Liquidsoap's own HTTP output (`output.harbor`, 2.3.3) sends no ICY metadata, so players would get no track titles (`test/hunt.spec.ts` checks). `radio.liq` builds one stream per show and appends each play (with tags, and the listener count from Icecast's status-json) to `plays/YYYY-MM.jsonl`. Per-track work hangs off the playlist source's `on_track`: the crossfaded source doesn't mark every track.
-- `app/` is one Hono (+ hono/jsx) app: `server.tsx` (show list, player, covers), `admin.tsx` (`/admin`, Hono basicAuth, SoundExchange report), `login.tsx` (optional `SITE_PASSWORD` signed-cookie login), `plays.ts` (reads the play log), `client.ts` (browser bundle: htmx, icecast-metadata-player, Pico CSS from npm, no CDNs). The CSP forbids eval, so no htmx trigger filters.
+- `app/` is one Hono (+ hono/jsx) app: `server.tsx` (show list, player, covers), `admin.tsx` (`/admin`, Hono basicAuth, SoundExchange report), `login.tsx` (optional `SITE_PASSWORD` signed-cookie login), `plays.ts` (reads the play log), `client.ts` (browser bundle: htmx, icecast-metadata-player, the hand-written `style.css`/`tokens.css`, fonts from `@fontsource`; no CDNs). The CSP forbids eval, so no htmx trigger filters.
 - Caddy routes GET/HEAD `/<slug>/stream` to Icecast and everything else to the app. `login.tsx` also throttles failed logins (site form and admin basic auth).
 - `test/`: `e2e.sh` + `compose.yml` overlay + Playwright specs on `fixtures/`; `global-setup.ts` logs in with `SITE_PASSWORD`.
 - Run `pre-commit run --all-files` before committing.

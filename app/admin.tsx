@@ -2,7 +2,7 @@
 // ADMIN_PASSWORD): SoundExchange Report of Use from the play log.
 import { Hono } from "hono";
 import { basicAuth } from "hono/basic-auth";
-import { monthOf, monthPlays } from "./plays.ts";
+import { eachPlay, monthOf } from "./plays.ts";
 
 const PASSWORD = process.env.ADMIN_PASSWORD;
 if (!PASSWORD) throw new Error("ADMIN_PASSWORD is not set");
@@ -30,12 +30,15 @@ async function report(month: string): Promise<string> {
     string,
     { artist: string; title: string; isrc: string; album: string; label: string; count: number }
   >();
-  for (const p of await monthPlays(month)) {
+  await eachPlay(month, (p) => {
     const key = `${p.artist}\n${p.title}`;
-    const song = songs.get(key) ?? { ...p, count: 0 };
+    let song = songs.get(key);
+    if (!song) {
+      const { artist, title, isrc, album, label } = p;
+      songs.set(key, (song = { artist, title, isrc, album, label, count: 0 }));
+    }
     song.count += Math.max(p.listeners, 1);
-    songs.set(key, song);
-  }
+  });
   const rows: (string | number)[][] = [HEADER];
   const sorted = [...songs.values()].sort(
     (a, b) => b.count - a.count || a.artist.localeCompare(b.artist) || a.title.localeCompare(b.title),

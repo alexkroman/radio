@@ -89,13 +89,17 @@ def show(f) =
   slug = path.remove_extension(path.basename(f))
 
   # Artist separation: reject a candidate if any of its artists was among the
-  # last 20 artists played on this show; after 20 rejections in a row (a show
-  # with few artists) take the next track anyway rather than go silent.
+  # last 20 artists picked on this show; after 20 rejections in a row (a show
+  # with few artists) take the next track anyway rather than go silent. A
+  # track's artists are recorded when it's picked, so the next pick (which can
+  # come before the track starts, or before its async on_track below is done)
+  # already sees them.
   recent_artists = ref([])
   rejected = ref(0)
   def artist_not_recent(r) =
+    artists = track_artists(r)
     if
-      rejected() < 20 and list.exists(fun (a) -> list.mem(a, recent_artists()), track_artists(r))
+      rejected() < 20 and list.exists(fun (a) -> list.mem(a, recent_artists()), artists)
     then
       rejected := rejected() + 1
       log.info(
@@ -105,6 +109,7 @@ def show(f) =
       false
     else
       rejected := 0
+      recent_artists := list.prefix(20, list.append(artists, recent_artists()))
       true
     end
   end
@@ -122,8 +127,8 @@ def show(f) =
     )
 
   # Per track (on the playlist: the crossfaded source doesn't mark every track),
-  # from the raw metadata before the text recode below: artist separation and
-  # the play log (with the track's cover, pre-extracted by scripts/import.sh).
+  # from the raw metadata before the text recode below: the play log (with the
+  # track's cover, pre-extracted by scripts/import.sh).
   # Asynchronous, so the listener count's HTTP call never holds up the stream.
   tracks.on_track(
     synchronous=false,
@@ -151,8 +156,6 @@ def show(f) =
           data="#{json.stringify(compact=true, play)}\n",
           "/plays/#{time.string('%Y-%m')}.jsonl"
         )
-        recent_artists :=
-          list.prefix(20, list.append(artists_of(list.assoc(default="", "artist", m)), recent_artists()))
       end
   )
 

@@ -15,6 +15,14 @@
   --color-link-underline: #b5b5b5;
   --color-accent: #e8590c; /* ONLY: logo centre square, "Live" dot, player-bar dot */
   --color-on-ink-muted: #b5b5b5; /* secondary text on the black player bar */
+  --color-link-hover: #555555;
+  --color-surface: #111111; /* mobile player bar background */
+  --color-surface-text: #ffffff;
+  --color-surface-border: transparent;
+  --color-on-fill: #ffffff; /* icon on a filled (--color-ink) play button */
+  --art-outline: transparent; /* hairline around album covers */
+
+  color-scheme: light dark;
 
   /* Type families */
   --font-sans: Inter, system-ui, -apple-system, sans-serif;
@@ -51,4 +59,27 @@
   /* Sizes */
   --tap: 44px; /* minimum touch target; small play buttons */
   --play-lg: 72px; /* station page play button */
+}
+
+/* Dark mode: follows the OS setting. Same layout, type and sizes; only colors change.
+   Light and dark swap ink and background, so filled buttons become light with dark icons. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #111111;
+    --color-ink: #f2f2f2; /* not pure white, to reduce glare */
+    --color-body: #c8c8c8;
+    --color-muted: #8f8f8f; /* 5.8:1 on #111111 */
+    --color-hairline: #2a2a2a;
+    --color-hairline-soft: #222222;
+    --color-placeholder: #1c1c1c;
+    --color-link-underline: #555555;
+    --color-link-hover: #bdbdbd;
+    --color-accent: #e8590c; /* unchanged */
+    --color-on-ink-muted: #8f8f8f;
+    --color-surface: #1c1c1c; /* player bar is a raised dark surface, NOT inverted */
+    --color-surface-text: #f2f2f2;
+    --color-surface-border: #2a2a2a;
+    --color-on-fill: #111111;
+    --art-outline: rgb(255 255 255 / 8%);
+  }
 }

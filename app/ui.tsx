@@ -6,14 +6,15 @@ export const SITE_TITLE = process.env.SITE_TITLE || "Mazes Radio";
 export type Show = { slug: string; title: string; description: string };
 
 // The labyrinth mark (design hand-off assets/logo-mark.svg), decorative here:
-// the link around it carries the name.
+// the link around it carries the name. The lines follow --color-ink (via the
+// link's color), so the mark turns white in dark mode; the centre stays orange.
 const LogoMark = () => (
   <svg width="24" height="24" viewBox="0 0 48 48" aria-hidden="true">
-    <g fill="none" stroke="#111111" stroke-width="5" stroke-linecap="square">
+    <g fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="square">
       <path d="M20 4H4V44H44V4H28" />
       <path d="M28 36H36V12H12V36H20" />
     </g>
-    <rect x="20" y="20" width="8" height="8" fill="#E8590C" />
+    <rect x="20" y="20" width="8" height="8" class="mark-centre" />
   </svg>
 );
 

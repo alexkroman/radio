@@ -38,7 +38,7 @@ a {
 }
 
 a:hover {
-  color: #555;
+  color: var(--color-link-hover);
 }
 
 img {
@@ -117,6 +117,10 @@ button {
   flex: none;
 }
 
+.mark-centre {
+  fill: var(--color-accent);
+}
+
 .wordmark {
   font: var(--type-wordmark);
   letter-spacing: -0.03em;
@@ -188,6 +192,12 @@ a.url {
   object-fit: cover;
 }
 
+/* A faint inset outline (dark mode) so dark covers don't melt into the page. */
+img.cover {
+  outline: 1px solid var(--art-outline);
+  outline-offset: -1px;
+}
+
 .cover-ph {
   background: var(--color-placeholder);
   border: 1px solid var(--color-hairline);
@@ -243,7 +253,7 @@ a.url {
 .play.playing,
 .play-lg {
   background: var(--color-ink);
-  color: var(--color-bg);
+  color: var(--color-on-fill);
 }
 
 .play-lg {
@@ -501,8 +511,9 @@ a.url {
   align-items: center;
   gap: 14px;
   padding: 14px 24px calc(14px + env(safe-area-inset-bottom));
-  background: var(--color-ink);
-  color: var(--color-bg);
+  border-top: 1px solid var(--color-surface-border);
+  background: var(--color-surface);
+  color: var(--color-surface-text);
 }
 
 .bar-text {
@@ -538,8 +549,8 @@ a.url {
 }
 
 .play-bar {
-  border-color: var(--color-bg);
-  color: var(--color-bg);
+  border-color: var(--color-surface-text);
+  color: var(--color-surface-text);
 }
 
 /* ── Login and admin ── */
@@ -561,6 +572,8 @@ a.url {
   padding: 0 16px;
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-pill);
+  background: var(--color-bg);
+  color: var(--color-ink);
   font: var(--type-small);
 }
 
@@ -575,7 +588,7 @@ a.url {
   border: 0;
   border-radius: var(--radius-pill);
   background: var(--color-ink);
-  color: var(--color-bg);
+  color: var(--color-on-fill);
   font: var(--type-nav);
 }
 

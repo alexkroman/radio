@@ -9,9 +9,19 @@
 //       links:
 //         Instagram: https://instagram.com/anaruiz
 //     - Ben Cho                     # just a name
+//     - name: 李小龙
+//       slug: bruce-lee            # for a name that makes no usable slug
 //
-// A DJ on several shows is one page; their details can be written on any of
-// those shows (the first show, by slug, that sets a field wins).
+// `djs:` can also be a single DJ (a name or a mapping) instead of a list, and
+// `dj:` is the same key under another name, for a show with one DJ:
+//
+//   dj: Ana Ruiz
+//
+// The slug is the name lowercased, without accents, non-alphanumerics as "-"
+// ("Zoë Ñandú" → zoe-nandu); a DJ with no usable slug is left out, as is a
+// repeat of a DJ already on the show. A DJ on several shows is one page; their
+// details can be written on any of those shows (the first show, by slug, that
+// sets a field wins).
 import { readdir, readFile } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import { marked } from "marked";

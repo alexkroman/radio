@@ -66,6 +66,24 @@ djs:
 ---
 ```
 
+A DJ's page address comes from their name: lowercased, accents dropped, anything else between letters and digits turned into `-` (`Zoë Ñandú` → `/djs/zoe-nandu`). Set `slug:` to choose it yourself, e.g. for a name in a script without Latin letters, which otherwise makes no address and leaves the DJ out:
+
+```md
+djs:
+
+- name: 李小龙
+  slug: bruce-lee
+```
+
+A show with one DJ can write it on one line with `dj:` (the same key as `djs:`, which also takes a single DJ instead of a list):
+
+```md
+---
+title: My Show
+dj: Ana Ruiz
+---
+```
+
 `shows/` is gitignored — create your own show files after cloning. Adding or removing a show needs `docker compose restart liquidsoap`; editing a title or description shows up immediately.
 
 ## Where things are

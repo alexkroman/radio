@@ -463,7 +463,7 @@ img.cover {
 
 .history li {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 4px 20px;
   padding: 12px 0;

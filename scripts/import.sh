@@ -45,14 +45,15 @@ done
 
 # Verify pyacoustid is installed in beets' Python environment (needed for chroma plugin).
 # Use a temp DB so beet doesn't prompt to create a directory.
-tmpdb=$(mktemp /tmp/beet-check-XXXXXX); rm -f "$tmpdb"
+tmpdb=$(mktemp /tmp/beet-check-XXXXXX)
+rm -f "$tmpdb"
 tmpdb="${tmpdb}.db"
 beet_ver=$(beet -c "$CONFIG" -l "$tmpdb" version 2>&1 </dev/null || true)
 rm -f "$tmpdb" "${tmpdb%.*}"*.bak
 if ! echo "$beet_ver" | grep -q "chroma"; then
   beet_bin=$(command -v beet)
   echo "ERROR: pyacoustid not installed in beets' Python environment." >&2
-  if [[ "$beet_bin" == */Cellar/* || "$beet_bin" == */opt/homebrew/* ]]; then
+  if [[ $beet_bin == */Cellar/* || $beet_bin == */opt/homebrew/* ]]; then
     echo "  Fix (Homebrew): /opt/homebrew/opt/beets/libexec/bin/pip install pyacoustid" >&2
   else
     echo "  Fix (pipx): pipx inject beets pyacoustid" >&2
@@ -61,7 +62,7 @@ if ! echo "$beet_ver" | grep -q "chroma"; then
 fi
 
 # ── Determine which shows to process ────────────────────────────────────────
-if [[ "${1:-}" != "" ]]; then
+if [[ ${1:-} != "" ]]; then
   show_dirs=("$MUSIC_DIR/$1")
 else
   show_dirs=()
@@ -75,7 +76,10 @@ fi
 
 # ── Process each show ────────────────────────────────────────────────────────
 for show_dir in "${show_dirs[@]}"; do
-  [[ -d "$show_dir" ]] || { echo "WARN: $show_dir not found, skipping." >&2; continue; }
+  [[ -d $show_dir ]] || {
+    echo "WARN: $show_dir not found, skipping." >&2
+    continue
+  }
   slug=$(basename "$show_dir")
 
   echo ""
@@ -119,11 +123,11 @@ for show_dir in "${show_dirs[@]}"; do
     out="$cover_dir/$stem.jpg"
 
     # Skip if cover exists and is newer than the audio file
-    [[ -f "$out" && "$out" -nt "$file" ]] && continue
+    [[ -f $out && $out -nt $file ]] && continue
 
     # Extract the first video stream (embedded album art) and convert to JPEG.
     # ffmpeg exits non-zero when no video stream exists; that's fine.
-    if ffmpeg -i "$file" -map 0:v:0 "$out" -y -loglevel error 2>/dev/null; then
+    if ffmpeg -nostdin -i "$file" -map 0:v:0 "$out" -y -loglevel error 2>/dev/null; then
       echo "  ✓ $stem"
     else
       rm -f "$out"

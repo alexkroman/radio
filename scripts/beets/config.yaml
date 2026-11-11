@@ -45,6 +45,7 @@ fetchart:
 scrub:
   auto: yes # strip junk tags before writing clean ones
 
+
 # Tags the app / Liquidsoap care about:
 #   artist  → TPE1   artist  tag("artist", "")
 #   title   → TIT2   title   tag("title", "")

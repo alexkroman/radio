@@ -7,9 +7,13 @@ import { render, useLayoutEffect, useRef, useState } from "hono/jsx/dom";
 
 export type BarState = { title: string; track: string; artist: string; cover: string };
 
-// Bar's state setter, once it has rendered.
+// What the bar shows, and its setter once it has rendered (one bar per page).
+let state: BarState | undefined;
 let setState: ((s: BarState | undefined) => void) | undefined;
-export const setBar = (s: BarState | undefined) => setState?.(s);
+export function setBar(s: BarState | undefined) {
+  state = s;
+  setState?.(s);
+}
 
 // The placeholder square until (and unless) the cover loads. Keyed by src, so
 // a new cover starts out as the placeholder again.
@@ -36,7 +40,7 @@ function Cover({ src, alt }: { src: string; alt: string }) {
 }
 
 function Bar({ onPause }: { onPause: () => void }) {
-  const [s, set] = useState<BarState>();
+  const [s, set] = useState(state);
   setState = set;
   if (!s) return null;
   const parts = [s.track, s.artist].filter(Boolean);

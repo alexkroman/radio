@@ -2,10 +2,6 @@
 // (/<slug>) and current cover (/<slug>/cover.jpg), DJ pages (/djs/<dj>), /about,
 // and the admin pages (/admin). Shows are shows/<slug>.md (app/shows.ts), with
 // their DJs in the front matter; Liquidsoap serves their streams via Caddy.
-import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
-import { extname } from "node:path";
-import { Readable } from "node:stream";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -15,7 +11,7 @@ import { jsxRenderer } from "hono/jsx-renderer";
 import { admin } from "./admin.tsx";
 import { login, throttle } from "./login.tsx";
 import { latestPlays, type Play, recentPlays } from "./plays.ts";
-import { getDj, getShow, getShows, PHOTO_TYPES, type Show, SLUG } from "./shows.ts";
+import { getDj, getShow, getShows, type Show, SLUG } from "./shows.ts";
 import {
   Cover,
   coverUrl,
@@ -111,15 +107,17 @@ const History = ({ plays }: { plays: Play[] }) => (
 export const app = new Hono({ strict: false });
 
 // Every GET gets an ETag, so a repeat (the now-playing poll, the unhashed
-// app.js/app.css) is answered 304 when nothing changed. Files (serveStatic,
-// DJ photos) send Last-Modified and Content-Length, so their ETag is made from
-// those instead of etag() hashing the whole file.
+// app.js/app.css) is answered 304 when nothing changed. Files (serveStatic)
+// send Last-Modified and their size, so their ETag is made from those instead
+// of etag() hashing the whole file: the size is the whole file's (Content-Range
+// on a range request), so every range of it has the file's ETag.
 app.use(etag());
 app.use(async (c, next) => {
   await next();
   const h = c.res.headers;
   const modified = h.get("Last-Modified");
-  if (modified && !h.has("ETag")) h.set("ETag", `W/"${h.get("Content-Length")}-${Date.parse(modified)}"`);
+  const size = h.get("Content-Range")?.split("/")[1] ?? h.get("Content-Length");
+  if (modified && size && !h.has("ETag")) h.set("ETag", `W/"${size}-${Date.parse(modified)}"`);
 });
 // The only form is the login (a password and a path): no bigger body is read.
 app.use(bodyLimit({ maxSize: 4096, onError: (c) => c.text("Too large", 413) }));
@@ -347,13 +345,8 @@ app.get(`/djs/:dj{${SLUG}}`, async (c) => {
 // A DJ's photo: the file named by `photo:` in a show's front matter.
 app.get(`/djs/:dj{${SLUG}}/photo`, async (c) => {
   const photo = (await getDj(c.req.param("dj")))?.photo;
-  const file = photo ? await stat(photo).catch(() => undefined) : undefined;
-  if (!photo || !file?.isFile()) return c.notFound();
   // No max-age: the ETag makes a repeat a 304, and an edited photo shows at once.
-  c.header("Content-Type", PHOTO_TYPES[extname(photo).toLowerCase()]);
-  c.header("Content-Length", String(file.size));
-  c.header("Last-Modified", file.mtime.toUTCString());
-  return c.body(Readable.toWeb(createReadStream(photo)) as ReadableStream);
+  return (photo && (await serveStatic({ path: photo })(c, async () => {}))) || c.notFound();
 });
 
 // The current track's cover: a redirect to its pre-extracted art (play log).

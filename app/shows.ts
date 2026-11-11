@@ -32,14 +32,8 @@ export const SLUG = "[a-z0-9-]+";
 const SHOW_FILE = new RegExp(`^${SLUG}\\.md$`);
 // Pages with their own routes; a show with one of these slugs isn't listed.
 const RESERVED = new Set(["about", "admin", "assets", "covers", "djs", "login"]);
-export const PHOTO_TYPES: Record<string, string> = {
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".webp": "image/webp",
-  ".avif": "image/avif",
-  ".gif": "image/gif",
-};
+// DJ photos: image files (served by serveStatic, which types them by extension).
+const PHOTO_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif"]);
 
 export type DjRef = { slug: string; name: string };
 export type Show = { slug: string; title: string; description: string; djs: DjRef[] };
@@ -86,7 +80,10 @@ function djEntry(v: unknown): DjEntry | undefined {
     tagline: str(o["tagline"]),
     bio: bio && (marked.parseInline(bio) as string),
     // Only image files inside shows/.
-    photo: photo?.startsWith(SHOWS + sep) && extname(photo).toLowerCase() in PHOTO_TYPES ? photo : undefined,
+    photo:
+      photo?.startsWith(SHOWS + sep) && PHOTO_EXTENSIONS.has(extname(photo).toLowerCase())
+        ? photo
+        : undefined,
     links: links.length ? links : undefined,
   };
 }

@@ -12,7 +12,7 @@ export type Play = {
   album: string;
   label: string;
   isrc: string;
-  cover?: string; // "<show>/<stem>.jpg" relative path, set when pre-extracted art exists
+  cover: string; // "<show>/<stem>.jpg" relative path, or "" when no art was pre-extracted
   listeners: number;
 };
 

@@ -15,6 +15,7 @@ const play = (p: Partial<Play>): Play => ({
   album: "Album",
   label: "Label",
   isrc: "US1234567890",
+  cover: "",
   listeners: 0,
   ...p,
 });

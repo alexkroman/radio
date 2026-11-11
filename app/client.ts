@@ -11,9 +11,11 @@ import "@fontsource/jetbrains-mono/700.css";
 import "./tokens.css";
 import "./style.css";
 import htmx from "htmx.org";
-import IcecastMetadataPlayer from "icecast-metadata-player";
+import IcecastMetadataPlayer, { type IcyMetadata } from "icecast-metadata-player";
 
-type Station = { slug: string; title: string; player: IcecastMetadataPlayer };
+// `stopping`: the player's stop() after a pause, awaited before the player
+// (or the audio element) is used again; its stop() returns early while stopping.
+type Station = { slug: string; title: string; player: IcecastMetadataPlayer; stopping?: Promise<void> };
 
 const audio = new Audio();
 const session = "mediaSession" in navigator ? navigator.mediaSession : undefined;
@@ -74,11 +76,19 @@ barCover?.addEventListener("load", () => {
   $("bar-ph").hidden = true;
 });
 
+// The stream stopped on its own (a pause is already shown by stop()).
 function stopped(p: IcecastMetadataPlayer) {
-  if (station?.player !== p) return;
+  if (station?.player !== p || station.stopping) return;
   active = undefined;
   if (session) session.playbackState = "paused";
   sync();
+}
+
+// Start the audio element, as icecast-metadata-player's play() would (to keep
+// iOS's permission from the click), but catch the rejection when the player
+// then loads the stream into it: the player's own call leaves that unhandled.
+function unlock() {
+  audio.play().catch(() => {});
 }
 
 async function start(slug: string, title: string) {
@@ -86,7 +96,16 @@ async function start(slug: string, title: string) {
   now = { track: "", artist: "", cover: "" };
   readPage();
   sync();
-  if (station?.slug === slug) return void station.player.play();
+  const paused = station;
+  if (paused?.stopping) {
+    await paused.stopping;
+    paused.stopping = undefined;
+    if (active !== slug || station !== paused) return; // another click meanwhile
+  }
+  if (station?.slug === slug) {
+    unlock();
+    return void station.player.play();
+  }
   const old = station;
   station = undefined;
   if (old) await old.player.detachAudioElement();
@@ -94,7 +113,7 @@ async function start(slug: string, title: string) {
   const p: IcecastMetadataPlayer = new IcecastMetadataPlayer(`/${slug}/stream`, {
     audioElement: audio,
     retryTimeout: 120,
-    onMetadata: (metadata: { StreamTitle?: string }) => {
+    onMetadata: (metadata: IcyMetadata) => {
       if (station?.player !== p) return;
       const raw = metadata.StreamTitle ?? "";
       const dash = raw.indexOf(" - ");
@@ -126,13 +145,15 @@ async function start(slug: string, title: string) {
   station = { slug, title, player: p };
   (window as unknown as { player: unknown }).player = p;
   sync();
+  unlock();
   await p.play();
 }
 
 function stop() {
   active = undefined;
+  if (session) session.playbackState = "paused";
   sync();
-  void station?.player.stop();
+  if (station) station.stopping ??= station.player.stop();
 }
 
 function toggle(slug: string, title: string) {
@@ -165,10 +186,16 @@ document.addEventListener("click", (e) => {
   );
 });
 
-// Don't poll while the tab is hidden (an hx-trigger filter would need eval,
-// which the CSP forbids).
 document.addEventListener("htmx:beforeRequest", (e) => {
-  if (document.hidden && (e.target as Element).id === "poll") e.preventDefault();
+  const poll = e.target as Element;
+  if (poll.id !== "poll") return;
+  // Don't poll while the tab is hidden (an hx-trigger filter would need eval,
+  // which the CSP forbids).
+  if (document.hidden) return e.preventDefault();
+  // A refresh still in flight when its page is swapped out (a link, back) would
+  // otherwise land in the next page: htmx swaps a removed element's
+  // hx-select-oob into the document. Its events no longer reach `document`.
+  poll.addEventListener("htmx:beforeOnLoad", (l) => poll.isConnected || l.preventDefault(), { once: true });
 });
 
 function settle() {

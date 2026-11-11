@@ -73,8 +73,8 @@ services:
     depends_on:
       init: { condition: service_completed_successfully }
 
-  # One 24/7 stream per show (radio.liq), sent to Icecast; writes covers/ and
-  # the play log (plays/YYYY-MM.jsonl).
+  # One 24/7 stream per show (radio.liq), sent to Icecast; writes the play log
+  # (plays/YYYY-MM.jsonl).
   liquidsoap:
     <<: *hardening
     group_add: ["10001"]
@@ -88,7 +88,7 @@ services:
       - ./radio.liq:/radio.liq:ro
       - ./shows:/shows:ro
       - ./music:/music:ro
-      - ./covers:/covers
+      - ./covers:/covers:ro
       - ./plays:/plays
     depends_on:
       init: { condition: service_completed_successfully }

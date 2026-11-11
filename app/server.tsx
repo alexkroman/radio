@@ -1,5 +1,5 @@
 // The web app behind Caddy: the stations list (/), each show's station page
-// (/<slug>) and cover (/<slug>/cover.jpg), /about, and the admin pages (/admin).
+// (/<slug>) and current cover (/<slug>/cover.jpg), /about, and the admin pages (/admin).
 // Shows are shows/<slug>.md; Liquidsoap serves their streams via Caddy.
 import { readdir, readFile } from "node:fs/promises";
 import { serve } from "@hono/node-server";
@@ -13,6 +13,7 @@ import { login, throttle } from "./login.tsx";
 import { type Play, recentPlays } from "./plays.ts";
 import {
   Cover,
+  coverUrl,
   Markdown,
   npData,
   PlayButton,
@@ -67,12 +68,12 @@ async function getShows(): Promise<Show[]> {
   return (await Promise.all(files.map((f) => getShow(f.slice(0, -3))))).filter((s) => s !== undefined);
 }
 
-// Track title over artist, as in the stations list.
-const TrackLines = ({ play }: { play?: Play }) => (
-  <div class="np-lines">
-    {play && <span class="np-track">{play.title}</span>}
-    {play?.artist && <span class="np-artist">{play.artist}</span>}
-  </div>
+// Track title and artist; `cls` prefixes their classes (np-track, h-artist, …).
+const TrackLines = ({ play, cls }: { play?: Play; cls: string }) => (
+  <>
+    {play && <span class={`${cls}-track`}>{play.title}</span>}
+    {play?.artist && <span class={`${cls}-artist`}>{play.artist}</span>}
+  </>
 );
 
 // The station page's cover and text (the play button stays put when this is refreshed).
@@ -84,8 +85,7 @@ const NowPlaying = ({ show, play }: { show: Show; play?: Play }) => (
         <span class="dot" aria-hidden="true" />
         <span data-status={show.slug}>Live</span>
       </span>
-      {play && <span class="np-track">{play.title}</span>}
-      {play?.artist && <span class="np-artist">{play.artist}</span>}
+      <TrackLines play={play} cls="np" />
     </div>
   </div>
 );
@@ -103,8 +103,7 @@ const History = ({ plays }: { plays: Play[] }) => (
           <li>
             <Time seconds={p.time} />
             <Cover play={p} size="cover-40" />
-            <span class="h-track">{p.title}</span>
-            {p.artist && <span class="h-artist">{p.artist}</span>}
+            <TrackLines play={p} cls="h" />
           </li>
         ))}
       </ol>
@@ -151,7 +150,8 @@ app.use(
   )),
 );
 
-app.use(throttle);
+app.use("/login", throttle);
+app.use("/admin/*", throttle);
 login(app);
 app.route("/admin", admin);
 
@@ -173,7 +173,9 @@ app.get("/", async (c) => {
             </div>
             <div id={`np-${s.slug}`} class="station-np" {...npData(s.slug, s.play)}>
               <Cover play={s.play} size="cover-56" labelled />
-              <TrackLines play={s.play} />
+              <div class="np-lines">
+                <TrackLines play={s.play} cls="np" />
+              </div>
             </div>
             <PlayButton show={s} />
           </div>
@@ -280,27 +282,22 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
   );
 });
 
-// The current track's cover, copied by radio.liq to covers/<slug>.jpg.
-app.get(
-  `/:slug{${SLUG}}/cover.jpg`,
-  serveStatic({
-    root: COVERS,
-    rewriteRequestPath: (_, c) => `/${c.req.param("slug")}.jpg`,
-    onFound: (_, c) => c.header("Cache-Control", "public, max-age=30"),
-  }),
-);
+// The current track's cover: a redirect to its pre-extracted art (play log).
+app.get(`/:slug{${SLUG}}/cover.jpg`, async (c) => {
+  const cover = (await recentPlays(c.req.param("slug"), 1))[0]?.cover;
+  if (!cover) return c.notFound();
+  c.header("Cache-Control", "no-cache");
+  return c.redirect(coverUrl(cover));
+});
 
-// Per-track covers extracted by scripts/import.sh → covers/<show>/<stem>.jpg.
-// File names are percent-encoded (ui.tsx coverUrl) and may hold "&", "#" or
-// "?", which serveStatic's decodeURI leaves encoded, so serve the fully decoded
-// :file param, refusing an encoded "/" or "\" in it.
-app.get(
-  `/covers/:slug{${SLUG}}/:file{[^/]+\\.jpg}`,
-  (c, next) => (/[/\\]/.test(c.req.param("file")) ? c.notFound() : next()),
+// Per-track covers extracted by scripts/import.sh → covers/<show>/<stem>.jpg
+// (beets keeps "#" and "%" out of file names, so ui.tsx coverUrl's encodeURI
+// round-trips through serveStatic's decodeURI).
+app.use(
+  "/covers/*",
   serveStatic({
     root: COVERS,
-    allowPercentInPath: true,
-    rewriteRequestPath: (_, c) => `/${c.req.param("slug")}/${c.req.param("file")}`,
+    rewriteRequestPath: (p) => p.replace(/^\/covers/, ""),
     onFound: (_, c) => c.header("Cache-Control", "public, max-age=3600"),
   }),
 );

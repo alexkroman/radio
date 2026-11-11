@@ -74,7 +74,7 @@ export const PlayButton = ({ show, large }: { show: Show; large?: boolean }) => 
   </button>
 );
 
-const coverUrl = (cover: string) => `/covers/${cover.split("/").map(encodeURIComponent).join("/")}`;
+export const coverUrl = (cover: string) => `/covers/${encodeURI(cover)}`;
 
 // A track's artwork, or the placeholder square when it has none.
 // Decorative unless `labelled` (now-playing positions).

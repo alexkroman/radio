@@ -13,6 +13,7 @@
 #   5. beet fetchart   – fetch missing cover art
 #   6. beet move       – rename to "Artist - Title.ext"
 #   7. ffmpeg          – extract embedded cover art to covers/<show>/<stem>.jpg
+#                        (and remove covers whose track is gone)
 #
 # Requirements:
 #   brew install chromaprint fdupes ffmpeg pipx
@@ -133,6 +134,13 @@ for show_dir in "${show_dirs[@]}"; do
       rm -f "$out"
     fi
   done < <(find "$show_dir" -maxdepth 1 \( -name "*.mp3" -o -name "*.flac" -o -name "*.m4a" \) -print0 | sort -z)
+
+  # Remove covers whose track is gone (deleted, or renamed by beet move).
+  for cover in "$cover_dir"/*.jpg; do
+    [[ -e $cover ]] || continue
+    stem=$(basename "${cover%.jpg}")
+    [[ -e "$show_dir/$stem.mp3" || -e "$show_dir/$stem.flac" || -e "$show_dir/$stem.m4a" ]] || rm -f "$cover"
+  done
 done
 
 echo ""

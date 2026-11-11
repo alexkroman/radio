@@ -19,6 +19,20 @@ paths:
   default: "%if{$artist,$artist - }$title" # Artist - Title.mp3 (or just Title.mp3)
   singleton: "%if{$artist,$artist - }$title" # same flat format for singleton imports
 
+# File names become cover URLs (covers/<show>/<stem>.jpg, encodeURI'd by the
+# app), so keep "#" and "%" out of them as well as beets' defaults (setting
+# `replace` drops the defaults, so they're repeated here).
+replace:
+  '[\\/]': _
+  '^\.': _
+  '[\x00-\x1f]': _
+  '[<>:"\?\*\|]': _
+  "[#%]": _
+  '\.$': _
+  '\s+$': ""
+  '^\s+': ""
+  "^-": _
+
 import:
   copy: no # tag in-place; don't move files
   move: no

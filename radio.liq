@@ -5,8 +5,7 @@ enable_autocue_metadata()
 # appended to /plays/YYYY-MM.jsonl (read by the app's page and report).
 # Adding or removing a show needs `docker compose restart liquidsoap`.
 
-# Artists of a track (split on ",", "&", "feat.", "x", "with"); falls back to
-# the "Artist- Title" filename when the file has no artist tag.
+# Artists of a track (split on ",", "&", "feat.", "x", "with").
 def artists_of(a) =
   parts =
     string.split(
@@ -16,83 +15,59 @@ def artists_of(a) =
   list.filter(fun (x) -> x != "", list.map(string.trim, parts))
 end
 
-def track_artists(r) =
-  a = list.assoc(default="", "artist", request.metadata(r))
-  artists_of(
-    if
-      a != ""
-    then
-      a
-    else
-      list.hd(
-        default="",
-        string.split(
+# Artist and title from an "Artist- Title" file name (or the whole name as
+# title), for untagged files.
+def filename_tags(uri) =
+  name = path.remove_extension(path.basename(uri))
+  parts =
+    string.split(
+      separator="- ",
+      name
+    )
+  if
+    list.length(parts) > 1
+  then
+    [
+      ("artist", list.hd(default="", parts)),
+      (
+        "title",
+        string.concat(
           separator="- ",
-          path.basename(request.uri(r))
+          list.tl(parts)
         )
       )
-    end
-  )
+    ]
+  else
+    [("title", name)]
+  end
 end
 
-# Untagged files get artist/title from an "Artist- Title" file name (or the
-# whole name as title) so they still show up in the log and the report.
+# A track's artists, from its tag or (untagged) its file name.
+def track_artists(r) =
+  a = list.assoc(default="", "artist", request.metadata(r))
+  artists_of(if a != "" then a else list.assoc(default="", "artist", filename_tags(request.uri(r))) end)
+end
+
+# Untagged files get artist/title from their file name so they still show up
+# in the log and the report.
 def title_from_filename(m) =
   if
     list.assoc(default="", "title", m) != ""
   then
     []
   else
-    name = path.remove_extension(path.basename(list.assoc(default="", "filename", m)))
-    parts =
-      string.split(
-        separator="- ",
-        name
-      )
-    if
-      list.length(parts) > 1
-    then
-      [
-        ("artist", list.hd(default="", parts)),
-        (
-          "title",
-          string.concat(
-            separator="- ",
-            list.tl(parts)
-          )
-        )
-      ]
-    else
-      [("title", name)]
-    end
+    filename_tags(list.assoc(default="", "filename", m))
   end
 end
 
-# Listeners on an Icecast mount right now, from its status page (whose
-# "source" is an object for one mount and a list for several); 0 on error.
+# Listeners on an Icecast mount right now, from its status page; 0 on error.
 def listeners(mount) =
-  body =
-    try
-      http.get(timeout=2., "http://icecast:8000/status-json.xsl")
-    catch _ do
-      ""
-    end
   try
-    let json.parse ({icestats = {source}} : {icestats: {source: [{listenurl: string, listeners: int}]}}) =
-      body
-    list.fold(
-      fun (n, s) -> if string.contains(suffix="/#{mount}", s.listenurl) then n + s.listeners else n end,
-      0,
-      source
-    )
+    let json.parse ({icestats = {source}} : {icestats: {source: {listeners: int}}}) =
+      http.get(timeout=2., "http://icecast:8000/status-json.xsl?mount=/#{mount}")
+    source.listeners
   catch _ do
-    try
-      let json.parse ({icestats = {source}} : {icestats: {source: {listenurl: string, listeners: int}}}) =
-        body
-      if string.contains(suffix="/#{mount}", source.listenurl) then source.listeners else 0 end
-    catch _ do
-      0
-    end
+    0
   end
 end
 
@@ -112,7 +87,6 @@ end
 
 def show(f) =
   slug = path.remove_extension(path.basename(f))
-  cover_file = "/covers/#{slug}.jpg"
 
   # Artist separation: reject a candidate if any of its artists was among the
   # last 20 artists played on this show; after 20 rejections in a row (a show
@@ -148,8 +122,8 @@ def show(f) =
     )
 
   # Per track (on the playlist: the crossfaded source doesn't mark every track),
-  # from the raw metadata before the text recode below: cover, artist
-  # separation and the play log.
+  # from the raw metadata before the text recode below: artist separation and
+  # the play log (with the track's cover, pre-extracted by scripts/import.sh).
   tracks.on_track(
     fun (m) ->
       begin
@@ -175,18 +149,6 @@ def show(f) =
           data="#{json.stringify(compact=true, play)}\n",
           "/plays/#{time.string('%Y-%m')}.jsonl"
         )
-
-        # Use covers pre-extracted by scripts/import.sh rather than reading
-        # embedded art at runtime. file.contents reads the JPEG as a byte string.
-        if
-          file.exists(track_cover)
-        then
-          file.write(data=file.contents(track_cover), cover_file)
-        elsif
-          file.exists(cover_file)
-        then
-          file.remove(cover_file)
-        end
         recent_artists :=
           list.prefix(20, list.append(artists_of(list.assoc(default="", "artist", m)), recent_artists()))
       end

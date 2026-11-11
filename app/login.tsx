@@ -3,6 +3,7 @@
 // favicons and the streams (Caddy → Liquidsoap) stay public so apps like VLC
 // can play them.
 import type { Hono } from "hono";
+import { except } from "hono/combine";
 import { getSignedCookie, setSignedCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import { timingSafeEqual } from "hono/utils/buffer";
@@ -31,18 +32,26 @@ const Login = ({ next, error }: { next: string; error?: boolean }) => (
 );
 
 // At most 10 failed logins (site form or admin basic auth) per client IP per
-// 15 minutes. Caddy sets X-Forwarded-For to the real client address.
-const failures = new Map<string, number[]>();
+// 15 minutes. Caddy sets X-Forwarded-For to the real client address. An
+// attempt counts from when it starts (and is dropped if it succeeds), so
+// attempts sent all at once can't get past the limit.
+const WINDOW = 15 * 60_000;
+const attempts = new Map<string, number[]>();
 export const throttle = createMiddleware(async (c, next) => {
-  if (!/^\/(login|admin)(\/|$)/.test(c.req.path)) return next();
   const ip = c.req.header("x-forwarded-for") ?? "";
   const now = Date.now();
-  const recent = (failures.get(ip) ?? []).filter((t) => now - t < 15 * 60_000);
-  if (recent.length >= 10) return c.text("Too many attempts, try again later", 429);
-  await next();
-  if (c.res.status === 401 && (c.req.method === "POST" || c.req.header("authorization"))) recent.push(now);
-  if (recent.length) failures.set(ip, recent);
-  else failures.delete(ip);
+  let times = attempts.get(ip);
+  if (!times) attempts.set(ip, (times = []));
+  while (times.length && now - times[0]! >= WINDOW) times.shift();
+  if (times.length >= 10) return c.text("Too many attempts, try again later", 429);
+  const attempt = c.req.method === "POST" || !!c.req.header("authorization");
+  if (attempt) times.push(now);
+  try {
+    await next();
+  } finally {
+    if (attempt && c.res.status !== 401) times.splice(times.indexOf(now), 1);
+    if (!times.length) attempts.delete(ip);
+  }
 });
 
 export function login(app: Hono) {
@@ -65,13 +74,14 @@ export function login(app: Hono) {
     return c.redirect(to, 303);
   });
 
-  app.use(async (c, next) => {
-    if (
-      /^\/((assets|admin)(\/|$)|favicon\.(ico|svg)$|apple-touch-icon\.png$)/.test(c.req.path) ||
-      (await getSignedCookie(c, PASSWORD, COOKIE)) === "1"
-    )
-      return next();
-    c.status(401);
-    return c.render(<Login next={c.req.path} />, { script: false });
-  });
+  app.use(
+    except(
+      ["/assets/*", "/admin/*", "/favicon.ico", "/favicon.svg", "/apple-touch-icon.png"],
+      async (c, next) => {
+        if ((await getSignedCookie(c, PASSWORD, COOKIE)) === "1") return next();
+        c.status(401);
+        return c.render(<Login next={c.req.path} />, { script: false });
+      },
+    ),
+  );
 }

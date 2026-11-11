@@ -150,7 +150,8 @@ app.use(
   )),
 );
 
-app.use(throttle);
+app.use("/login", throttle);
+app.use("/admin/*", throttle);
 login(app);
 app.route("/admin", admin);
 

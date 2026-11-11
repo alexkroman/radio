@@ -252,6 +252,68 @@ test("player plays the stream using only self-hosted assets", async ({ page }) =
   expect(problems).toEqual([]);
 });
 
+test("pausing and playing again at once keeps playing", async ({ page }) => {
+  const state = () => page.evaluate(() => (window as unknown as { player: { state: string } }).player.state);
+  await page.goto("/night");
+  await page.getByRole("button", { name: "Play Fixture Night" }).click();
+  await expect.poll(state).toBe("playing");
+  // Two clicks in one task: the second lands while the player is still stopping.
+  await page.evaluate(() => {
+    const b = document.querySelector<HTMLButtonElement>("button[data-play=night]")!;
+    b.click();
+    b.click();
+  });
+  await expect(page.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+  await expect.poll(state).toBe("playing");
+  await page.waitForTimeout(2000);
+  expect(await state()).toBe("playing");
+  await expect(page.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+});
+
+test("pausing one station and playing another at once plays the other", async ({ page }) => {
+  const state = () => page.evaluate(() => (window as unknown as { player: { state: string } }).player.state);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Play Fixture Default" }).click();
+  await expect.poll(state).toBe("playing");
+  await page.evaluate(() => {
+    document.querySelector<HTMLButtonElement>("button[data-play=default]")!.click();
+    document.querySelector<HTMLButtonElement>("button[data-play=night]")!.click();
+  });
+  await expect.poll(state).toBe("playing");
+  // The old player's late cleanup must not take over the audio element.
+  await page.waitForTimeout(2000);
+  expect(await state()).toBe("playing");
+  await expect(page.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+});
+
+test("a refresh still in flight when you leave a station page isn't swapped into the next", async ({
+  page,
+}) => {
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  let polled!: () => void;
+  const requested = new Promise<void>((r) => (polled = r));
+  await page.route("**/night", async (route) => {
+    if (route.request().headers()["hx-trigger"] !== "poll") return route.continue();
+    polled();
+    await held;
+    await route.continue().catch(() => {});
+  });
+  await page.goto("/night");
+  await page.locator("#poll").evaluate((el) => el.dispatchEvent(new Event("refresh")));
+  await requested;
+  await page.getByRole("link", { name: "Stations", exact: true }).click();
+  await page.getByRole("link", { name: "Fixture Default" }).click();
+  await expect(page.locator("#np")).toHaveAttribute("data-np", "default");
+  const done = page.waitForEvent("requestfinished", (r) => r.url().endsWith("/night")).catch(() => {});
+  release();
+  await Promise.race([done, page.waitForTimeout(3000)]);
+  await page.waitForTimeout(500); // htmx swaps and settles within ~20 ms of the response
+  // Checked once: the default page's own refresh would soon put it right again.
+  expect(await page.locator("#np").getAttribute("data-np")).toBe("default");
+  expect(await page.locator("#history").textContent()).not.toContain("Midnight");
+});
+
 test("the phone player bar shows while playing", async ({ browser }) => {
   const context = await browser.newContext({
     baseURL: BASE,

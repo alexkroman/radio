@@ -150,16 +150,17 @@ test("admin report: empty months and leap-year February", async () => {
 });
 
 // Last: it locks this client out of logging in for a while.
-test("repeated wrong passwords are throttled", async ({ playwright }) => {
+test("wrong passwords are throttled, even sent all at once", async ({ playwright }) => {
   const context = await playwright.request.newContext({ baseURL: BASE, ignoreHTTPSErrors: true });
-  const statuses: number[] = [];
-  for (let i = 0; i < 15; i++) {
-    statuses.push(
+  const statuses = await Promise.all(
+    Array.from({ length: 30 }, async (_, i) =>
       (
         await context.post("/login", { form: { password: `wrong-${i}`, next: "/" }, maxRedirects: 0 })
       ).status(),
-    );
-  }
-  expect(statuses).toContain(429);
+    ),
+  );
+  // Earlier tests made a wrong attempt or two, so at most 10 get through.
+  expect(statuses.filter((s) => s === 401).length).toBeLessThanOrEqual(10);
+  expect(statuses.filter((s) => s === 429).length).toBeGreaterThanOrEqual(20);
   await context.dispose();
 });

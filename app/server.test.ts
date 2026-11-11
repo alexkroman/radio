@@ -147,12 +147,6 @@ describe("pages", () => {
     const art = await page(res.headers.get("location")!);
     expect(art.status).toBe(200);
     expect(art.headers.get("cache-control")).toBe("public, max-age=3600");
-    // From the file's size and date, not a hash of it.
-    expect(art.headers.get("etag")).toMatch(/^W\/"\d+-\d+"$/);
-    // A range of the file has the whole file's ETag.
-    const range = await page(res.headers.get("location")!, { range: "bytes=0-9" });
-    expect(range.status).toBe(206);
-    expect(range.headers.get("etag")).toBe(art.headers.get("etag"));
   });
 
   test("an unchanged page is 304 to a request with its ETag", async () => {

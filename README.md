@@ -4,7 +4,7 @@ A small internet radio station: stock open-source services plus one small TypeSc
 
 - **Liquidsoap** plays each show as its own 24/7 stream, on shuffle with automatic cue points, loudness levelling and crossfades, and appends every play (tags and listener count) to a monthly log, `plays/YYYY-MM.jsonl`.
 - **Icecast** serves the streams, with track titles (UTF-8) in the stream for players like VLC.
-- **`app/`** ([Hono](https://hono.dev)) serves the show list, the player pages and the admin site (SoundExchange reports from the play log). Its browser code (htmx, icecast-metadata-player, Pico CSS) is bundled from npm, so nothing loads from a CDN.
+- **`app/`** ([Hono](https://hono.dev)) serves the show list, the player pages and the admin site (SoundExchange reports from the play log). Its browser code (htmx, icecast-metadata-player, fonts) is bundled from npm, so nothing loads from a CDN.
 - **Caddy** provides HTTPS and is the only public entry point.
 - **Docker** restarts any service that crashes.
 

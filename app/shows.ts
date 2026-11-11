@@ -36,7 +36,8 @@ const RESERVED = new Set(["about", "admin", "assets", "covers", "djs", "login"])
 const PHOTO_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif"]);
 
 export type DjRef = { slug: string; name: string };
-export type Show = { slug: string; title: string; description: string; djs: DjRef[] };
+// A show's DJs keep the details written for them there, for getDj.
+export type Show = { slug: string; title: string; description: string; djs: DjEntry[] };
 export type Dj = DjRef & {
   tagline?: string;
   bio?: string; // HTML
@@ -88,9 +89,7 @@ function djEntry(v: unknown): DjEntry | undefined {
   };
 }
 
-type ShowFile = Show & { entries: DjEntry[] };
-
-async function readShow(slug: string): Promise<ShowFile | undefined> {
+export async function getShow(slug: string): Promise<Show | undefined> {
   if (RESERVED.has(slug)) return undefined;
   const text = await readFile(`${SHOWS}/${slug}.md`, "utf8").catch(() => undefined);
   if (text === undefined) return undefined;
@@ -104,7 +103,7 @@ async function readShow(slug: string): Promise<ShowFile | undefined> {
     // Invalid front matter: fall back to the slug as the title.
   }
   const djs = meta["djs"] ?? meta["dj"];
-  const entries = (Array.isArray(djs) ? djs : djs === undefined ? [] : [djs])
+  const entries: DjEntry[] = (Array.isArray(djs) ? djs : djs === undefined ? [] : [djs])
     .map(djEntry)
     .filter((d) => d !== undefined)
     .filter((d, i, all) => all.findIndex((e) => e.slug === d.slug) === i);
@@ -112,36 +111,26 @@ async function readShow(slug: string): Promise<ShowFile | undefined> {
     slug,
     title: str(meta["title"]) ?? slug,
     description: await marked.parse(body),
-    djs: entries.map(({ slug, name }) => ({ slug, name })),
-    entries,
+    djs: entries,
   };
 }
 
-const toShow = ({ slug, title, description, djs }: ShowFile): Show => ({ slug, title, description, djs });
-
-async function readShows(): Promise<ShowFile[]> {
+export async function getShows(): Promise<Show[]> {
   const files = (await readdir(SHOWS)).filter((f) => SHOW_FILE.test(f)).sort();
-  return (await Promise.all(files.map((f) => readShow(f.slice(0, -3))))).filter((s) => s !== undefined);
+  return (await Promise.all(files.map((f) => getShow(f.slice(0, -3))))).filter((s) => s !== undefined);
 }
-
-export const getShow = async (slug: string) => {
-  const show = await readShow(slug);
-  return show && toShow(show);
-};
-
-export const getShows = async () => (await readShows()).map(toShow);
 
 export async function getDj(slug: string): Promise<Dj | undefined> {
   let dj: Dj | undefined;
-  for (const show of await readShows()) {
-    const entry = show.entries.find((e) => e.slug === slug);
+  for (const show of await getShows()) {
+    const entry = show.djs.find((e) => e.slug === slug);
     if (!entry) continue;
     dj ??= { slug, name: entry.name, links: [], shows: [] };
     dj.tagline ??= entry.tagline;
     dj.bio ??= entry.bio;
     dj.photo ??= entry.photo;
     if (!dj.links.length && entry.links) dj.links = entry.links;
-    dj.shows.push(toShow(show));
+    dj.shows.push(show);
   }
   return dj;
 }

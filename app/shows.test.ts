@@ -108,12 +108,13 @@ describe("shows", () => {
   test("with CRLF line endings are read", async () => {
     const show = await shows.getShow("g-crlf");
     expect(show?.title).toBe("Windows");
-    expect(show?.djs).toEqual([{ slug: "ana-ruiz", name: "Ana Ruiz" }]);
+    expect(show?.djs).toMatchObject([{ slug: "ana-ruiz", name: "Ana Ruiz" }]);
   });
 });
 
 describe("a show's DJs", () => {
-  const djs = async (slug: string) => (await shows.getShow(slug))?.djs;
+  const djs = async (slug: string) =>
+    (await shows.getShow(slug))?.djs.map(({ slug, name }) => ({ slug, name }));
 
   test("djs: a list of names and mappings, in order, without repeats or unusable slugs", async () => {
     expect(await djs("a-list")).toEqual([

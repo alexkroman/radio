@@ -74,7 +74,7 @@ test("a show with nothing to play streams music/offline.mp3, without logging it"
 
 test("a track is skipped after 10 s of silence", async () => {
   // Hush- Gap is 4 s of tone, 40 s of silence, 4 s of tone, alone on its show:
-  // played through, it would restart every ~36 s (48 s less the 12 s crossfade).
+  // played through, it restarts every ~47 s.
   await expect
     .poll(
       async () => {

@@ -219,4 +219,4 @@ for show_dir in "${show_dirs[@]}"; do
 done
 
 echo ""
-echo "Done. If the stack is running and you added or removed a show, run: docker compose exec icecast sh /icecast/config.sh reload && docker compose restart liquidsoap"
+echo "Done. Now run: scripts/deploy.sh"

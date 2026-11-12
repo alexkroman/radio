@@ -42,6 +42,11 @@ services:
     restart: "no"
 
   # Serves the streams (one mount per show), with UTF-8 track metadata.
+  # Buffering for slow connections (the streams are 256 kbps, 32 KB/s):
+  #   - burst-size: a new listener gets ~10 s of audio at once (default 64 KB,
+  #     ~2 s), so the player starts with a full buffer instead of an empty one.
+  #   - queue-size: a listener whose connection stalls can fall ~32 s behind
+  #     before Icecast drops it (default 512 KB, ~16 s). Must exceed burst-size.
   icecast:
     <<: *hardening
     group_add: ["10001"]
@@ -56,9 +61,13 @@ services:
           -e "s|<hostname>localhost</hostname>|<hostname>$$DOMAIN</hostname>|" \
           -e 's|<errorlog>-</errorlog>|<errorlog>error.log</errorlog>|' \
           -e 's|</icecast>|<mount type="default"><charset>UTF-8</charset></mount></icecast>|' \
+          -e 's|<burst-size>[0-9]*</burst-size>|<burst-size>327680</burst-size>|' \
+          -e 's|<queue-size>[0-9]*</queue-size>|<queue-size>1048576</queue-size>|' \
           /etc/icecast.xml > /tmp/icecast.xml
         chmod 600 /tmp/icecast.xml
         grep -q '<charset>UTF-8' /tmp/icecast.xml
+        grep -q '<burst-size>327680<' /tmp/icecast.xml
+        grep -q '<queue-size>1048576<' /tmp/icecast.xml
         exec icecast -c /tmp/icecast.xml
     environment:
       DOMAIN: ${DOMAIN:-localhost}

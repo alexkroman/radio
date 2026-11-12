@@ -1,11 +1,11 @@
 /** @jsxImportSource hono/jsx/dom */
 // The fixed player bar, rendered in the browser with hono/jsx/dom
 // into #player (outside the swapped page, so it and the audio survive
-// navigation). app/client.ts sets what it shows with setBar(); it shows only
-// while a station is playing.
+// navigation). app/client.ts sets what it shows with setBar(); it always shows,
+// with the playing station, else the last one played (or a default), paused.
 import { render, useLayoutEffect, useRef, useState } from "hono/jsx/dom";
 
-export type BarState = { title: string; track: string; artist: string; cover: string };
+export type BarState = { title: string; track: string; artist: string; cover: string; playing: boolean };
 
 // What the bar shows, and its setter once it has rendered (one bar per page).
 let state: BarState | undefined;
@@ -39,7 +39,7 @@ function Cover({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-function Bar({ onPause }: { onPause: () => void }) {
+function Bar({ onToggle }: { onToggle: () => void }) {
   const [s, set] = useState(state);
   setState = set;
   if (!s) return null;
@@ -50,21 +50,32 @@ function Bar({ onPause }: { onPause: () => void }) {
       <div class="bar-text">
         <span id="bar-track">{parts.join(" · ")}</span>
         <span class="bar-status">
-          <span class="dot" aria-hidden="true" />
+          {s.playing && <span class="dot" aria-hidden="true" />}
           <span>{`${s.title} · Live`}</span>
         </span>
       </div>
-      <button type="button" class="play play-bar" aria-label={`Pause ${s.title}`} onClick={onPause}>
-        {/* ui.tsx PauseIcon (server JSX, so not shared). */}
-        <svg class="i-pause" width={14} height={14} viewBox="0 0 14 14" aria-hidden="true">
-          <rect x="3" y="2" width="2.5" height="10" fill="currentColor" />
-          <rect x="8.5" y="2" width="2.5" height="10" fill="currentColor" />
-        </svg>
+      <button
+        type="button"
+        class="play play-bar"
+        aria-label={`${s.playing ? "Pause" : "Play"} ${s.title}`}
+        onClick={onToggle}
+      >
+        {/* ui.tsx PauseIcon and PlayIcon (server JSX, so not shared). */}
+        {s.playing ? (
+          <svg width={14} height={14} viewBox="0 0 14 14" aria-hidden="true">
+            <rect x="3" y="2" width="2.5" height="10" fill="currentColor" />
+            <rect x="8.5" y="2" width="2.5" height="10" fill="currentColor" />
+          </svg>
+        ) : (
+          <svg width={14} height={14} viewBox="0 0 14 14" aria-hidden="true">
+            <path d="M4 2.5v9l7.5-4.5z" fill="currentColor" />
+          </svg>
+        )}
       </button>
     </div>
   );
 }
 
-export function mountBar(el: HTMLElement, onPause: () => void) {
-  render(<Bar onPause={onPause} />, el);
+export function mountBar(el: HTMLElement, onToggle: () => void) {
+  render(<Bar onToggle={onToggle} />, el);
 }

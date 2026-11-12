@@ -24,7 +24,7 @@ test("in-stream (ICY) metadata is the current track, in UTF-8", async () => {
 
 test("the player picks up track metadata from the stream", async ({ page }) => {
   await page.goto("/edge");
-  await page.getByRole("button", { name: "Play Edge Cases" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Play Edge Cases" }).click();
   await expect
     .poll(() =>
       page.evaluate(

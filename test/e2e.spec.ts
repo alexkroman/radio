@@ -30,7 +30,7 @@ test("home page lists every show with its description", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Fixture Default" })).toHaveAttribute("href", "/default");
   await expect(page.getByRole("link", { name: "Fixture Night" })).toHaveAttribute("href", "/night");
   await expect(page.locator(".station-desc", { hasText: "default" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Play Fixture Night" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("button", { name: "Play Fixture Night" })).toBeVisible();
   await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName("Mazes Radio, all stations");
 });
 
@@ -74,7 +74,7 @@ test("a DJ page has their profile, shows and links", async ({ page }) => {
     "https://instagram.com/anaruiz",
   );
   await expect(page.locator(".streams dt")).toHaveText(["Instagram"]);
-  await page.getByRole("button", { name: "Play Fixture Night" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
   await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
   await page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" }).click();
 
@@ -252,7 +252,7 @@ test("player plays the stream using only self-hosted assets", async ({ page }) =
   );
   const state = () => playerState(page);
   await page.goto("/night");
-  await page.getByRole("button", { name: "Play Fixture Night" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
   await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
   await expect(page.locator("[data-status=night]")).toHaveText("Listening · Live");
   await expect.poll(state).toBe("playing");
@@ -264,16 +264,16 @@ test("player plays the stream using only self-hosted assets", async ({ page }) =
   await expect(page).toHaveTitle(/^About/);
   await page.getByRole("link", { name: "Stations", exact: true }).click();
   await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Play Fixture Default" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("button", { name: "Play Fixture Default" })).toBeVisible();
   expect(await state()).toBe("playing");
 
   // Starting another station stops this one.
-  await page.getByRole("button", { name: "Play Fixture Default" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Play Fixture Default" }).click();
   await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Default" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Play Fixture Night" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("button", { name: "Play Fixture Night" })).toBeVisible();
   await expect.poll(state).toBe("playing");
   await page.getByRole("main").getByRole("button", { name: "Pause Fixture Default" }).click();
-  await expect(page.getByRole("button", { name: "Play Fixture Default" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("button", { name: "Play Fixture Default" })).toBeVisible();
   expect(problems).toEqual([]);
 });
 
@@ -287,10 +287,10 @@ test("the player never hands its audio element to AirPlay, even across a show sw
       return { disabled: a.disableRemotePlayback, airplay: a.getAttribute("x-webkit-airplay") };
     });
   await page.goto("/");
-  await page.getByRole("button", { name: "Play Fixture Default" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Play Fixture Default" }).click();
   await expect.poll(() => playerState(page)).toBe("playing");
   expect(await remote()).toEqual({ disabled: true, airplay: "deny" });
-  await page.getByRole("button", { name: "Play Fixture Night" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
   await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
   await expect.poll(() => playerState(page)).toBe("playing");
   expect(await remote()).toEqual({ disabled: true, airplay: "deny" });
@@ -299,7 +299,7 @@ test("the player never hands its audio element to AirPlay, even across a show sw
 test("pausing and playing again at once keeps playing", async ({ page }) => {
   const state = () => playerState(page);
   await page.goto("/night");
-  await page.getByRole("button", { name: "Play Fixture Night" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
   await expect.poll(state).toBe("playing");
   // Two clicks in one task: the second lands while the player is still stopping.
   await page.evaluate(() => {
@@ -341,7 +341,7 @@ test("play resumes an AudioContext that iOS suspended", async ({ page }) => {
       return ctx.state === "running" && ctx.currentTime > t;
     });
   await page.goto("/night");
-  await page.getByRole("button", { name: "Play Fixture Night" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
   await expect.poll(() => playerState(page)).toBe("playing");
   expect(await audible()).toBe(true);
   await page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" }).click();
@@ -351,7 +351,7 @@ test("play resumes an AudioContext that iOS suspended", async ({ page }) => {
     setTimeout(() => void (window as unknown as { ctx: AudioContext }).ctx.suspend()),
   );
   await expect.poll(audible).toBe(false);
-  await page.getByRole("button", { name: "Play Fixture Night" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
   await expect.poll(() => playerState(page)).toBe("playing");
   await expect.poll(audible).toBe(true);
 });
@@ -359,7 +359,7 @@ test("play resumes an AudioContext that iOS suspended", async ({ page }) => {
 test("pausing one station and playing another at once plays the other", async ({ page }) => {
   const state = () => playerState(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "Play Fixture Default" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Play Fixture Default" }).click();
   await expect.poll(state).toBe("playing");
   await page.evaluate(() => {
     document.querySelector<HTMLButtonElement>("button[data-play=default]")!.click();
@@ -404,7 +404,7 @@ for (const [name, viewport] of [
   ["phone", { width: 390, height: 844 }],
   ["desktop", { width: 1440, height: 900 }],
 ] as const)
-  test(`the player bar shows while playing (${name})`, async ({ browser }) => {
+  test(`the player bar always shows (${name})`, async ({ browser }) => {
     const context = await browser.newContext({
       baseURL: BASE,
       ignoreHTTPSErrors: true,
@@ -414,8 +414,10 @@ for (const [name, viewport] of [
     const page = await context.newPage();
     await page.goto("/");
     const bar = page.getByRole("region", { name: "Player" });
-    await expect(bar).toBeHidden();
-    await page.getByRole("button", { name: "Play Fixture Night" }).click();
+    // Paused, with the page's first station, before anything plays.
+    await expect(bar).toBeVisible();
+    await expect(bar.getByRole("button", { name: /^Play / })).toBeVisible();
+    await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
     await expect(bar).toBeVisible();
     await expect(bar).toContainText("Fixture Night · Live");
     await expect(bar).toContainText("Midnight · Gamma");
@@ -425,7 +427,11 @@ for (const [name, viewport] of [
     await expect(page).toHaveURL(/\/about$/);
     await expect(bar).toContainText("Fixture Night · Live");
     await bar.getByRole("button", { name: "Pause Fixture Night" }).click();
-    await expect(bar).toBeHidden();
+    // It stays, paused, with the same station, and plays it again.
+    await expect(bar).toBeVisible();
+    await expect(bar).toContainText("Fixture Night · Live");
+    await bar.getByRole("button", { name: "Play Fixture Night" }).click();
+    await expect(bar.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
     await context.close();
   });
 

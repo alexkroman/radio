@@ -35,6 +35,8 @@ Open <https://localhost/>. On localhost your browser warns about the certificate
 
 Add or remove files in `music/<show>/` any time; they're picked up without a restart. Anything ffmpeg can decode works.
 
+A track that goes silent for 10 seconds (a hidden track after minutes of silence, a file that decodes to nothing) is skipped. A show with nothing to play streams `music/offline.mp3` on a loop if you add one (say, a short "back soon" message), or else silence, so listeners stay connected.
+
 ## Shows
 
 Each `shows/<slug>.md` is a show: its own 24/7 stream at `/<slug>/stream`, playing `music/<slug>/` on shuffle, with a player page at `/<slug>`. Slugs are lowercase letters, digits and hyphens. The front matter sets the title; the body is the description shown on the page:

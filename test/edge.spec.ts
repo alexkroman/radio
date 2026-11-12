@@ -1,7 +1,15 @@
 // Edge cases: odd titles and show files, missing music, traversal,
-// listener counting. Fixtures: test/fixtures/{shows,music}/{edge,plain,empty}.
+// listener counting. Fixtures: test/fixtures/{shows,music}/{edge,plain,empty,quiet}.
 import { expect, test } from "@playwright/test";
-import { adminRequest, listen, loggedPlays, performances, streamHead, waitForTrack } from "./helpers.ts";
+import {
+  adminRequest,
+  icyTitle,
+  listen,
+  loggedPlays,
+  performances,
+  streamHead,
+  waitForTrack,
+} from "./helpers.ts";
 
 test("titles with unicode, pipes and HTML show exactly as tagged", async ({ page }) => {
   await page.goto("/edge");
@@ -57,6 +65,25 @@ test("a show with no music folder still streams and renders", async ({ page }) =
   await page.goto("/empty");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Empty");
   await expect(page.locator("#np .np-track")).toHaveCount(0);
+});
+
+test("a show with nothing to play streams music/offline.mp3, without logging it", async () => {
+  expect(await icyTitle("/empty/stream")).toBe("Mazes Radio - Back soon");
+  expect((await loggedPlays()).some((p) => p.title === "Back soon")).toBe(false);
+});
+
+test("a track is skipped after 10 s of silence", async () => {
+  // Hush- Gap is 4 s of tone, 40 s of silence, 4 s of tone, alone on its show:
+  // played through, it would restart every ~36 s (48 s less the 12 s crossfade).
+  await expect
+    .poll(
+      async () => {
+        const times = (await loggedPlays()).filter((p) => p.show === "quiet").map((p) => p.time);
+        return Math.min(...times.slice(1).map((t, i) => t - times[i]!));
+      },
+      { timeout: 90_000 },
+    )
+    .toBeLessThan(25);
 });
 
 test("encoded and dotted paths don't leak files", async ({ request }) => {

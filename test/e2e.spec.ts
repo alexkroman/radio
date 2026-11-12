@@ -319,7 +319,7 @@ test("switching shows on an iPhone never pauses or reloads the audio element", a
     started: number;
   };
   await page.goto("/");
-  await page.getByRole("button", { name: "Play Fixture Default" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Play Fixture Default" }).click();
   await expect.poll(() => playerState(page)).toBe("playing");
   await page.evaluate(() => {
     const w = window as unknown as W;
@@ -328,7 +328,7 @@ test("switching shows on an iPhone never pauses or reloads the audio element", a
     w.source = a.srcObject;
     for (const e of ["pause", "emptied", "loadstart", "abort"]) a.addEventListener(e, () => w.events.push(e));
   });
-  await page.getByRole("button", { name: "Play Fixture Night" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
   await expect
     .poll(() => page.evaluate(() => (window as unknown as W).player.endpoint))
     .toContain("/night/stream");

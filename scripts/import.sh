@@ -3,7 +3,7 @@
 #
 # Usage:
 #   scripts/import.sh              # process every show under music/
-#   scripts/import.sh jazz         # process music/jazz/ only
+#   scripts/import.sh frequency    # process music/frequency/ only
 #
 # What it does (safe to re-run; re-checks tags/covers for changed files):
 #   1. Remove exact duplicate files within each show directory

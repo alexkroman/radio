@@ -29,19 +29,6 @@ const audio = new Audio();
 // play): the speaker went silent while the phone kept playing.
 audio.disableRemotePlayback = true;
 audio.setAttribute("x-webkit-airplay", "deny");
-// AirPlay as system audio requires uninterrupted audio to hold the iOS session.
-// Between streams, detachAudioElement() involves a macrotask (WASM worker), so
-// unlock()'s audio.play() runs outside the user-gesture window that AirPlay
-// needs. Playing this from the click keeps the session alive across the gap.
-const airplayBridge = new Audio();
-airplayBridge.disableRemotePlayback = true;
-airplayBridge.setAttribute("x-webkit-airplay", "deny");
-airplayBridge.src =
-  "data:audio/mpeg;base64,//sQxAAABFgC/SCEYACCgB9AAAAAppppVCAHBAEIgBByw9WD5+J8ufwxiDED" +
-  "sMfE+D4fwG/RUGCx6VO4awVxV3qDtQNPiXKnZUNSwKuUDR6IgaeoGg7Fg6pMQU1FMy4xMDCqqqqqqqr/+xL" +
-  "EB4PAAAGkAAAAIAAANIAAAASqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq" +
-  "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo=";
-airplayBridge.loop = true;
 const session = navigator.mediaSession;
 let station: Station | undefined;
 // The station shown as playing: set on click, cleared when it stops.
@@ -115,13 +102,19 @@ async function start(slug: string, title: string) {
     unlock();
     return void station.player.play();
   }
+  // Switch the network source without pausing the audio element so the iOS
+  // AirPlay (system-audio) session stays connected. Pausing or clearing
+  // srcObject signals iOS to route the next play() back to the phone speaker.
+  // switchEndpoint() aborts the current fetch and restarts with the new URL;
+  // it never calls audio.pause() or sets srcObject, so AirPlay keeps playing.
+  if (station && station.player.state !== "stopped") {
+    station.slug = slug;
+    station.title = title;
+    return void station.player.switchEndpoint(`/${slug}/stream`);
+  }
   const old = station;
   station = undefined;
-  if (old) {
-    airplayBridge.play().catch(() => {}); // hold iOS AirPlay session across the macrotask gap
-    await old.player.detachAudioElement();
-    airplayBridge.pause();
-  }
+  if (old) await old.player.detachAudioElement();
   if (active?.slug !== slug) return; // another click while the old one stopped
   const p: IcecastMetadataPlayer = new IcecastMetadataPlayer(`/${slug}/stream`, {
     audioElement: audio,
@@ -131,7 +124,10 @@ async function start(slug: string, title: string) {
     // (compose.yml) sends ~10 s on connect, so this rarely delays the start.
     bufferLength: 5,
     onMetadata: (metadata: IcyMetadata) => {
-      if (station?.player !== p) return;
+      if (!station || station.player !== p) return;
+      // Read slug/title from station at invocation time: switchEndpoint() reuses
+      // this player for a different show, so captured construction-time vars are stale.
+      const { slug: s, title: t } = station;
       const raw = metadata.StreamTitle ?? "";
       const dash = raw.indexOf(" - ");
       now = {
@@ -145,8 +141,8 @@ async function start(slug: string, title: string) {
       session.metadata = new MediaMetadata({
         title: now.track,
         artist: now.artist,
-        album: title,
-        artwork: [{ src: coverSrc(slug), sizes: "512x512", type: "image/jpeg" }],
+        album: t,
+        artwork: [{ src: coverSrc(s), sizes: "512x512", type: "image/jpeg" }],
       });
     },
     onPlay: () => {

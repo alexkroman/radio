@@ -37,8 +37,8 @@ rs() { rsync -rltO --delete --chmod=D755,F644 -e "$SSH" "$@"; }
 
 # Sync everything; capture itemized output to know what changed.
 out=$(
-  { git ls-files -z && printf '.env\0'; } | rs -i --from0 --files-from=- ./ "$HOST:radio/"
-  rs -i music covers shows "$HOST:radio/"
+  { git ls-files -z && printf '.env\0'; } | rs -i --from0 --files-from=- ./ "$HOST:radio/" &&
+    rs -i music covers shows "$HOST:radio/"
 )
 
 # Pre-create bind-mounted dirs so Docker doesn't create them as root on first run.

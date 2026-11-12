@@ -18,6 +18,9 @@ library: ~/.config/beets/radio-library.db # overridden per-show in import.sh wit
 paths:
   default: "%if{$artist,$artist - }$title" # Artist - Title.mp3 (or just Title.mp3)
   singleton: "%if{$artist,$artist - }$title" # same flat format for singleton imports
+  # Without this, compilation albums go to Compilations/<album>/<track> <title>,
+  # a subfolder that cover extraction (and the duplicates report) don't see.
+  comp: "%if{$artist,$artist - }$title"
 
 # File names become cover URLs (covers/<show>/<stem>.jpg, encodeURI'd by the
 # app), so keep "#" and "%" out of them as well as beets' defaults (setting

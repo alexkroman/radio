@@ -1,9 +1,7 @@
 #!/bin/sh
-# Deploy to OVHcloud Public Cloud in Hillsboro (US-WEST-OR-1); see README.md
-# "Deploy to OVHcloud". `scripts/deploy.sh` deploys everything (creating the
-# server on first run); `scripts/deploy.sh media` only syncs music/, covers/
-# and shows/. Set FLAVOR for another server size, or IP=<address> to skip the
-# OpenStack CLI.
+# Deploy to OVHcloud VPS (or provision one on first run); see README.md
+# "Deploy to OVHcloud". Set FLAVOR for a different server size, or IP=<address>
+# (or IP= in .env) to skip the OpenStack CLI.
 set -eu
 cd "$(dirname "$0")/.."
 export OS_REGION_NAME="${OS_REGION_NAME:-US-WEST-OR-1}"
@@ -37,24 +35,31 @@ HOST=ubuntu@$IP
 # dirs compose.yml's init service owns.
 rs() { rsync -rltO --delete --chmod=D755,F644 -e "$SSH" "$@"; }
 
-# music/, covers/ and shows/ (deletions too). Liquidsoap reads the show list
-# at startup, so restart it when a show is added or removed.
-media() {
-  out=$(rs -i music covers shows "$HOST:radio/")
-  if printf '%s\n' "$out" | grep -qE '^(>f\+|\*deleting) +shows/'; then
-    $SSH "$HOST" 'cd radio && docker compose restart liquidsoap'
-  fi
-}
+# Sync everything; capture itemized output to know what changed.
+out=$(
+  { git ls-files -z && printf '.env\0'; } | rs -i --from0 --files-from=- ./ "$HOST:radio/"
+  rs -i music covers shows "$HOST:radio/"
+)
 
-if [ "${1:-}" != media ]; then
-  # The code is what git tracks (commit or `git add` new files), plus .env.
-  { git ls-files -z && printf '.env\0'; } | rs --from0 --files-from=- ./ "$HOST:radio/"
-  # Pre-create bind-mounted dirs so Docker doesn't create them as root on first run.
-  $SSH "$HOST" 'chmod 600 radio/.env && cd radio &&
-    mkdir -p music plays logs covers &&
-    docker compose up -d --build --remove-orphans'
+# Pre-create bind-mounted dirs so Docker doesn't create them as root on first run.
+$SSH "$HOST" 'chmod 600 radio/.env && cd radio &&
+  mkdir -p music plays logs covers &&
+  docker compose up -d --build --remove-orphans'
+
+changed() { printf '%s\n' "$out" | grep -qF "$1"; }
+
+# Liquidsoap reads radio.liq once at startup and builds one output per show slug.
+# Restart it if radio.liq changed, or a show was added or removed. Edits to show
+# descriptions or DJs don't need a restart — only the app reads that front matter.
+if changed radio.liq || printf '%s\n' "$out" | grep -qE '^(>f\+|\*deleting).*shows/'; then
+  $SSH "$HOST" 'cd radio && docker compose restart liquidsoap'
 fi
-media
+
+# Caddy can reload its config in-place without dropping TLS connections.
+if changed Caddyfile; then
+  $SSH "$HOST" 'cd radio && docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile'
+fi
+
 # Back up the play log (the only record for SoundExchange reports) to
 # backup/plays/. Never deletes, and never touches the local plays/.
 mkdir -p backup/plays

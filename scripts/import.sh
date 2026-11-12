@@ -149,8 +149,11 @@ for show_dir in "${show_dirs[@]}"; do
   # Retry library tracks without a release match: unmatched ones (import skips
   # them as already imported, and mbsync needs a match to start from) and ones
   # imported as singletons before albums. -L re-imports library items in place.
+  # Without scrub: it rewrites every imported file's tags, even a track that
+  # comes back as-is (most of these, every run), which re-extracts its cover.
+  # A track that does match still gets its new tags written.
   echo "── Re-matching tracks without a release (beet import -L)"
-  $BEET import -L -q 'mb_albumid::^$' </dev/null || true
+  $BEET -P scrub import -L -q 'mb_albumid::^$' </dev/null || true
 
   # 3. Refresh tags for files changed on disk since last run
   echo "── Updating changed files (beet update)"

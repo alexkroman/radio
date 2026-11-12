@@ -38,34 +38,64 @@ import:
   move: no
   write: yes
   timid: no # auto-accept matches above the confidence threshold
-  duplicate_action: skip # skip tracks already in the library; use beet update to refresh
+  # A show folder holds tracks from many albums, a few each: group them into
+  # albums by their artist/album tags, so a match gets the release (album,
+  # label, release ID for cover art), and fetchart works (it's per album).
+  group_albums: yes
+  # A new track from an album already in the library joins it; "skip" would
+  # drop it as a duplicate album.
+  duplicate_action: merge
   quiet_fallback: asis # import with existing tags when no MusicBrainz match found
 
 # beets 2.x moved MusicBrainz into a plugin; listing plugins replaces the
 # default list, so without it there are no candidates and every track is
 # imported as-is.
-plugins: musicbrainz chroma fromfilename fetchart scrub mbsync duplicates
+plugins: musicbrainz chroma fromfilename fetchart embedart scrub mbsync duplicates
 
 # beets 2.x penalizes a candidate from a different data source than the file's,
-# and an untagged file has none, so every singleton match lost ~11% and never
-# reached the auto-accept threshold in quiet mode. MusicBrainz is the only
-# source here, so the penalty means nothing.
+# and an untagged file has none, so every match lost ~11% and never reached
+# the auto-accept threshold in quiet mode. MusicBrainz is the only source here,
+# so the penalty means nothing. And a show has a track or two of each album,
+# so don't count the rest of the album against a match.
+# Artist names differ in form more than anything else ("Ryuichi Sakamoto" vs
+# 坂本龍一, "A, B" vs "A + B", a co-artist missing), which held right albums at
+# 72-82%; the album title, track titles, lengths and fingerprint already pin
+# the release down. Wrong candidates score under 55%, so accept from 85% (the
+# default is 96%). On 30 random Gloaming tracks: 29 matched, all correctly.
 match:
+  strong_rec_thresh: 0.15
   distance_weights:
     data_source: 0.0
+    missing_tracks: 0.0
+    artist: 1.0
+  max_rec:
+    missing_tracks: strong
 
 chroma:
   auto: yes # fingerprint every track before MusicBrainz lookup
 
+# Cover art, fetched for each album on import (needs Pillow: pipx inject beets
+# pillow). Only art at least 1000 px wide replaces what a file already has;
+# it's scaled to 1200 px (covers show at up to 512 px; lock screens and AirPlay
+# larger). The Cover Art Archive (by release ID) comes first, at full
+# resolution; the rest search by the album's artist and title.
 fetchart:
   auto: yes
-  enforce_ratio: no
-  min_width: 300
+  minwidth: 1000
+  maxwidth: 1200
+  enforce_ratio: 10%
+  high_resolution: yes
   sources:
     - coverart
     - itunes
     - amazon
     - albumart
+
+# Embed the fetched art in every track of the album, then delete the image
+# file, which would otherwise sit in the show's music folder.
+embedart:
+  auto: yes
+  remove_art_file: yes
 
 scrub:
   auto: yes # strip junk tags before writing clean ones

@@ -92,20 +92,23 @@ for show_dir in "${show_dirs[@]}"; do
   fdupes --delete --noprompt --quiet "$show_dir"
 
   # 2. Import new tracks (singleton mode — each file matched individually)
+  # beet import exits 1 when tracks are imported as-is (no MusicBrainz match); that's expected.
   echo "── Importing new tracks (beet import)"
-  $BEET import -q -s "$show_dir" </dev/null
+  $BEET import -q -s "$show_dir" </dev/null || true
 
   # 3. Refresh tags for files changed on disk since last run
   echo "── Updating changed files (beet update)"
   $BEET update </dev/null
 
   # 4. Re-sync MusicBrainz data for complete ISRC and album artist
+  # beet mbsync exits 1 when no items match; that's expected.
   echo "── Syncing MusicBrainz metadata (beet mbsync)"
-  $BEET mbsync </dev/null
+  $BEET mbsync </dev/null || true
 
   # 5. Fetch cover art for tracks that are still missing it
+  # beet fetchart exits 1 when no art is found; that's expected.
   echo "── Fetching missing cover art (beet fetchart)"
-  $BEET fetchart </dev/null
+  $BEET fetchart </dev/null || true
 
   # 6. Rename files to "Artist - Title.ext" within the show directory
   echo "── Renaming files (beet move)"

@@ -29,6 +29,19 @@ const audio = new Audio();
 // play): the speaker went silent while the phone kept playing.
 audio.disableRemotePlayback = true;
 audio.setAttribute("x-webkit-airplay", "deny");
+// AirPlay as system audio requires uninterrupted audio to hold the iOS session.
+// Between streams, detachAudioElement() involves a macrotask (WASM worker), so
+// unlock()'s audio.play() runs outside the user-gesture window that AirPlay
+// needs. Playing this from the click keeps the session alive across the gap.
+const airplayBridge = new Audio();
+airplayBridge.disableRemotePlayback = true;
+airplayBridge.setAttribute("x-webkit-airplay", "deny");
+airplayBridge.src =
+  "data:audio/mpeg;base64,//sQxAAABFgC/SCEYACCgB9AAAAAppppVCAHBAEIgBByw9WD5+J8ufwxiDED" +
+  "sMfE+D4fwG/RUGCx6VO4awVxV3qDtQNPiXKnZUNSwKuUDR6IgaeoGg7Fg6pMQU1FMy4xMDCqqqqqqqr/+xL" +
+  "EB4PAAAGkAAAAIAAANIAAAASqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq" +
+  "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo=";
+airplayBridge.loop = true;
 const session = navigator.mediaSession;
 let station: Station | undefined;
 // The station shown as playing: set on click, cleared when it stops.
@@ -104,7 +117,11 @@ async function start(slug: string, title: string) {
   }
   const old = station;
   station = undefined;
-  if (old) await old.player.detachAudioElement();
+  if (old) {
+    airplayBridge.play().catch(() => {}); // hold iOS AirPlay session across the macrotask gap
+    await old.player.detachAudioElement();
+    airplayBridge.pause();
+  }
   if (active?.slug !== slug) return; // another click while the old one stopped
   const p: IcecastMetadataPlayer = new IcecastMetadataPlayer(`/${slug}/stream`, {
     audioElement: audio,

@@ -18,3 +18,4 @@ plays/*
 scripts/beets/library*.db
 *.bak
 /backup/
+.playwright-mcp/

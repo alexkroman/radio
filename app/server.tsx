@@ -284,11 +284,7 @@ app.get(`/djs/:dj{${SLUG}}`, async (c) => {
     <main class="page page-dj">
       <SiteHeader />
       <section class="profile" aria-label="Profile">
-        {dj.photo ? (
-          <img class="cover photo" src={`/djs/${dj.slug}/photo`} alt={`Photo of ${dj.name}`} />
-        ) : (
-          <span class="cover photo cover-ph" aria-hidden="true" />
-        )}
+        {dj.photo && <img class="cover photo" src={`/djs/${dj.slug}/photo`} alt={`Photo of ${dj.name}`} />}
         <div class="profile-text">
           <span class="label">DJ</span>
           <h1 class="display">{dj.name}</h1>

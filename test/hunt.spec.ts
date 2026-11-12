@@ -3,16 +3,7 @@
 import { request as https } from "node:https";
 import { expect, test } from "@playwright/test";
 import { STATE } from "./global-setup.ts";
-import {
-  ADMIN,
-  adminRequest,
-  BASE,
-  icyTitle,
-  listen,
-  loggedPlays,
-  performances,
-  streamHead,
-} from "./helpers.ts";
+import { BASE, icyTitle, listen, loggedPlays, performances, streamHead } from "./helpers.ts";
 
 const ODD_ARTIST = 'Q "The" Artist';
 const ODD_TITLE = "Back\\slash \"Quotes\" & 'Ticks'";
@@ -38,16 +29,16 @@ test("the player picks up track metadata from the stream", async ({ page }) => {
     .toEqual(["Zoë Ñandú", "Café | Olé <b>"]);
 });
 
-test("quotes and backslashes survive the log, the page and the report", async ({ page }) => {
+test("quotes and backslashes survive the log, the page and the report", async ({ page, request }) => {
   await expect
     .poll(async () => (await loggedPlays()).find((p) => p.show === "odd"))
     .toMatchObject({ artist: ODD_ARTIST, title: ODD_TITLE });
   await page.goto("/odd");
   await expect(page.locator("#np .np-track")).toHaveText(ODD_TITLE);
   await expect(page.locator("#np .np-artist")).toHaveText(ODD_ARTIST);
-  const admin = await adminRequest();
-  expect(await performances(admin, 'Q "THE" ARTIST', "BACK\\SLASH \"QUOTES\" & 'TICKS'")).toBeGreaterThan(0);
-  await admin.dispose();
+  expect(await performances(request, 'Q "THE" ARTIST', "BACK\\SLASH \"QUOTES\" & 'TICKS'")).toBeGreaterThan(
+    0,
+  );
 });
 
 test("pages fit a 320 px wide phone, even with very long titles", async ({ browser }) => {
@@ -56,10 +47,9 @@ test("pages fit a 320 px wide phone, even with very long titles", async ({ brows
     ignoreHTTPSErrors: true,
     viewport: { width: 320, height: 640 },
     storageState: STATE,
-    httpCredentials: ADMIN,
   });
   const page = await context.newPage();
-  for (const path of ["/", "/long", "/edge", "/admin/"]) {
+  for (const path of ["/", "/long", "/edge", "/reports"]) {
     await page.goto(path);
     if (path === "/long")
       await expect(page.locator("#np .np-track")).toContainText("Supercalifragilisticexpialidocious");

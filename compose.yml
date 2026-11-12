@@ -90,7 +90,7 @@ services:
       init: { condition: service_completed_successfully }
       icecast: { condition: service_started }
 
-  # Show list, player pages and /admin (app/).
+  # Show list, player pages and reports (app/).
   app:
     <<: *hardening
     group_add: ["10001"]
@@ -102,7 +102,6 @@ services:
       TZ: ${TZ:-UTC}
       SITE_TITLE: ${SITE_TITLE:-Mazes Radio}
       CONTACT_EMAIL: ${CONTACT_EMAIL:-}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       SITE_PASSWORD: ${SITE_PASSWORD:-}
     volumes:
       - ./shows:/shows:ro

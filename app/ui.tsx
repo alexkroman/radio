@@ -25,7 +25,13 @@ export const Lockup = () => (
 );
 
 // `home`: the stations list, where the lockup is the page's <h1>.
-export const SiteHeader = ({ current, home }: { current?: "stations" | "about"; home?: boolean }) => (
+export const SiteHeader = ({
+  current,
+  home,
+}: {
+  current?: "stations" | "about" | "reports";
+  home?: boolean;
+}) => (
   <header class="site-header">
     {home ? (
       <h1>
@@ -40,6 +46,9 @@ export const SiteHeader = ({ current, home }: { current?: "stations" | "about"; 
       </a>
       <a href="/about" aria-current={current === "about" ? "page" : undefined}>
         About
+      </a>
+      <a href="/reports" aria-current={current === "reports" ? "page" : undefined}>
+        Reports
       </a>
     </nav>
   </header>

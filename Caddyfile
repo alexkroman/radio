@@ -15,8 +15,8 @@
 	log_skip @htmx
 
 	# Public: each show's stream at /<slug>/stream (Icecast mount /<slug>; GET
-	# and HEAD only, so no one can publish a source); everything else, /admin
-	# included, is the Node app.
+	# and HEAD only, so no one can publish a source); everything else is the
+	# Node app.
 	@stream {
 		method GET HEAD
 		path_regexp ^/[a-z0-9-]+/stream$

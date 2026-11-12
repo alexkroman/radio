@@ -1,6 +1,6 @@
 // The web app behind Caddy: the stations list (/), each show's station page
 // (/<slug>) and current cover (/<slug>/cover.jpg), DJ pages (/djs/<dj>), /about,
-// and the admin pages (/admin). Shows are shows/<slug>.md (app/shows.ts), with
+// and the SoundExchange reports (/reports). Shows are shows/<slug>.md (app/shows.ts), with
 // their DJs in the front matter; Liquidsoap serves their streams via Caddy.
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
@@ -8,9 +8,9 @@ import { bodyLimit } from "hono/body-limit";
 import { etag } from "hono/etag";
 import { createMiddleware } from "hono/factory";
 import { jsxRenderer } from "hono/jsx-renderer";
-import { admin } from "./admin.tsx";
 import { login, throttle } from "./login.tsx";
 import { latestPlays, type Play, recentPlays } from "./plays.ts";
+import { reports } from "./reports.tsx";
 import { getDj, getShow, getShows, type Show, SLUG } from "./shows.ts";
 import {
   Cover,
@@ -167,9 +167,8 @@ app.use(
 );
 
 app.use("/login", throttle);
-app.use("/admin/*", throttle);
 login(app);
-app.route("/admin", admin);
+app.route("/reports", reports);
 
 app.get("/", async (c) => {
   const [shows, latest] = await Promise.all([getShows(), latestPlays()]);

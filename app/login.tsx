@@ -1,7 +1,6 @@
-// Optional site password (SITE_PASSWORD): every page then needs a signed
-// cookie, set by a small login form. /admin has its own basic auth; assets,
-// favicons and the streams (Caddy → Liquidsoap) stay public so apps like VLC
-// can play them.
+// Optional site password (SITE_PASSWORD): every page (the reports included)
+// then needs a signed cookie, set by a small login form. Assets, favicons and
+// the streams (Caddy → Liquidsoap) stay public so apps like VLC can play them.
 import type { Hono } from "hono";
 import { except } from "hono/combine";
 import { getSignedCookie, setSignedCookie } from "hono/cookie";
@@ -31,10 +30,10 @@ const Login = ({ next, error }: { next: string; error?: boolean }) => (
   </main>
 );
 
-// At most 10 failed logins (site form or admin basic auth) per client IP per
-// 15 minutes. Caddy sets X-Forwarded-For to the real client address. An
-// attempt counts from when it starts (and is dropped if it succeeds), so
-// attempts sent all at once can't get past the limit.
+// At most 10 failed logins per client IP per 15 minutes. Caddy sets
+// X-Forwarded-For to the real client address. An attempt counts from when it
+// starts (and is dropped if it succeeds), so attempts sent all at once can't
+// get past the limit.
 const WINDOW = 15 * 60_000;
 const attempts = new Map<string, number[]>();
 export const throttle = createMiddleware(async (c, next) => {
@@ -44,7 +43,7 @@ export const throttle = createMiddleware(async (c, next) => {
   if (!times) attempts.set(ip, (times = []));
   while (times.length && now - times[0]! >= WINDOW) times.shift();
   if (times.length >= 10) return c.text("Too many attempts, try again later", 429);
-  const attempt = c.req.method === "POST" || !!c.req.header("authorization");
+  const attempt = c.req.method === "POST";
   if (attempt) times.push(now);
   try {
     await next();
@@ -75,13 +74,10 @@ export function login(app: Hono) {
   });
 
   app.use(
-    except(
-      ["/assets/*", "/admin/*", "/favicon.ico", "/favicon.svg", "/apple-touch-icon.png"],
-      async (c, next) => {
-        if ((await getSignedCookie(c, PASSWORD, COOKIE)) === "1") return next();
-        c.status(401);
-        return c.render(<Login next={c.req.path} />, { script: false });
-      },
-    ),
+    except(["/assets/*", "/favicon.ico", "/favicon.svg", "/apple-touch-icon.png"], async (c, next) => {
+      if ((await getSignedCookie(c, PASSWORD, COOKIE)) === "1") return next();
+      c.status(401);
+      return c.render(<Login next={c.req.path} />, { script: false });
+    }),
   );
 }

@@ -1,16 +1,12 @@
 // Shared helpers for the end-to-end specs.
 import { readFile } from "node:fs/promises";
 import { request as https } from "node:https";
-import { type APIRequestContext, expect, type Page, request } from "@playwright/test";
+import { type APIRequestContext, expect, type Page } from "@playwright/test";
 import { IcecastMetadataReader } from "icecast-metadata-js";
 import type { Play } from "../app/plays.ts";
 
 export const BASE = process.env.BASE_URL ?? "https://localhost";
 export const SITE_PASSWORD = process.env.SITE_PASSWORD ?? "";
-export const ADMIN = {
-  username: "admin",
-  password: process.env.ADMIN_PASSWORD ?? "",
-};
 export const month = new Date().toISOString().slice(0, 7);
 
 // Status, type and first ~16 KB of a (never-ending) stream.
@@ -43,17 +39,13 @@ export function listen(path: string): () => void {
   return () => req.destroy();
 }
 
-export function adminRequest(): Promise<APIRequestContext> {
-  return request.newContext({
-    baseURL: BASE,
-    ignoreHTTPSErrors: true,
-    httpCredentials: ADMIN,
-  });
-}
-
 // Performances counted for a song in this month's report (0 if absent).
-export async function performances(admin: APIRequestContext, artist: string, title: string): Promise<number> {
-  const text = await (await admin.get(`/admin/report?month=${month}`)).text();
+export async function performances(
+  request: APIRequestContext,
+  artist: string,
+  title: string,
+): Promise<number> {
+  const text = await (await request.get(`/reports/${month}`)).text();
   const row = text.split("\n").find((l) => l.startsWith(`^MAZES RADIO^|^A^|^${artist}^|^${title}^|`));
   return row ? Number(row.split("|").at(-1)) : 0;
 }

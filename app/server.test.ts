@@ -40,8 +40,6 @@ const req = (path: string, init: RequestInit = {}, headers: Record<string, strin
 const page = (path: string, headers: Record<string, string> = {}) => req(path, {}, { cookie, ...headers });
 const login = (body: Record<string, string>, headers: Record<string, string> = {}) =>
   req("/login", { method: "POST", body: new URLSearchParams(body) }, headers);
-const admin = (path: string, password = "unit-admin") =>
-  req(path, {}, { authorization: `Basic ${btoa(`admin:${password}`)}` });
 
 beforeAll(async () => {
   // The modules read PLAYS_DIR when loaded.
@@ -171,16 +169,21 @@ describe("pages", () => {
   });
 });
 
-describe("admin", () => {
-  test("needs the admin password", async () => {
-    expect((await admin("/admin", "nope")).status).toBe(401);
-    const res = await admin("/admin");
+describe("reports", () => {
+  test("are linked from the site and list this month", async () => {
+    expect(await (await page("/")).text()).toContain('href="/reports"');
+    const res = await page("/reports");
     expect(res.status).toBe(200);
-    expect(await res.text()).toContain(`/admin/report?month=${month}`);
+    expect(await res.text()).toContain(`href="/reports/${month}"`);
+  });
+
+  test("need only the site password, like every page", async () => {
+    expect((await req("/reports")).status).toBe(401);
+    expect((await req(`/reports/${month}`)).status).toBe(401);
   });
 
   test("the SoundExchange report counts each play's listeners (at least 1)", async () => {
-    const res = await admin(`/admin/report?month=${month}`);
+    const res = await page(`/reports/${month}`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-disposition")).toMatch(/^attachment; filename="MAZESRADIO01/);
     const rows = (await res.text()).trim().split("\n");
@@ -192,18 +195,16 @@ describe("admin", () => {
     ]);
   });
 
-  test.each(["2026-13", "2026-00", "26-01", "2026-1", "", "2026-01x"])("month %j is refused", async (m) => {
-    expect((await admin(`/admin/report?month=${encodeURIComponent(m)}`)).status).toBe(400);
+  test.each(["2026-13", "2026-00", "26-01", "2026-1", "2026-01x"])("month %j is not found", async (m) => {
+    expect((await page(`/reports/${encodeURIComponent(m)}`)).status).toBe(404);
   });
 
   test("a month without plays is just the header, named for its days", async () => {
-    const res = await admin("/admin/report?month=2028-02");
+    const res = await page("/reports/2028-02");
     expect(res.headers.get("content-disposition")).toBe(
       'attachment; filename="MAZESRADIO01022028-29022028_A.txt"',
     );
     expect((await res.text()).trim().split("\n")).toHaveLength(1);
-    expect((await admin("/admin/report?month=2026-02")).headers.get("content-disposition")).toContain(
-      "-28022026_A.txt",
-    );
+    expect((await page("/reports/2026-02")).headers.get("content-disposition")).toContain("-28022026_A.txt");
   });
 });

@@ -87,6 +87,9 @@ def safe_recode(s) =
   end
 end
 
+# Played on a show that has nothing else to play (optional).
+offline = "/music/offline.mp3"
+
 def show(f) =
   slug = path.remove_extension(path.basename(f))
 
@@ -158,7 +161,16 @@ def show(f) =
 
   # Loudness: autocue measures each track and sets liq_amplify (gain to reach
   # -14 LUFS); amplify applies it via its default override="liq_amplify".
-  music = crossfade(duration=12., fade_in=6., fade_out=6., amplify(1., tracks))
+  # Dead air: autocue trims silence at a track's ends; blank.skip skips a track
+  # (a hidden track after minutes of silence, a file that decodes to nothing)
+  # once it has been silent for 10 s.
+  music = crossfade(duration=12., fade_in=6., fade_out=6., blank.skip(max_blank=10., amplify(1., tracks)))
+
+  # When the show has nothing to play (no music, or every file fails), play
+  # music/offline.mp3 if there is one, else silence (mksafe), so listeners
+  # stay connected either way.
+  music =
+    if file.exists(offline) then fallback(track_sensitive=false, [music, single(offline)]) else music end
 
   # Limiter catches peaks from tracks autocue boosted and crossfade overlaps.
   radio = limit(mksafe(music))

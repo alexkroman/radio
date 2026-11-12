@@ -18,7 +18,7 @@ set -a
 # shellcheck disable=SC1091 # plain KEY=value file
 . ./test/test.env
 set +a
-docker buildx bake --load "${bake_flags[@]}" "${files[@]}" app e2e
+docker buildx bake --load ${bake_flags[@]+"${bake_flags[@]}"} "${files[@]}" app e2e
 # Start the stack from those images, then the tests. Plain `compose run` would
 # rebuild the app (pull_policy: build) without E2E_BAKE_FLAGS, which fails in
 # cloud sessions, and `run` has no --no-build.

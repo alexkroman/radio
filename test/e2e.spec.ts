@@ -282,6 +282,62 @@ test("the player never hands its audio element to AirPlay, even across a show sw
   expect(await remote()).toEqual({ disabled: true, airplay: "deny" });
 });
 
+// AirPlay on an iPhone carries the phone's audio output, and iOS can move it
+// back to the phone when the page's audio pauses, as reloading the audio
+// element does. So switching shows on an iPhone (no MediaSource: the player
+// decodes into an AudioContext) must leave the element playing, with the same
+// source, while the new show's audio flows into it.
+test("switching shows on an iPhone never pauses or reloads the audio element", async ({ page }) => {
+  await page.addInitScript(() => {
+    delete (window as { MediaSource?: unknown }).MediaSource;
+    const w = window as unknown as { started: number };
+    w.started = 0;
+    const start = AudioBufferSourceNode.prototype.start;
+    AudioBufferSourceNode.prototype.start = function (...args) {
+      w.started++;
+      return start.apply(this, args);
+    };
+  });
+  type W = {
+    player: { audioElement: HTMLAudioElement; endpoint: string; playbackMethod: string };
+    events: string[];
+    source: MediaProvider | null;
+    started: number;
+  };
+  await page.goto("/");
+  await page.getByRole("main").getByRole("button", { name: "Play Fixture Default" }).click();
+  await expect.poll(() => playerState(page)).toBe("playing");
+  await page.evaluate(() => {
+    const w = window as unknown as W;
+    const a = w.player.audioElement;
+    w.events = [];
+    w.source = a.srcObject;
+    for (const e of ["pause", "emptied", "loadstart", "abort"]) a.addEventListener(e, () => w.events.push(e));
+  });
+  await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as W).player.endpoint))
+    .toContain("/night/stream");
+  await expect.poll(() => playerState(page)).toBe("playing");
+  // The new show's audio is being scheduled, not just the old one's tail.
+  const before = await page.evaluate(() => (window as unknown as W).started);
+  await expect.poll(() => page.evaluate(() => (window as unknown as W).started)).toBeGreaterThan(before);
+  expect(
+    await page.evaluate(() => {
+      const w = window as unknown as W;
+      const a = w.player.audioElement;
+      return {
+        method: w.player.playbackMethod,
+        events: w.events,
+        sameSource: a.srcObject === w.source,
+        paused: a.paused,
+        live: (a.srcObject as MediaStream).getAudioTracks().map((t) => t.readyState),
+      };
+    }),
+  ).toEqual({ method: "webaudio", events: [], sameSource: true, paused: false, live: ["live"] });
+  await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+});
+
 test("pausing and playing again at once keeps playing", async ({ page }) => {
   const state = () => playerState(page);
   await page.goto("/night");

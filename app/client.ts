@@ -11,7 +11,7 @@ import "@fontsource/jetbrains-mono/700.css";
 import "./tokens.css";
 import "./style.css";
 // Before icecast-metadata-player, which reads window.AudioContext when loaded.
-import { resumeAudio } from "./audio.ts";
+import { keepSource, resumeAudio } from "./audio.ts";
 import htmx from "htmx.org";
 import IcecastMetadataPlayer, { type IcyMetadata } from "icecast-metadata-player";
 import { mountBar, setBar } from "./bar.tsx";
@@ -29,6 +29,7 @@ const audio = new Audio();
 // play): the speaker went silent while the phone kept playing.
 audio.disableRemotePlayback = true;
 audio.setAttribute("x-webkit-airplay", "deny");
+keepSource(audio);
 const session = navigator.mediaSession;
 let station: Station | undefined;
 type Show = { slug: string; title: string };
@@ -121,6 +122,17 @@ async function start(slug: string, title: string) {
     unlock();
     return void station.player.play();
   }
+  // Switch shows without pausing the audio element, so AirPlay (the phone's
+  // audio output) stays on the speaker: a pause, or the silent data: URL that
+  // stop() leaves in the element, lets iOS route the next play() to the phone.
+  // switchEndpoint() keeps the element playing while it fetches the new
+  // stream, and audio.ts keeps its source the same MediaStream throughout.
+  if (station && station.player.state !== "stopped") {
+    station.slug = slug;
+    station.title = title;
+    // The library reads options.bufferLength etc. without a guard, so pass {}.
+    return void station.player.switchEndpoint(`/${slug}/stream`, {});
+  }
   const old = station;
   station = undefined;
   if (old) await old.player.detachAudioElement();
@@ -133,7 +145,10 @@ async function start(slug: string, title: string) {
     // (compose.yml) sends ~10 s on connect, so this rarely delays the start.
     bufferLength: 5,
     onMetadata: (metadata: IcyMetadata) => {
-      if (station?.player !== p) return;
+      if (!station || station.player !== p) return;
+      // Read slug/title from station at invocation time: switchEndpoint() reuses
+      // this player for a different show, so captured construction-time vars are stale.
+      const { slug: s, title: t } = station;
       const raw = metadata.StreamTitle ?? "";
       const dash = raw.indexOf(" - ");
       now = {
@@ -147,8 +162,8 @@ async function start(slug: string, title: string) {
       session.metadata = new MediaMetadata({
         title: now.track,
         artist: now.artist,
-        album: title,
-        artwork: [{ src: coverSrc(slug), sizes: "512x512", type: "image/jpeg" }],
+        album: t,
+        artwork: [{ src: coverSrc(s), sizes: "512x512", type: "image/jpeg" }],
       });
     },
     onPlay: () => {

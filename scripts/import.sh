@@ -2,17 +2,21 @@
 # Import and tag music for one or all shows, then extract cover art.
 #
 # Usage:
-#   scripts/import.sh              # process every show under music/
-#   scripts/import.sh frequency    # process music/frequency/ only
+#   scripts/import.sh                    # process every show under music/
+#   scripts/import.sh frequency          # process music/frequency/ only
+#   scripts/import.sh --all frequency    # re-match every track, not just new
+#                                        # and unmatched ones (hours per show)
 #
 # What it does (safe to re-run; re-checks tags/covers for changed files):
 #   1. Remove exact duplicate files within each show directory
 #   2. beet import     – group new tracks into albums by their tags, fingerprint
 #                        + MusicBrainz lookup, then embed the best cover art
 #                        found (fetchart + embedart); then the same again for
-#                        library tracks that still have no release match
+#                        library tracks that still have no release match.
+#                        With --all, every track in the folder.
 #   3. beet update     – refresh tags for files changed since last run
-#   4. beet mbsync     – re-sync MusicBrainz data (ISRC, album artist)
+#   4. beet mbsync     – with --all: re-sync MusicBrainz data (ISRC, album
+#                        artist) for matched tracks
 #   5. beet move       – rename to "Artist - Title.ext"
 #   6. report duplicates (files import skipped, and tracks matched to the same
 #      MusicBrainz recording); nothing is deleted
@@ -67,6 +71,11 @@ if ! echo "$beet_ver" | grep -q "chroma" || ! "$beet_python" -c "import PIL" 2>/
 fi
 
 # ── Determine which shows to process ────────────────────────────────────────
+all=false
+if [[ ${1:-} == "--all" ]]; then
+  all=true
+  shift
+fi
 if [[ ${1:-} != "" ]]; then
   show_dirs=("$MUSIC_DIR/$1")
 else
@@ -103,8 +112,39 @@ for show_dir in "${show_dirs[@]}"; do
   # 2. Import new tracks, grouped into albums by their tags (config.yaml);
   #    fetchart and embedart add cover art as each album is imported.
   # beet import exits 1 when tracks are imported as-is (no MusicBrainz match); that's expected.
-  echo "── Importing new tracks (beet import)"
-  $BEET import -q "$show_dir" </dev/null || true
+  if $all; then
+    # beets re-matches files already in the library, so this redoes them all.
+    echo "── Re-importing every track (beet import)"
+    $BEET import -q "$show_dir" </dev/null || true
+  else
+    # Only files not in the library yet: move them to a staging folder (on the
+    # same disk, outside music/ so Liquidsoap doesn't see it) and import that
+    # with -m, which moves each one back into the show folder under its
+    # library name. A file import skips (a duplicate) stays in staging and is
+    # moved back after, as are files left by an interrupted run.
+    echo "── Importing new tracks (beet import)"
+    staging="scripts/beets/staging-$slug"
+    unstage() {
+      [[ -d $staging ]] || return 0
+      find "$staging" -type f -exec mv -n {} "$show_dir/" \;
+      find "$staging" -depth -type d -empty -delete
+    }
+    unstage
+    mkdir -p "$staging"
+    trap unstage EXIT
+    # shellcheck disable=SC2016 # $path is a beets format field, not shell
+    comm -23 \
+      <(find "$PWD/$show_dir" -maxdepth 1 \( -name "*.mp3" -o -name "*.flac" -o -name "*.m4a" \) | sort) \
+      <($BEET ls -f '$path' </dev/null | sort) |
+      while IFS= read -r file; do mv -n "$file" "$staging/"; done
+    new=$(find "$staging" -type f | wc -l | tr -d ' ')
+    if [[ $new -gt 0 ]]; then
+      echo "  $new new"
+      $BEET import -q -m "$staging" </dev/null || true
+    fi
+    unstage
+    trap - EXIT
+  fi
 
   # Retry library tracks without a release match: unmatched ones (import skips
   # them as already imported, and mbsync needs a match to start from) and ones
@@ -116,10 +156,13 @@ for show_dir in "${show_dirs[@]}"; do
   echo "── Updating changed files (beet update)"
   $BEET update </dev/null
 
-  # 4. Re-sync MusicBrainz data for complete ISRC and album artist
+  # 4. Re-sync MusicBrainz data for complete ISRC and album artist. A match
+  #    already brings these, so only with --all: it looks up every album.
   # beet mbsync exits 1 when no items match; that's expected.
-  echo "── Syncing MusicBrainz metadata (beet mbsync)"
-  $BEET mbsync </dev/null || true
+  if $all; then
+    echo "── Syncing MusicBrainz metadata (beet mbsync)"
+    $BEET mbsync </dev/null || true
+  fi
 
   # 5. Rename files to "Artist - Title.ext" within the show directory
   echo "── Renaming files (beet move)"

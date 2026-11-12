@@ -19,3 +19,4 @@ scripts/beets/library*.db
 *.bak
 /backup/
 .playwright-mcp/
+scripts/beets/staging-*/

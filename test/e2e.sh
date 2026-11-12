@@ -55,6 +55,38 @@ listen() { dc exec -d caddy wget -qO /dev/null "http://icecast:8000/$1"; }
 edit_shows() { dc run --rm --no-deps -T init sh -c "$1"; }
 reload() { dc exec -T icecast sh /icecast/config.sh reload; }
 has_fallback() { dc exec -T icecast grep -q "<fallback-mount>/fallback-$1.mp3<" /tmp/icecast.xml; }
+# Times Icecast has moved listeners from /$1's fallback back to /$1.
+returns() {
+  dc exec -T icecast grep -c "passing [1-9][0-9]* listeners from \"/fallback-$1.mp3\" to \"/$1\"" \
+    /var/log/icecast/error.log || true
+}
+# Restart Liquidsoap and wait (up to 30 s) until the listeners on each of the
+# shows given went to their fallback and back. Waiting on Icecast's log, not
+# the listener counts: a stopped container's connections can linger in Icecast
+# (until its source-timeout) with listeners still attached, which would pass a
+# count without testing the fallback at all.
+restart_liquidsoap() {
+  local slug before=() i=0
+  for slug in "$@"; do before+=("$(returns "$slug")"); done
+  dc restart liquidsoap >/dev/null
+  for slug in "$@"; do
+    for _ in $(seq 1 30); do
+      [ "$(returns "$slug")" -gt "${before[i]}" ] && break
+      sleep 1
+    done
+    [ "$(returns "$slug")" -gt "${before[i]}" ] ||
+      fail "after restarting Liquidsoap, /$slug's listeners never came back from its fallback"
+    i=$((i + 1))
+  done
+}
+# Wait (up to 30 s, the old source may linger as above) for /$1 to stop.
+expect_gone() {
+  for _ in $(seq 1 30); do
+    [ -z "$(listeners "$1")" ] && return
+    sleep 1
+  done
+  fail "$2"
+}
 
 listen default
 expect default 1 "connecting"
@@ -64,7 +96,7 @@ edit_shows 'printf -- "---\ntitle: Added\n---\n" >/shows/added.md && chmod a+r /
 reload
 has_fallback added || fail "the reload didn't give the new show a fallback"
 expect default 1 "reloading Icecast for a new show"
-dc restart liquidsoap >/dev/null
+restart_liquidsoap default
 expect default 1 "restarting Liquidsoap for a new show"
 listen added
 expect added 1 "connecting to the new show"
@@ -75,8 +107,8 @@ reload
 ! has_fallback night || fail "the reload kept the removed show's fallback"
 expect default 1 "reloading Icecast for a removed show"
 expect added 1 "reloading Icecast for a removed show"
-dc restart liquidsoap >/dev/null
+restart_liquidsoap default added
 expect default 1 "restarting Liquidsoap for a removed show"
 expect added 1 "restarting Liquidsoap for a removed show (the new show's fallback)"
-[ -z "$(listeners night)" ] || fail "the removed show is still streaming"
+expect_gone night "the removed show is still streaming"
 step "listeners stayed connected through adding and removing a show"

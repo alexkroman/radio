@@ -7,12 +7,15 @@
 #
 # What it does (safe to re-run; re-checks tags/covers for changed files):
 #   1. Remove exact duplicate files within each show directory
-#   2. beet import -s  – fingerprint + MusicBrainz lookup for new tracks
+#   2. beet import -s  – fingerprint + MusicBrainz lookup for new tracks, then
+#                        again for library tracks that still have no match
 #   3. beet update     – refresh tags for files changed since last run
 #   4. beet mbsync     – re-sync MusicBrainz data (ISRC, album artist)
 #   5. beet fetchart   – fetch missing cover art
 #   6. beet move       – rename to "Artist - Title.ext"
-#   7. ffmpeg          – extract embedded cover art to covers/<show>/<stem>.jpg
+#   7. report duplicates (files import skipped, and tracks matched to the same
+#      MusicBrainz recording); nothing is deleted
+#   8. ffmpeg          – extract embedded cover art to covers/<show>/<stem>.jpg
 #                        (and remove covers whose track is gone)
 #
 # Requirements:
@@ -85,7 +88,10 @@ for show_dir in "${show_dirs[@]}"; do
   echo "══ $slug ══════════════════════════════════"
 
   LIB="scripts/beets/library-$slug.db"
-  BEET="beet -c $CONFIG -l $LIB"
+  # Every command gets the show dir as beets' library directory: beets 2.x
+  # stores paths under it relative to it, so a command run with another
+  # directory can't find the files (and `beet update` drops them).
+  BEET="beet -c $CONFIG -l $LIB -d $PWD/$show_dir"
 
   # 1. Remove exact duplicates (same audio content, different filenames)
   echo "── Deduplication"
@@ -95,6 +101,12 @@ for show_dir in "${show_dirs[@]}"; do
   # beet import exits 1 when tracks are imported as-is (no MusicBrainz match); that's expected.
   echo "── Importing new tracks (beet import)"
   $BEET import -q -s "$show_dir" </dev/null || true
+
+  # Retry tracks already in the library without a MusicBrainz match (import
+  # skips them as duplicates, and mbsync needs a match to start from). -L
+  # re-imports library items in place.
+  echo "── Re-matching unmatched tracks (beet import -L)"
+  $BEET import -L -q -s 'mb_trackid::^$' </dev/null || true
 
   # 3. Refresh tags for files changed on disk since last run
   echo "── Updating changed files (beet update)"
@@ -112,9 +124,23 @@ for show_dir in "${show_dirs[@]}"; do
 
   # 6. Rename files to "Artist - Title.ext" within the show directory
   echo "── Renaming files (beet move)"
-  $BEET -d "$show_dir" move </dev/null
+  $BEET move </dev/null
 
-  # 7. Extract embedded cover art from each track to covers/<show>/<stem>.jpg.
+  # 7. Report duplicates; deleting is left to you. Import skips a file whose
+  #    artist and title (after matching, so two rips of one song) are already
+  #    in the library, but the file stays here and still plays. The duplicates
+  #    plugin finds library tracks matched to the same MusicBrainz recording
+  #    under different titles.
+  echo "── Duplicates (not deleted; remove by hand)"
+  # shellcheck disable=SC2016 # $path is a beets format field, not shell
+  comm -23 \
+    <(find "$PWD/$show_dir" -maxdepth 1 \( -name "*.mp3" -o -name "*.flac" -o -name "*.m4a" \) | sort) \
+    <($BEET ls -f '$path' </dev/null | sort) |
+    sed 's|^|  not imported (a library track has its artist and title): |'
+  # shellcheck disable=SC2016
+  $BEET duplicates -s -F -k mb_trackid -f '  same recording: $path' </dev/null
+
+  # 8. Extract embedded cover art from each track to covers/<show>/<stem>.jpg.
   #    Re-extracts if the audio file is newer than the existing cover.
   echo "── Extracting covers"
   cover_dir="$COVERS_DIR/$slug"

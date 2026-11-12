@@ -41,7 +41,18 @@ import:
   duplicate_action: skip # skip tracks already in the library; use beet update to refresh
   quiet_fallback: asis # import with existing tags when no MusicBrainz match found
 
-plugins: chroma fetchart scrub mbsync
+# beets 2.x moved MusicBrainz into a plugin; listing plugins replaces the
+# default list, so without it there are no candidates and every track is
+# imported as-is.
+plugins: musicbrainz chroma fromfilename fetchart scrub mbsync duplicates
+
+# beets 2.x penalizes a candidate from a different data source than the file's,
+# and an untagged file has none, so every singleton match lost ~11% and never
+# reached the auto-accept threshold in quiet mode. MusicBrainz is the only
+# source here, so the penalty means nothing.
+match:
+  distance_weights:
+    data_source: 0.0
 
 chroma:
   auto: yes # fingerprint every track before MusicBrainz lookup

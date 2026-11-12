@@ -277,6 +277,25 @@ test("player plays the stream using only self-hosted assets", async ({ page }) =
   expect(problems).toEqual([]);
 });
 
+// With an AirPlay speaker picked, switching shows on an iPhone silenced it:
+// Safari handed the audio element to the speaker while its source was briefly
+// a URL (app/client.ts). The element must stay the phone's, across a switch.
+test("the player never hands its audio element to AirPlay, even across a show switch", async ({ page }) => {
+  const remote = () =>
+    page.evaluate(() => {
+      const a = (window as unknown as { player: { audioElement: HTMLAudioElement } }).player.audioElement;
+      return { disabled: a.disableRemotePlayback, airplay: a.getAttribute("x-webkit-airplay") };
+    });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Play Fixture Default" }).click();
+  await expect.poll(() => playerState(page)).toBe("playing");
+  expect(await remote()).toEqual({ disabled: true, airplay: "deny" });
+  await page.getByRole("button", { name: "Play Fixture Night" }).click();
+  await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+  await expect.poll(() => playerState(page)).toBe("playing");
+  expect(await remote()).toEqual({ disabled: true, airplay: "deny" });
+});
+
 test("pausing and playing again at once keeps playing", async ({ page }) => {
   const state = () => playerState(page);
   await page.goto("/night");

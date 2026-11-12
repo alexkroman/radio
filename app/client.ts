@@ -21,6 +21,14 @@ import { mountBar, setBar } from "./bar.tsx";
 type Station = { slug: string; title: string; player: IcecastMetadataPlayer; stopping?: Promise<void> };
 
 const audio = new Audio();
+// AirPlay (a WiiM, say, picked in Control Center) gets the page's audio as the
+// phone's output, like any app's. Without this, Safari may instead hand the
+// element itself to the speaker whenever its source is a URL, and switching
+// shows briefly is one (icecast-metadata-player points it at a silent data:
+// MP3 between streams, then at a WebAudio MediaStream, which a speaker can't
+// play): the speaker went silent while the phone kept playing.
+audio.disableRemotePlayback = true;
+audio.setAttribute("x-webkit-airplay", "deny");
 const session = navigator.mediaSession;
 let station: Station | undefined;
 // The station shown as playing: set on click, cleared when it stops.

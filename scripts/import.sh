@@ -5,15 +5,15 @@
 #   scripts/import.sh                    # process every show under music/
 #   scripts/import.sh frequency          # process music/frequency/ only
 #   scripts/import.sh --all frequency    # re-match every track, not just new
-#                                        # and unmatched ones (hours per show)
+#                                        # ones, for MusicBrainz additions and
+#                                        # fixes (hours per show)
 #
 # What it does (safe to re-run; re-checks tags/covers for changed files):
 #   1. Remove exact duplicate files within each show directory
 #   2. beet import     – group new tracks into albums by their tags, fingerprint
 #                        + MusicBrainz lookup, then embed the best cover art
-#                        found (fetchart + embedart); then the same again for
-#                        library tracks that still have no release match.
-#                        With --all, every track in the folder.
+#                        found (fetchart + embedart). With --all, every track
+#                        in the folder, matched or not.
 #   3. beet update     – refresh tags for files changed since last run
 #   4. beet mbsync     – with --all: re-sync MusicBrainz data (ISRC, album
 #                        artist) for matched tracks
@@ -113,7 +113,9 @@ for show_dir in "${show_dirs[@]}"; do
   #    fetchart and embedart add cover art as each album is imported.
   # beet import exits 1 when tracks are imported as-is (no MusicBrainz match); that's expected.
   if $all; then
-    # beets re-matches files already in the library, so this redoes them all.
+    # beets re-matches files already in the library, so this redoes them all:
+    # unmatched tracks MusicBrainz has since added get a match, and matched
+    # ones pick up its corrections.
     echo "── Re-importing every track (beet import)"
     $BEET import -q "$show_dir" </dev/null || true
   else
@@ -145,15 +147,6 @@ for show_dir in "${show_dirs[@]}"; do
     unstage
     trap - EXIT
   fi
-
-  # Retry library tracks without a release match: unmatched ones (import skips
-  # them as already imported, and mbsync needs a match to start from) and ones
-  # imported as singletons before albums. -L re-imports library items in place.
-  # Without scrub: it rewrites every imported file's tags, even a track that
-  # comes back as-is (most of these, every run), which re-extracts its cover.
-  # A track that does match still gets its new tags written.
-  echo "── Re-matching tracks without a release (beet import -L)"
-  $BEET -P scrub import -L -q 'mb_albumid::^$' </dev/null || true
 
   # 3. Refresh tags for files changed on disk since last run
   echo "── Updating changed files (beet update)"

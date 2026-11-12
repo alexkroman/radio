@@ -11,7 +11,7 @@ import "@fontsource/jetbrains-mono/700.css";
 import "./tokens.css";
 import "./style.css";
 // Before icecast-metadata-player, which reads window.AudioContext when loaded.
-import { resumeAudio } from "./audio.ts";
+import { keepSource, resumeAudio } from "./audio.ts";
 import htmx from "htmx.org";
 import IcecastMetadataPlayer, { type IcyMetadata } from "icecast-metadata-player";
 import { mountBar, setBar } from "./bar.tsx";
@@ -29,6 +29,7 @@ const audio = new Audio();
 // play): the speaker went silent while the phone kept playing.
 audio.disableRemotePlayback = true;
 audio.setAttribute("x-webkit-airplay", "deny");
+keepSource(audio);
 const session = navigator.mediaSession;
 let station: Station | undefined;
 // The station shown as playing: set on click, cleared when it stops.
@@ -102,15 +103,16 @@ async function start(slug: string, title: string) {
     unlock();
     return void station.player.play();
   }
-  // Switch the network source without pausing the audio element so the iOS
-  // AirPlay (system-audio) session stays connected. Pausing or clearing
-  // srcObject signals iOS to route the next play() back to the phone speaker.
-  // switchEndpoint() aborts the current fetch and restarts with the new URL;
-  // it never calls audio.pause() or sets srcObject, so AirPlay keeps playing.
+  // Switch shows without pausing the audio element, so AirPlay (the phone's
+  // audio output) stays on the speaker: a pause, or the silent data: URL that
+  // stop() leaves in the element, lets iOS route the next play() to the phone.
+  // switchEndpoint() keeps the element playing while it fetches the new
+  // stream, and audio.ts keeps its source the same MediaStream throughout.
   if (station && station.player.state !== "stopped") {
     station.slug = slug;
     station.title = title;
-    return void station.player.switchEndpoint(`/${slug}/stream`);
+    // The library reads options.bufferLength etc. without a guard, so pass {}.
+    return void station.player.switchEndpoint(`/${slug}/stream`, {});
   }
   const old = station;
   station = undefined;

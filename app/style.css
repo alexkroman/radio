@@ -649,7 +649,7 @@ img.cover {
   padding-bottom: calc(var(--page-pad-bottom) + 72px + env(safe-area-inset-bottom));
 }
 
-/* ── Login and admin ── */
+/* ── Login and reports ── */
 .page-login {
   --width: 360px;
 
@@ -693,12 +693,12 @@ img.cover {
   color: var(--color-ink);
 }
 
-.admin-table {
+.reports-table {
   border-collapse: collapse;
   border-top: 1px solid var(--color-ink);
 }
 
-.admin-table td {
+.reports-table td {
   padding: 12px 24px 12px 0;
   border-bottom: 1px solid var(--color-hairline);
   font: var(--type-url);

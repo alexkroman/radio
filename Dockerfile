@@ -1,4 +1,4 @@
-# The web app image (site + admin),
+# The web app image,
 # plus an `e2e` target with Playwright for the end-to-end suite.
 FROM node:26-alpine AS deps
 WORKDIR /app

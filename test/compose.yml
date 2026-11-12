@@ -52,7 +52,6 @@ services:
     network_mode: service:caddy
     environment:
       BASE_URL: https://localhost
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       SITE_PASSWORD: ${SITE_PASSWORD}
     volumes:
       - ./test-results:/app/test-results

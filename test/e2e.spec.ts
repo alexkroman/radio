@@ -2,16 +2,7 @@
 // on test/fixtures. Run with `npm run e2e`; test/global-setup.ts logs in.
 import { expect, test } from "@playwright/test";
 import { STATE } from "./global-setup.ts";
-import {
-  ADMIN,
-  adminRequest,
-  BASE,
-  month,
-  playerState,
-  SITE_PASSWORD,
-  streamHead,
-  waitForTrack,
-} from "./helpers.ts";
+import { BASE, month, playerState, SITE_PASSWORD, streamHead, waitForTrack } from "./helpers.ts";
 
 test("each show is its own MP3 stream", async () => {
   for (const show of ["default", "night"]) {
@@ -197,19 +188,13 @@ test("only the app and the show streams are reachable", async ({ playwright }) =
     "/night/../status-json.xsl",
     "/style.css",
   ];
-  for (const httpCredentials of [undefined, ADMIN]) {
-    const request = await playwright.request.newContext({
-      baseURL: BASE,
-      ignoreHTTPSErrors: true,
-      httpCredentials,
-    });
-    for (const path of paths) {
-      const res = await request.get(path);
-      expect([401, 404], `${path} → ${res.status()}`).toContain(res.status());
-      expect(await res.text()).not.toMatch(/icecast/i);
-    }
-    await request.dispose();
+  const request = await playwright.request.newContext({ baseURL: BASE, ignoreHTTPSErrors: true });
+  for (const path of paths) {
+    const res = await request.get(path);
+    expect([401, 404], `${path} → ${res.status()}`).toContain(res.status());
+    expect(await res.text()).not.toMatch(/icecast/i);
   }
+  await request.dispose();
 });
 
 test("security headers are set and the server banner is stripped", async ({ request }) => {
@@ -219,10 +204,12 @@ test("security headers are set and the server banner is stripped", async ({ requ
   expect(headers["server"]).toBeUndefined();
 });
 
-test("SoundExchange report counts plays from every show with file tags", async () => {
-  const request = await adminRequest();
+test("SoundExchange report counts plays from every show with file tags", async ({ page, request }) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Reports" }).click();
+  await expect(page.locator(`a[href="/reports/${month}"]`)).toBeVisible();
   await expect(async () => {
-    const res = await request.get(`/admin/report?month=${month}`);
+    const res = await request.get(`/reports/${month}`);
     expect(res.headers()["content-disposition"]).toMatch(
       /^attachment; filename="MAZESRADIO01\d{6}-\d{8}_A\.txt"$/,
     );
@@ -236,7 +223,6 @@ test("SoundExchange report counts plays from every show with file tags", async (
     );
     expect(text).toMatch(/^\^MAZES RADIO\^\|\^A\^\|\^GAMMA\^\|\^MIDNIGHT\^\|\^\^\|\^\^\|\^\^\|\d+$/m);
   }).toPass({ timeout: 80_000 });
-  await request.dispose();
 });
 
 test("player plays the stream using only self-hosted assets", async ({ page }) => {

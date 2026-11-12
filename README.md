@@ -4,7 +4,7 @@ A small internet radio station: stock open-source services plus one small TypeSc
 
 - **Liquidsoap** plays each show as its own 24/7 stream, on shuffle with automatic cue points, loudness levelling and crossfades, and appends every play (tags and listener count) to a monthly log, `plays/YYYY-MM.jsonl`.
 - **Icecast** serves the streams, with track titles (UTF-8) in the stream for players like VLC.
-- **`app/`** ([Hono](https://hono.dev)) serves the show list, the player pages and the admin site (SoundExchange reports from the play log). Its browser code (htmx, icecast-metadata-player, fonts) is bundled from npm, so nothing loads from a CDN.
+- **`app/`** ([Hono](https://hono.dev)) serves the show list, the player pages and the SoundExchange reports (from the play log). Its browser code (htmx, icecast-metadata-player, fonts) is bundled from npm, so nothing loads from a CDN.
 - **Caddy** provides HTTPS and is the only public entry point.
 - **Docker** restarts any service that crashes.
 
@@ -90,15 +90,15 @@ djs: [Ana Ruiz]
 
 ## Where things are
 
-| URL                               | What's there                                                   |
-| --------------------------------- | -------------------------------------------------------------- |
-| `https://localhost/`              | List of shows                                                  |
-| `https://localhost/<slug>`        | A show's player, now playing, history                          |
-| `https://localhost/<slug>/stream` | A show's stream for apps and VLC                               |
-| `https://localhost/djs/<dj>`      | A DJ's profile and shows                                       |
-| `https://localhost/admin/`        | Admin site (SoundExchange reports), `admin` / `ADMIN_PASSWORD` |
+| URL                               | What's there                          |
+| --------------------------------- | ------------------------------------- |
+| `https://localhost/`              | List of shows                         |
+| `https://localhost/<slug>`        | A show's player, now playing, history |
+| `https://localhost/<slug>/stream` | A show's stream for apps and VLC      |
+| `https://localhost/djs/<dj>`      | A DJ's profile and shows              |
+| `https://localhost/reports`       | Monthly SoundExchange reports         |
 
-Set `SITE_PASSWORD` in `.env` to put the show pages behind a login form; the streams stay public so apps can play them. After 10 wrong passwords (site or admin) from one address, logins are refused for 15 minutes. Nothing else is public.
+Set `SITE_PASSWORD` in `.env` to put the show pages behind a login form; the streams stay public so apps can play them. After 10 wrong passwords from one address, logins are refused for 15 minutes. Nothing else is public.
 
 ## Deploy to OVHcloud (Hillsboro)
 
@@ -130,7 +130,7 @@ npm run build       # esbuild → dist/ (the Docker image does this too)
 
 ## End-to-end tests
 
-`npm run e2e` builds the images, starts the real stack (Caddy, Icecast, Liquidsoap, the app) on the fixture shows and music in `test/fixtures/`, runs the Playwright suites in `test/` from a container inside Caddy's network, and tears everything down. It needs only Docker, uses its own compose project (`radio-e2e`) and throwaway volumes, publishes no ports, and doesn't touch `logs/`, `covers/`, `plays/` or `music/`. Pass Playwright arguments through, e.g. `npm run e2e -- -g "admin"`.
+`npm run e2e` builds the images, starts the real stack (Caddy, Icecast, Liquidsoap, the app) on the fixture shows and music in `test/fixtures/`, runs the Playwright suites in `test/` from a container inside Caddy's network, and tears everything down. It needs only Docker, uses its own compose project (`radio-e2e`) and throwaway volumes, publishes no ports, and doesn't touch `logs/`, `covers/`, `plays/` or `music/`. Pass Playwright arguments through, e.g. `npm run e2e -- -g "report"`.
 
 ## Checks
 

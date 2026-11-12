@@ -6,7 +6,6 @@ export default defineConfig({
   test: {
     include: ["app/**/*.test.ts"],
     env: {
-      ADMIN_PASSWORD: "unit-admin",
       SITE_PASSWORD: "unit-site",
       SHOWS_DIR: "test/fixtures/shows",
       COVERS_DIR: "test/fixtures/covers",

@@ -1,11 +1,8 @@
-// Admin pages, mounted at /admin behind basic auth (user "admin",
-// ADMIN_PASSWORD): SoundExchange Report of Use from the play log.
+// SoundExchange reports, mounted at /reports (linked from the site nav): the
+// last 12 months, each a Report of Use from the play log at /reports/<YYYY-MM>.
 import { Hono } from "hono";
-import { basicAuth } from "hono/basic-auth";
 import { monthOf, monthPlays } from "./plays.ts";
-
-const PASSWORD = process.env.ADMIN_PASSWORD;
-if (!PASSWORD) throw new Error("ADMIN_PASSWORD is not set");
+import { SiteHeader } from "./ui.tsx";
 
 const SERVICE = "MAZES RADIO";
 const SHORT = "MAZESRADIO";
@@ -46,37 +43,40 @@ async function report(month: string): Promise<string> {
   return rows.map((r) => r.map(field).join("|")).join("\n") + "\n";
 }
 
-export const admin = new Hono();
+export const reports = new Hono();
 
-admin.use(basicAuth({ username: "admin", password: PASSWORD }));
-
-admin.get("/", (c) => {
+reports.get("/", (c) => {
   const now = new Date();
   const months = Array.from({ length: 12 }, (_, i) =>
     monthOf(new Date(now.getFullYear(), now.getMonth() - i, 1)),
   );
   return c.render(
-    <main class="page page-station">
-      <h1 class="display">Admin</h1>
-      <h2 class="label">SoundExchange reports</h2>
-      <table class="admin-table">
+    <main class="page page-reports">
+      <SiteHeader current="reports" />
+      <h1 class="display">Reports</h1>
+      <p class="lead">
+        Monthly SoundExchange Reports of Use: every song played on every station, with its listener count.
+      </p>
+      <table class="reports-table">
         {months.map((m) => (
           <tr>
             <td>{m}</td>
             <td>
-              <a href={`/admin/report?month=${m}`}>Download</a>
+              <a href={`/reports/${m}`} hx-boost="false" download>
+                Download
+              </a>
             </td>
           </tr>
         ))}
       </table>
+      <footer class="footer footer-rule">{c.req.header("host")}</footer>
     </main>,
-    { title: "Radio admin", script: false },
+    { title: "Reports" },
   );
 });
 
-admin.get("/report", async (c) => {
-  const month = c.req.query("month") ?? "";
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return c.text("month must be YYYY-MM", 400);
+reports.get("/:month{\\d{4}-(?:0[1-9]|1[0-2])}", async (c) => {
+  const month = c.req.param("month");
   const [y, m] = month.split("-");
   const last = new Date(Number(y), Number(m), 0).getDate();
   c.header("Content-Disposition", `attachment; filename="${SHORT}01${m}${y}-${last}${m}${y}_A.txt"`);

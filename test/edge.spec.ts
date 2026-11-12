@@ -1,15 +1,7 @@
 // Edge cases: odd titles and show files, missing music, traversal,
 // listener counting. Fixtures: test/fixtures/{shows,music}/{edge,plain,empty,quiet}.
 import { expect, test } from "@playwright/test";
-import {
-  adminRequest,
-  icyTitle,
-  listen,
-  loggedPlays,
-  performances,
-  streamHead,
-  waitForTrack,
-} from "./helpers.ts";
+import { icyTitle, listen, loggedPlays, performances, streamHead, waitForTrack } from "./helpers.ts";
 
 test("titles with unicode, pipes and HTML show exactly as tagged", async ({ page }) => {
   await page.goto("/edge");
@@ -42,10 +34,8 @@ test("an unchanged page or asset is 304 through Caddy's compression", async ({ r
   }
 });
 
-test("report keeps unicode and the whole title when it contains a pipe", async () => {
-  const admin = await adminRequest();
-  await expect.poll(() => performances(admin, "ZOË ÑANDÚ", "CAFÉ  OLÉ <B>")).toBeGreaterThan(0);
-  await admin.dispose();
+test("report keeps unicode and the whole title when it contains a pipe", async ({ request }) => {
+  await expect.poll(() => performances(request, "ZOË ÑANDÚ", "CAFÉ  OLÉ <B>")).toBeGreaterThan(0);
 });
 
 test("an untagged track is shown by its file name, without cover art", async ({ page, request }) => {
@@ -95,7 +85,7 @@ test("encoded and dotted paths don't leak files", async ({ request }) => {
     "/..%2fshows/default.md",
     "/%2e%2e/%2e%2e/etc/passwd",
     "/default/cover.jpg/..%2f..%2fdefault.md",
-    "/admin%2f",
+    "/reports%2f2026-01",
   ];
   for (const path of paths) {
     const res = await request.get(path);
@@ -103,26 +93,22 @@ test("encoded and dotted paths don't leak files", async ({ request }) => {
   }
 });
 
-test("the report counts every listener connected when a track starts", async () => {
-  const admin = await adminRequest();
-  const before = await performances(admin, "GAMMA", "MIDNIGHT");
+test("the report counts every listener connected when a track starts", async ({ request }) => {
+  const before = await performances(request, "GAMMA", "MIDNIGHT");
   const stops = [listen("/night/stream"), listen("/night/stream"), listen("/night/stream")];
   // Midnight (20 s) repeats on the night show; wait for it to be logged again.
   await expect
-    .poll(() => performances(admin, "GAMMA", "MIDNIGHT"), { timeout: 60_000 })
+    .poll(() => performances(request, "GAMMA", "MIDNIGHT"), { timeout: 60_000 })
     .toBeGreaterThanOrEqual(before + 3);
   stops.forEach((stop) => stop());
-  await admin.dispose();
 });
 
-test("the report matches the play log", async () => {
-  const admin = await adminRequest();
+test("the report matches the play log", async ({ request }) => {
   await expect(async () => {
     const expected = (await loggedPlays())
       .filter((p) => p.show === "night" && p.title === "Midnight")
       .reduce((n, p) => n + Math.max(p.listeners, 1), 0);
     expect(expected).toBeGreaterThan(0);
-    expect(await performances(admin, "GAMMA", "MIDNIGHT")).toBe(expected);
+    expect(await performances(request, "GAMMA", "MIDNIGHT")).toBe(expected);
   }).toPass();
-  await admin.dispose();
 });

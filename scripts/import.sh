@@ -3,25 +3,29 @@
 #
 # Usage:
 #   scripts/import.sh              # process every show under music/
-#   scripts/import.sh jazz         # process music/jazz/ only
+#   scripts/import.sh frequency    # process music/frequency/ only
 #
 # What it does (safe to re-run; re-checks tags/covers for changed files):
 #   1. Remove exact duplicate files within each show directory
-#   2. beet import -s  – fingerprint + MusicBrainz lookup for new tracks
+#   2. beet import     – group new tracks into albums by their tags, fingerprint
+#                        + MusicBrainz lookup, then embed the best cover art
+#                        found (fetchart + embedart); then the same again for
+#                        library tracks that still have no release match
 #   3. beet update     – refresh tags for files changed since last run
 #   4. beet mbsync     – re-sync MusicBrainz data (ISRC, album artist)
-#   5. beet fetchart   – fetch missing cover art
-#   6. beet move       – rename to "Artist - Title.ext"
+#   5. beet move       – rename to "Artist - Title.ext"
+#   6. report duplicates (files import skipped, and tracks matched to the same
+#      MusicBrainz recording); nothing is deleted
 #   7. ffmpeg          – extract embedded cover art to covers/<show>/<stem>.jpg
 #                        (and remove covers whose track is gone)
 #
 # Requirements:
 #   brew install chromaprint fdupes ffmpeg pipx
-#   pipx install beets && pipx inject beets pyacoustid
+#   pipx install beets && pipx inject beets pyacoustid pillow
 #   pipx ensurepath   # adds ~/.local/bin to PATH if needed; restart shell
 #
 # If using Homebrew beets instead of pipx:
-#   /opt/homebrew/opt/beets/libexec/bin/pip install pyacoustid
+#   /opt/homebrew/opt/beets/libexec/bin/pip install pyacoustid pillow
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -35,7 +39,7 @@ for cmd in beet fpcalc ffmpeg fdupes; do
   if ! command -v "$cmd" &>/dev/null; then
     echo "ERROR: '$cmd' not found." >&2
     case "$cmd" in
-    beet) echo "  brew install pipx && pipx install beets && pipx inject beets pyacoustid" >&2 ;;
+    beet) echo "  brew install pipx && pipx install beets && pipx inject beets pyacoustid pillow" >&2 ;;
     fpcalc) echo "  brew install chromaprint" >&2 ;;
     ffmpeg) echo "  brew install ffmpeg" >&2 ;;
     fdupes) echo "  brew install fdupes" >&2 ;;
@@ -44,18 +48,20 @@ for cmd in beet fpcalc ffmpeg fdupes; do
   fi
 done
 
-# Verify pyacoustid is installed in beets' Python environment (needed for chroma plugin).
-# Use a temp DB so beet doesn't prompt to create a directory.
+# Verify beets' Python environment has pyacoustid (the chroma plugin) and
+# Pillow (fetchart/embedart size checks and resizing; without it they quietly
+# skip both). Use a temp DB so beet doesn't prompt to create a directory.
 tmpdir=$(mktemp -d)
 beet_ver=$(beet -c "$CONFIG" -l "$tmpdir/check.db" version 2>&1 </dev/null || true)
 rm -rf "$tmpdir"
-if ! echo "$beet_ver" | grep -q "chroma"; then
+beet_python=$(head -n1 "$(command -v beet)" | sed 's/^#! *//; s/ .*//')
+if ! echo "$beet_ver" | grep -q "chroma" || ! "$beet_python" -c "import PIL" 2>/dev/null; then
   beet_bin=$(command -v beet)
-  echo "ERROR: pyacoustid not installed in beets' Python environment." >&2
+  echo "ERROR: pyacoustid or Pillow not installed in beets' Python environment." >&2
   if [[ $beet_bin == */Cellar/* || $beet_bin == */opt/homebrew/* ]]; then
-    echo "  Fix (Homebrew): /opt/homebrew/opt/beets/libexec/bin/pip install pyacoustid" >&2
+    echo "  Fix (Homebrew): /opt/homebrew/opt/beets/libexec/bin/pip install pyacoustid pillow" >&2
   else
-    echo "  Fix (pipx): pipx inject beets pyacoustid" >&2
+    echo "  Fix (pipx): pipx inject beets pyacoustid pillow" >&2
   fi
   exit 1
 fi
@@ -85,16 +91,26 @@ for show_dir in "${show_dirs[@]}"; do
   echo "══ $slug ══════════════════════════════════"
 
   LIB="scripts/beets/library-$slug.db"
-  BEET="beet -c $CONFIG -l $LIB"
+  # Every command gets the show dir as beets' library directory: beets 2.x
+  # stores paths under it relative to it, so a command run with another
+  # directory can't find the files (and `beet update` drops them).
+  BEET="beet -c $CONFIG -l $LIB -d $PWD/$show_dir"
 
   # 1. Remove exact duplicates (same audio content, different filenames)
   echo "── Deduplication"
   fdupes --delete --noprompt --quiet "$show_dir"
 
-  # 2. Import new tracks (singleton mode — each file matched individually)
+  # 2. Import new tracks, grouped into albums by their tags (config.yaml);
+  #    fetchart and embedart add cover art as each album is imported.
   # beet import exits 1 when tracks are imported as-is (no MusicBrainz match); that's expected.
   echo "── Importing new tracks (beet import)"
-  $BEET import -q -s "$show_dir" </dev/null || true
+  $BEET import -q "$show_dir" </dev/null || true
+
+  # Retry library tracks without a release match: unmatched ones (import skips
+  # them as already imported, and mbsync needs a match to start from) and ones
+  # imported as singletons before albums. -L re-imports library items in place.
+  echo "── Re-matching tracks without a release (beet import -L)"
+  $BEET import -L -q 'mb_albumid::^$' </dev/null || true
 
   # 3. Refresh tags for files changed on disk since last run
   echo "── Updating changed files (beet update)"
@@ -105,14 +121,23 @@ for show_dir in "${show_dirs[@]}"; do
   echo "── Syncing MusicBrainz metadata (beet mbsync)"
   $BEET mbsync </dev/null || true
 
-  # 5. Fetch cover art for tracks that are still missing it
-  # beet fetchart exits 1 when no art is found; that's expected.
-  echo "── Fetching missing cover art (beet fetchart)"
-  $BEET fetchart </dev/null || true
-
-  # 6. Rename files to "Artist - Title.ext" within the show directory
+  # 5. Rename files to "Artist - Title.ext" within the show directory
   echo "── Renaming files (beet move)"
-  $BEET -d "$show_dir" move </dev/null
+  $BEET move </dev/null
+
+  # 6. Report duplicates; deleting is left to you. Import skips a file whose
+  #    artist and title (after matching, so two rips of one song) are already
+  #    in the library, but the file stays here and still plays. The duplicates
+  #    plugin finds library tracks matched to the same MusicBrainz recording
+  #    under different titles.
+  echo "── Duplicates (not deleted; remove by hand)"
+  # shellcheck disable=SC2016 # $path is a beets format field, not shell
+  comm -23 \
+    <(find "$PWD/$show_dir" -maxdepth 1 \( -name "*.mp3" -o -name "*.flac" -o -name "*.m4a" \) | sort) \
+    <($BEET ls -f '$path' </dev/null | sort) |
+    sed 's|^|  not imported (a library track has its artist and title): |'
+  # shellcheck disable=SC2016
+  $BEET duplicates -s -F -k mb_trackid -f '  same recording: $path' </dev/null
 
   # 7. Extract embedded cover art from each track to covers/<show>/<stem>.jpg.
   #    Re-extracts if the audio file is newer than the existing cover.

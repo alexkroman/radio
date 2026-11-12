@@ -193,10 +193,20 @@ for show_dir in "${show_dirs[@]}"; do
 
     # Extract the first video stream (embedded album art) and convert to JPEG.
     # ffmpeg exits non-zero when no video stream exists; that's fine.
-    if ffmpeg -nostdin -i "$file" -map 0:v:0 "$out" -y -loglevel error 2>/dev/null; then
-      echo "  ✓ $stem"
+    # A file whose tags were rewritten (--all) is newer than its cover even
+    # when its art is the same: then keep the cover as it is (so a deploy
+    # doesn't upload it again) and only mark it current.
+    tmp="$cover_dir/.$stem.tmp.jpg"
+    if ffmpeg -nostdin -i "$file" -map 0:v:0 "$tmp" -y -loglevel error 2>/dev/null; then
+      if [[ -f $out ]] && cmp -s "$tmp" "$out"; then
+        rm -f "$tmp"
+        touch "$out"
+      else
+        mv -f "$tmp" "$out"
+        echo "  ✓ $stem"
+      fi
     else
-      rm -f "$out"
+      rm -f "$tmp" "$out"
     fi
   done < <(find "$show_dir" -maxdepth 1 \( -name "*.mp3" -o -name "*.flac" -o -name "*.m4a" \) -print0 | sort -z)
 

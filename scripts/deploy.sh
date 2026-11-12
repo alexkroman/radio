@@ -48,10 +48,19 @@ $SSH "$HOST" 'chmod 600 radio/.env && cd radio &&
 
 changed() { printf '%s\n' "$out" | grep -qF "$1"; }
 
-# Liquidsoap reads radio.liq once at startup and builds one output per show slug.
-# Restart it if radio.liq changed, or a show was added or removed. Edits to show
-# descriptions or DJs don't need a restart — only the app reads that front matter.
-if changed radio.liq || printf '%s\n' "$out" | grep -qE '^(>f|\*deleting).*shows/'; then
+# Neither step below drops a listener. Icecast builds each show's fallback mount
+# from shows/ (icecast/config.sh); reloading its config keeps everyone
+# connected, unlike a restart. Liquidsoap reads radio.liq once at startup and
+# builds one output per show slug; while it restarts, listeners hear the
+# fallback. So when a show file is added or removed (rsync's ">f+++++++++" and
+# "*deleting"), reload Icecast first (the new show gets its fallback) and then
+# restart Liquidsoap. Edits to a show (">f.st......") or anything under
+# shows/djs/ need neither: only the app reads them, on every request.
+shows_changed=$(printf '%s\n' "$out" | grep -cE '^(>f\+{9}|\*deleting) +shows/[^/]+\.md$' || true)
+if [ "$shows_changed" -gt 0 ] || changed icecast/; then
+  $SSH "$HOST" 'cd radio && docker compose exec -T icecast sh /icecast/config.sh reload'
+fi
+if [ "$shows_changed" -gt 0 ] || changed radio.liq; then
   $SSH "$HOST" 'cd radio && docker compose restart liquidsoap'
 fi
 

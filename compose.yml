@@ -41,25 +41,16 @@ services:
       - ./plays:/plays
     restart: "no"
 
-  # Serves the streams (one mount per show), with UTF-8 track metadata.
+  # Serves the streams (one mount per show), with UTF-8 track metadata, extra
+  # buffering for slow connections and a silent fallback per show so listeners
+  # stay connected through a Liquidsoap restart: see icecast/config.sh, which
+  # also reloads the config for a new show without dropping anyone.
   icecast:
     <<: *hardening
     group_add: ["10001"]
     restart: unless-stopped
     image: libretime/icecast:2.5.0
-    command:
-      - sh
-      - -c
-      - |
-        set -e
-        sed \
-          -e "s|<hostname>localhost</hostname>|<hostname>$$DOMAIN</hostname>|" \
-          -e 's|<errorlog>-</errorlog>|<errorlog>error.log</errorlog>|' \
-          -e 's|</icecast>|<mount type="default"><charset>UTF-8</charset></mount></icecast>|' \
-          /etc/icecast.xml > /tmp/icecast.xml
-        chmod 600 /tmp/icecast.xml
-        grep -q '<charset>UTF-8' /tmp/icecast.xml
-        exec icecast -c /tmp/icecast.xml
+    command: ["sh", "-c", "sh /icecast/config.sh && exec icecast -c /tmp/icecast.xml"]
     environment:
       DOMAIN: ${DOMAIN:-localhost}
       ICECAST_SOURCE_PASSWORD: &password ${PASSWORD:?Set PASSWORD in .env}
@@ -73,6 +64,8 @@ services:
       ICECAST_MAX_CLIENTS: ${MAX_LISTENERS:-100}
     volumes:
       - ./logs:/var/log/icecast
+      - ./shows:/shows:ro
+      - ./icecast:/icecast:ro
     depends_on:
       init: { condition: service_completed_successfully }
 

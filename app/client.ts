@@ -101,6 +101,10 @@ async function start(slug: string, title: string) {
   const p: IcecastMetadataPlayer = new IcecastMetadataPlayer(`/${slug}/stream`, {
     audioElement: audio,
     retryTimeout: 120,
+    // Seconds of audio to hold before playing (default 1), so a dip in
+    // bandwidth drains the buffer instead of stuttering. Icecast's burst
+    // (compose.yml) sends ~10 s on connect, so this rarely delays the start.
+    bufferLength: 5,
     onMetadata: (metadata: IcyMetadata) => {
       if (station?.player !== p) return;
       const raw = metadata.StreamTitle ?? "";

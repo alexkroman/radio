@@ -41,53 +41,16 @@ services:
       - ./plays:/plays
     restart: "no"
 
-  # Serves the streams (one mount per show), with UTF-8 track metadata.
-  # Buffering for slow connections (the streams are 256 kbps, 32 KB/s):
-  #   - burst-size: a new listener gets ~10 s of audio at once (default 64 KB,
-  #     ~2 s), so the player starts with a full buffer instead of an empty one.
-  #   - queue-size: a listener whose connection stalls can fall ~32 s behind
-  #     before Icecast drops it (default 512 KB, ~16 s). Must exceed burst-size.
-  # Keeping listeners through a Liquidsoap restart (as AzuraCast does): while a
-  # show's source is gone its listeners get icecast/silence.mp3 (looped; same
-  # 256 kbps MP3 format), and fallback-override moves them back when it returns,
-  # so players stay connected instead of dropping. Icecast 2.5 ignores fallbacks
-  # on the default mount, so each show in shows/ gets its own <mount> at startup
-  # (a show added later streams without a fallback until Icecast restarts), and
-  # its own copy of the file: listeners on a shared fallback would all go back
-  # to whichever show returned first.
+  # Serves the streams (one mount per show), with UTF-8 track metadata, extra
+  # buffering for slow connections and a silent fallback per show so listeners
+  # stay connected through a Liquidsoap restart: see icecast/config.sh, which
+  # also reloads the config for a new show without dropping anyone.
   icecast:
     <<: *hardening
     group_add: ["10001"]
     restart: unless-stopped
     image: libretime/icecast:2.5.0
-    command:
-      - sh
-      - -c
-      - |
-        set -e
-        mkdir -p /tmp/web
-        cp -R /usr/share/icecast/web/. /tmp/web/
-        mounts=
-        for f in /shows/*.md; do
-          [ -e "$$f" ] || continue
-          slug=$$(basename "$$f" .md)
-          cp /silence.mp3 "/tmp/web/fallback-$$slug.mp3"
-          mounts="$$mounts<mount type=\"normal\"><mount-name>/$$slug</mount-name><fallback-mount>/fallback-$$slug.mp3</fallback-mount><fallback-override>1</fallback-override></mount>"
-        done
-        sed \
-          -e "s|<hostname>localhost</hostname>|<hostname>$$DOMAIN</hostname>|" \
-          -e 's|<errorlog>-</errorlog>|<errorlog>error.log</errorlog>|' \
-          -e 's|<webroot>[^<]*</webroot>|<webroot>/tmp/web</webroot>|' \
-          -e "s|</icecast>|<mount type=\"default\"><charset>UTF-8</charset></mount>$$mounts</icecast>|" \
-          -e 's|<burst-size>[0-9]*</burst-size>|<burst-size>327680</burst-size>|' \
-          -e 's|<queue-size>[0-9]*</queue-size>|<queue-size>1048576</queue-size>|' \
-          /etc/icecast.xml > /tmp/icecast.xml
-        chmod 600 /tmp/icecast.xml
-        grep -q '<charset>UTF-8' /tmp/icecast.xml
-        grep -q '<burst-size>327680<' /tmp/icecast.xml
-        grep -q '<queue-size>1048576<' /tmp/icecast.xml
-        grep -q '<webroot>/tmp/web<' /tmp/icecast.xml
-        exec icecast -c /tmp/icecast.xml
+    command: ["sh", "-c", "sh /icecast/config.sh && exec icecast -c /tmp/icecast.xml"]
     environment:
       DOMAIN: ${DOMAIN:-localhost}
       ICECAST_SOURCE_PASSWORD: &password ${PASSWORD:?Set PASSWORD in .env}
@@ -102,7 +65,7 @@ services:
     volumes:
       - ./logs:/var/log/icecast
       - ./shows:/shows:ro
-      - ./icecast/silence.mp3:/silence.mp3:ro
+      - ./icecast:/icecast:ro
     depends_on:
       init: { condition: service_completed_successfully }
 

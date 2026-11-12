@@ -84,7 +84,7 @@ djs: [Ana Ruiz]
 ---
 ```
 
-`shows/` is gitignored — create your own show files after cloning. Adding or removing a show needs `docker compose restart icecast liquidsoap`; editing a title or description shows up immediately.
+`shows/` is gitignored — create your own show files after cloning. Adding or removing a show needs `docker compose exec icecast sh /icecast/config.sh reload && docker compose restart liquidsoap` (no listener is dropped); editing a title or description shows up immediately.
 
 ## Where things are
 
@@ -109,7 +109,7 @@ scripts/deploy.sh                     # run again after any change to redeploy
 scripts/deploy.sh media               # after scripts/import.sh or editing shows: copy just music/, covers/, shows/
 ```
 
-Both mirror your `music/`, `covers/` and `shows/` to the server, so files you delete locally go from the server too, and restart Icecast and Liquidsoap when a show was added or removed. Set `IP=<server address>` to run it without the OpenStack CLI or `openrc.sh`.
+Both mirror your `music/`, `covers/` and `shows/` to the server, so files you delete locally go from the server too, and reload Icecast and restart Liquidsoap when a show was added or removed, without dropping listeners. Set `IP=<server address>` to run it without the OpenStack CLI or `openrc.sh`.
 
 Every run also copies the server's play log to `backup/plays/` on your computer (it's the only record for SoundExchange reports), so deploy or sync now and then. The server installs security updates by itself and, when one needs it, reboots at 11:00 UTC (3–4 am Pacific); Docker brings the station back up.
 

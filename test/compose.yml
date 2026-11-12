@@ -1,15 +1,19 @@
 # End-to-end overlay for compose.yml (run with test/e2e.sh): the real stack on
-# fixture shows/music, with logs/covers/plays in throwaway volumes, nothing
+# fixture shows/music, with shows/logs/covers/plays in throwaway volumes (shows
+# so e2e.sh can add and remove one, as a deploy does), nothing
 # published to the host, and a Playwright container driving it.
 services:
   init:
-    # Override command: seed the covers volume with pre-extracted fixture art
-    # (no caddy:/data in e2e, so the base chown for /data is dropped too).
+    # Override command: seed the shows volume with the fixture shows and the
+    # covers volume with pre-extracted fixture art (no caddy:/data in e2e, so
+    # the base chown for /data is dropped too).
     command:
       - sh
       - -c
       - |
         set -e
+        cp -r /fixture-shows/. /shows/
+        chmod -R a+rX /shows
         cp -r /fixture-covers/. /covers/
         chown -R 10001:10001 /logs /covers /plays
         chmod -R u+rwX,g+rwX /logs /covers /plays
@@ -19,19 +23,21 @@ services:
       - e2e-covers:/covers
       - e2e-plays:/plays
       - ./test/fixtures/covers:/fixture-covers:ro
+      - e2e-shows:/shows
+      - ./test/fixtures/shows:/fixture-shows:ro
   icecast:
     volumes:
       - e2e-logs:/var/log/icecast
-      - ./test/fixtures/shows:/shows:ro
+      - e2e-shows:/shows:ro
   liquidsoap:
     volumes:
-      - ./test/fixtures/shows:/shows:ro
+      - e2e-shows:/shows:ro
       - ./test/fixtures/music:/music:ro
       - e2e-covers:/covers:ro
       - e2e-plays:/plays
   app:
     volumes:
-      - ./test/fixtures/shows:/shows:ro
+      - e2e-shows:/shows:ro
       - e2e-covers:/covers:ro
       - e2e-plays:/plays:ro
   caddy:
@@ -56,6 +62,7 @@ services:
       liquidsoap: { condition: service_started }
 
 volumes:
+  e2e-shows: {}
   e2e-logs: {}
   e2e-covers: {}
   e2e-plays: {}

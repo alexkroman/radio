@@ -127,6 +127,13 @@ app.use(
 );
 app.use("/:file{favicon\\.ico|favicon\\.svg|apple-touch-icon\\.png}", serveStatic({ root: "dist/public" }));
 
+// The player bar's mount, with the station it shows before any is played or
+// found on the page: the first show.
+async function Player() {
+  const [first] = await getShows();
+  return <div id="player" data-slug={first?.slug} data-title={first?.title} />;
+}
+
 app.use(
   jsxRenderer(({ children, title, script = true }) => (
     <html lang="en">
@@ -141,7 +148,7 @@ app.use(
         <link rel="stylesheet" href="/assets/app.css" />
         {script && <script src="/assets/app.js" defer />}
       </head>
-      <body>
+      <body class={script ? "with-bar" : undefined}>
         {/* Links swap just <main> in here, so the audio and the player bar keep going. */}
         <div
           id="page"
@@ -153,7 +160,7 @@ app.use(
           {children}
         </div>
         {/* The player bar (app/bar.tsx), rendered by the client. */}
-        {script && <div id="player" />}
+        {script && <Player />}
       </body>
     </html>
   )),

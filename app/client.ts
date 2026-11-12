@@ -32,9 +32,13 @@ audio.setAttribute("x-webkit-airplay", "deny");
 keepSource(audio);
 const session = navigator.mediaSession;
 let station: Station | undefined;
+type Show = { slug: string; title: string };
 // The station shown as playing: set on click, cleared when it stops.
-let active: { slug: string; title: string } | undefined;
-// The playing station's track, from the page or the stream's metadata.
+let active: Show | undefined;
+// The station in the player bar: the playing one, else the last one played,
+// else the page's first, else the site's first show (#player's data).
+let shown: Show | undefined;
+// The shown station's track, from the page or the stream's metadata.
 let now = { track: "", artist: "", cover: "" };
 
 function localTimes() {
@@ -44,11 +48,11 @@ function localTimes() {
   });
 }
 
-// Take the playing station's track and cover from the page when it has them.
+// Take the shown station's track and cover from the page when it has them.
 function readPage() {
-  if (!active) return;
+  if (!shown) return;
   // ui.tsx npData sets all three.
-  const np = document.querySelector<HTMLElement>(`[data-np="${active.slug}"]`)?.dataset as
+  const np = document.querySelector<HTMLElement>(`[data-np="${shown.slug}"]`)?.dataset as
     typeof now | undefined;
   if (np?.track) now = { track: np.track, artist: np.artist, cover: np.cover };
 }
@@ -56,6 +60,20 @@ function readPage() {
 // The playing track's cover: from the page, else the station's current cover
 // (keyed by track so a browser fetches it once per track).
 const coverSrc = (slug: string) => now.cover || `/${slug}/cover.jpg?t=${encodeURIComponent(now.track)}`;
+
+function pickShown() {
+  const button = document.querySelector<HTMLElement>("button[data-play]")?.dataset;
+  const player = document.getElementById("player")?.dataset;
+  const next =
+    active ??
+    (station && { slug: station.slug, title: station.title }) ??
+    shown ??
+    (button && { slug: button.play!, title: button.title! }) ??
+    (player?.slug ? { slug: player.slug, title: player.title! } : undefined);
+  if (next?.slug !== shown?.slug) now = { track: "", artist: "", cover: "" };
+  shown = next;
+  readPage();
+}
 
 // Show the play state everywhere: play buttons, "Live" labels, the player bar (app/bar.tsx).
 function sync() {
@@ -68,7 +86,7 @@ function sync() {
     el.textContent = el.dataset.status === active?.slug ? "Listening · Live" : "Live";
   });
   document.body.classList.toggle("playing", !!active);
-  setBar(active && { title: active.title, ...now, cover: coverSrc(active.slug) });
+  setBar(shown && { title: shown.title, ...now, cover: coverSrc(shown.slug), playing: !!active });
 }
 
 // The stream stopped on its own (a pause is already shown by stop()).
@@ -90,6 +108,7 @@ async function start(slug: string, title: string) {
   // Synchronously, in the click: iOS allows it only there.
   resumeAudio();
   active = { slug, title };
+  shown = active;
   now = { track: "", artist: "", cover: "" };
   readPage();
   sync();
@@ -208,11 +227,11 @@ document.addEventListener("htmx:beforeRequest", (e) => {
   poll.addEventListener("htmx:beforeOnLoad", (l) => poll.isConnected || l.preventDefault(), { once: true });
 });
 
-mountBar(document.getElementById("player")!, stop);
+mountBar(document.getElementById("player")!, () => shown && toggle(shown.slug, shown.title));
 
 function settle() {
   localTimes();
-  readPage();
+  pickShown();
   sync();
 }
 document.addEventListener("htmx:afterSettle", settle);

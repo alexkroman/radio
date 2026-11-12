@@ -78,10 +78,10 @@ test("a DJ page has their profile, shows and links", async ({ page }) => {
   await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
   await page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" }).click();
 
-  // Just a name: a placeholder photo, no bio or links.
+  // Just a name: no photo, bio or links.
   await page.goto("/djs/zoe-nandu");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Zoë Ñandú");
-  await expect(page.locator(".photo.cover-ph")).toBeVisible();
+  await expect(page.locator(".photo")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Elsewhere" })).toHaveCount(0);
 });
 

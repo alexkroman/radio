@@ -118,7 +118,7 @@ describe("pages", () => {
     expect(html).toContain("Fixture Default");
     expect(html).toContain("Second Wind");
     expect(html).toContain("Midnight");
-    expect(html).toContain('<div id="player"></div>');
+    expect(html).toContain('<div id="player" data-slug="default" data-title="Fixture Default"></div>');
   });
 
   test("a station page shows its now playing and history", async () => {

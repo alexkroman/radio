@@ -273,8 +273,7 @@ img.cover {
   display: none;
 }
 
-.play.playing .i-pause,
-.play.play-bar .i-pause {
+.play.playing .i-pause {
   display: block;
 }
 
@@ -593,7 +592,7 @@ img.cover {
   color: var(--color-body);
 }
 
-/* ── Player bar: fixed while playing, its contents in line with the index column ── */
+/* ── Player bar: always fixed at the bottom, its contents in line with the index column ── */
 #bar {
   position: fixed;
   inset: auto 0 0;
@@ -646,7 +645,7 @@ img.cover {
 }
 
 /* Room below the page for the bar. */
-.playing .page {
+.with-bar .page {
   padding-bottom: calc(var(--page-pad-bottom) + 72px + env(safe-area-inset-bottom));
 }
 

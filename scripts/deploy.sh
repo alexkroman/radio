@@ -48,10 +48,14 @@ $SSH "$HOST" 'chmod 600 radio/.env && cd radio &&
 
 changed() { printf '%s\n' "$out" | grep -qF "$1"; }
 
-# Liquidsoap reads radio.liq once at startup and builds one output per show slug.
-# Restart it if radio.liq changed, or a show was added or removed. Edits to show
-# descriptions or DJs don't need a restart — only the app reads that front matter.
-if changed radio.liq || printf '%s\n' "$out" | grep -qE '^(>f|\*deleting).*shows/'; then
+# Liquidsoap reads radio.liq once at startup and builds one output per show slug;
+# Icecast builds each show's fallback mount from shows/ at startup too. Restart
+# both if a show was added or removed, and just Liquidsoap (listeners stay on
+# the fallback meanwhile) if radio.liq changed. Edits to show descriptions or
+# DJs don't need a restart — only the app reads that front matter.
+if printf '%s\n' "$out" | grep -qE '^(>f|\*deleting).*shows/'; then
+  $SSH "$HOST" 'cd radio && docker compose restart icecast liquidsoap'
+elif changed radio.liq; then
   $SSH "$HOST" 'cd radio && docker compose restart liquidsoap'
 fi
 

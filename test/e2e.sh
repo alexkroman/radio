@@ -24,3 +24,18 @@ docker buildx bake --load "${bake_flags[@]}" "${files[@]}" app e2e
 # cloud sessions, and `run` has no --no-build.
 dc up -d --no-build caddy liquidsoap
 dc run --rm --no-deps e2e npx playwright test "$@"
+# A listener stays connected through a Liquidsoap restart (Icecast's silence
+# fallback, compose.yml) and is moved back to the show once it's up again.
+status() { dc exec -T caddy wget -qO- "http://icecast:8000/status-json.xsl?mount=/default"; }
+dc exec -d caddy wget -qO /dev/null http://icecast:8000/default
+sleep 2
+dc restart liquidsoap >/dev/null
+for _ in $(seq 1 30); do
+  status | grep -q '"listeners":1' && break
+  sleep 1
+done
+status | grep -q '"listeners":1' || {
+  echo "e2e: the listener was dropped when Liquidsoap restarted" >&2
+  exit 1
+}
+echo "e2e: a listener stayed connected through a Liquidsoap restart"

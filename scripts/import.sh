@@ -145,4 +145,4 @@ for show_dir in "${show_dirs[@]}"; do
 done
 
 echo ""
-echo "Done. Run 'docker compose restart liquidsoap' if the stack is running."
+echo "Done. Run 'docker compose restart icecast liquidsoap' if the stack is running."

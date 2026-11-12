@@ -3,7 +3,7 @@ enable_autocue_metadata()
 # Every shows/<slug>.md is a 24/7 MP3 stream on Icecast mount /<slug> (public
 # at /<slug>/stream via Caddy) playing music/<slug>/ on shuffle. Each play is
 # appended to /plays/YYYY-MM.jsonl (read by the app's page and report).
-# Adding or removing a show needs `docker compose restart liquidsoap`.
+# Adding or removing a show needs `docker compose restart icecast liquidsoap`.
 
 # Artists of a track (split on ",", "&", "feat.", "x", "with").
 def artists_of(a) =
@@ -161,6 +161,9 @@ def show(f) =
   # Limiter catches peaks from tracks autocue boosted and crossfade overlaps.
   radio = limit(mksafe(music))
   radio = metadata.map(fun (m) -> list.map(fun (kv) -> (fst(kv), safe_recode(snd(kv))), m), radio)
+
+  # icecast/silence.mp3 (Icecast's fallback while this restarts) is the same
+  # format: change both together.
   output.icecast(
     %mp3(bitrate = 256),
     encoding="UTF-8",

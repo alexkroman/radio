@@ -22,6 +22,7 @@ services:
   icecast:
     volumes:
       - e2e-logs:/var/log/icecast
+      - ./test/fixtures/shows:/shows:ro
   liquidsoap:
     volumes:
       - ./test/fixtures/shows:/shows:ro

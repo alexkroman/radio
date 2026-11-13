@@ -10,7 +10,11 @@
 # If using Homebrew beets instead of pipx:
 #   /opt/homebrew/opt/beets/libexec/bin/pip install pyacoustid
 
-id3v23: yes # write ID3v2.3 (Picard default; broader compatibility than v2.4)
+# Write ID3v2.4 (beets' default). v2.3 can't hold a full original release
+# date or several genres/artists, so they were cut short on every write and
+# `beet update` copied the cut-down tags back. Only beets, ffmpeg and
+# Liquidsoap read these files, and they all read v2.4.
+id3v23: no
 
 directory: . # overridden per-show in import.sh with -d
 library: ~/.config/beets/radio-library.db # overridden per-show in import.sh with -l

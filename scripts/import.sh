@@ -158,8 +158,15 @@ for show_dir in "${show_dirs[@]}"; do
   $BEET write </dev/null
 
   # 4. Rename files to "Artist - Title.ext" within the show directory
+  # Two tracks with the same artist and title get "Name.mp3" and "Name.1.mp3".
+  # beets then moves the second on every run, since its name isn't the plain
+  # one, but skips its own name looking for a free one: .1 becomes .2, then .1
+  # again, and each rename re-extracts its cover. So files already numbered
+  # stay put (as do the few titles that end in ".<digits>" themselves, like
+  # "Pt.1": they're already named, they just won't follow a tag change).
   echo "── Renaming files (beet move)"
-  $BEET move </dev/null
+  # shellcheck disable=SC2016 # a beets query, not shell
+  $BEET move '^path::\.[0-9]+\.[^./]+$' </dev/null
 
   # 5. Report duplicates; deleting is left to you. Import skips a file whose
   #    artist and title (after matching, so two rips of one song) are already

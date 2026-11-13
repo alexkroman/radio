@@ -106,6 +106,11 @@ describe("site login", () => {
     expect((await req("/assets/app.js")).status).not.toBe(401);
     expect((await req("/assets/nope.js")).status).toBe(404);
   });
+
+  test("app.js and app.css are revalidated on every load", async () => {
+    for (const f of ["app.js", "app.css"])
+      expect((await req(`/assets/${f}`)).headers.get("cache-control"), f).toBe("no-cache");
+  });
 });
 
 describe("pages", () => {

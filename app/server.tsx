@@ -121,6 +121,9 @@ const cacheFor = (value: string) =>
 
 // Fonts have content hashes in their names, so they never change.
 app.use("/assets/fonts/*", cacheFor("public, max-age=31536000, immutable"));
+// app.js and app.css keep their names, so make browsers revalidate them every
+// time: with only a Last-Modified, a phone may run yesterday's app.js for hours.
+app.use("/assets/:file{app\\.(?:js|css)}", cacheFor("no-cache"));
 app.use(
   "/assets/*",
   serveStatic({ root: "dist/public", rewriteRequestPath: (p) => p.replace(/^\/assets/, "") }),

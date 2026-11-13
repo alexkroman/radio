@@ -57,7 +57,7 @@ import:
 # beets 2.x moved MusicBrainz into a plugin; listing plugins replaces the
 # default list, so without it there are no candidates and every track is
 # imported as-is.
-plugins: musicbrainz chroma fromfilename fetchart embedart scrub mbsync duplicates earlyartresizer
+plugins: musicbrainz chroma fromfilename fetchart embedart scrub duplicates earlyartresizer
 # earlyartresizer (scripts/beets/plugins/, relative to the repo root, where
 # import.sh runs beets): see its docstring; stops a crash on macOS.
 pluginpath:
@@ -119,4 +119,3 @@ scrub:
 #   label   → TPUB   label   tag("label", "publisher")
 #   isrc    → TSRC   isrc    tag("isrc", "tsrc")
 # Beets writes all of these by default via its MusicBrainz lookup.
-# mbsync re-syncs from MusicBrainz after import for more complete ISRC data.

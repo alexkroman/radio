@@ -15,12 +15,10 @@
 #                        found (fetchart + embedart). With --all, every track
 #                        in the folder, matched or not.
 #   3. beet update     – refresh tags for files changed since last run
-#   4. beet mbsync     – with --all: re-sync MusicBrainz data (ISRC, album
-#                        artist) for matched tracks
-#   5. beet move       – rename to "Artist - Title.ext"
-#   6. report duplicates (files import skipped, and tracks matched to the same
+#   4. beet move       – rename to "Artist - Title.ext"
+#   5. report duplicates (files import skipped, and tracks matched to the same
 #      MusicBrainz recording); nothing is deleted
-#   7. ffmpeg          – extract embedded cover art to covers/<show>/<stem>.jpg
+#   6. ffmpeg          – extract embedded cover art to covers/<show>/<stem>.jpg
 #                        (and remove covers whose track is gone)
 #
 # Requirements:
@@ -152,19 +150,11 @@ for show_dir in "${show_dirs[@]}"; do
   echo "── Updating changed files (beet update)"
   $BEET update </dev/null
 
-  # 4. Re-sync MusicBrainz data for complete ISRC and album artist. A match
-  #    already brings these, so only with --all: it looks up every album.
-  # beet mbsync exits 1 when no items match; that's expected.
-  if $all; then
-    echo "── Syncing MusicBrainz metadata (beet mbsync)"
-    $BEET mbsync </dev/null || true
-  fi
-
-  # 5. Rename files to "Artist - Title.ext" within the show directory
+  # 4. Rename files to "Artist - Title.ext" within the show directory
   echo "── Renaming files (beet move)"
   $BEET move </dev/null
 
-  # 6. Report duplicates; deleting is left to you. Import skips a file whose
+  # 5. Report duplicates; deleting is left to you. Import skips a file whose
   #    artist and title (after matching, so two rips of one song) are already
   #    in the library, but the file stays here and still plays. The duplicates
   #    plugin finds library tracks matched to the same MusicBrainz recording
@@ -178,7 +168,7 @@ for show_dir in "${show_dirs[@]}"; do
   # shellcheck disable=SC2016
   $BEET duplicates -s -F -k mb_trackid -f '  same recording: $path' </dev/null
 
-  # 7. Extract embedded cover art from each track to covers/<show>/<stem>.jpg.
+  # 6. Extract embedded cover art from each track to covers/<show>/<stem>.jpg.
   #    Re-extracts if the audio file is newer than the existing cover.
   echo "── Extracting covers"
   cover_dir="$COVERS_DIR/$slug"

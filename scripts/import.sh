@@ -34,6 +34,14 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# macOS: each web request beets makes looks up the system proxy settings,
+# which starts Apple's network framework in the process; a subprocess beets
+# forks after that can then crash before it runs ("Python quit unexpectedly",
+# a SIGSEGV in nw_settings_child_has_forked), failing that step for a track.
+# With no_proxy=* Python skips the lookup (direct connections, as without a
+# proxy).
+export no_proxy='*'
+
 MUSIC_DIR="music"
 COVERS_DIR="covers"
 CONFIG="scripts/beets/config.yaml"

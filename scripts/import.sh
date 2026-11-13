@@ -14,7 +14,8 @@
 #                        + MusicBrainz lookup, then embed the best cover art
 #                        found (fetchart + embedart). With --all, every track
 #                        in the folder, matched or not.
-#   3. beet update     – refresh tags for files changed since last run
+#   3. beet update     – refresh tags for files changed since last run, then
+#                        write tags back (beet write) so an album's files agree
 #   4. beet move       – rename to "Artist - Title.ext"
 #   5. report duplicates (files import skipped, and tracks matched to the same
 #      MusicBrainz recording); nothing is deleted
@@ -149,6 +150,12 @@ for show_dir in "${show_dirs[@]}"; do
   # 3. Refresh tags for files changed on disk since last run
   echo "── Updating changed files (beet update)"
   $BEET update </dev/null
+  # update reads each file, then sets album-wide fields (genre, label, ...)
+  # on every track from the album's first one. Where an album's files
+  # disagree, the library no longer matches them, so the next update reads
+  # and resets them again, every run. Writing the library's tags back makes
+  # them agree (only files that differ are written).
+  $BEET write </dev/null
 
   # 4. Rename files to "Artist - Title.ext" within the show directory
   echo "── Renaming files (beet move)"

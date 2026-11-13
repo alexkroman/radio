@@ -16,7 +16,7 @@ Requires Docker.
 cp .env.example .env              # then replace every change-me value, e.g. with: openssl rand -hex 16
 mkdir -p music/<slug>             # one directory per show (e.g. music/myshow)
 cp ~/some/music/*.mp3 music/<slug>/
-# create shows/<slug>.md for each show (see Shows below; shows/ is gitignored)
+# shows/<slug>.md defines each show (see Shows below)
 docker compose up -d --build
 ```
 
@@ -86,7 +86,7 @@ djs: [Ana Ruiz]
 ---
 ```
 
-`shows/` is gitignored — create your own show files after cloning. Adding or removing a show needs `docker compose exec icecast sh /icecast/config.sh reload && docker compose restart liquidsoap` (no listener is dropped); editing a title or description shows up immediately.
+The show files are in the repo. Adding or removing a show needs `docker compose exec icecast sh /icecast/config.sh reload && docker compose restart liquidsoap` (no listener is dropped); editing a title or description shows up immediately.
 
 ## Where things are
 

@@ -10,36 +10,35 @@ import "@fontsource/jetbrains-mono/500.css";
 import "@fontsource/jetbrains-mono/700.css";
 import "./tokens.css";
 import "./style.css";
-// Before icecast-metadata-player, which reads window.AudioContext when loaded.
-import { keepSource, resumeAudio } from "./audio.ts";
 import htmx from "htmx.org";
-import IcecastMetadataPlayer, { type IcyMetadata } from "icecast-metadata-player";
 import { mountBar, setBar } from "./bar.tsx";
 
-// `stopping`: the player's stop() after a pause, awaited before the player
-// (or the audio element) is used again; its stop() returns early while stopping.
-type Station = { slug: string; title: string; player: IcecastMetadataPlayer; stopping?: Promise<void> };
-
+// The browser plays each show's MP3 stream itself, in every browser: switching
+// sets the element's URL and calls play() in the tap, as iOS requires. (A
+// player that decoded the stream into WebAudio left AirPlay speakers silent
+// after a switch.) The track comes from /<slug>/now.json.
 const audio = new Audio();
 // AirPlay (a WiiM, say, picked in Control Center) gets the page's audio as the
-// phone's output, like any app's. Without this, Safari may instead hand the
-// element itself to the speaker whenever its source is a URL, and switching
-// shows briefly is one (icecast-metadata-player points it at a silent data:
-// MP3 between streams, then at a WebAudio MediaStream, which a speaker can't
-// play): the speaker went silent while the phone kept playing.
+// phone's output, like any app's, rather than Safari handing the element
+// itself to the speaker.
 audio.disableRemotePlayback = true;
 audio.setAttribute("x-webkit-airplay", "deny");
-keepSource(audio);
+(window as unknown as { audio: HTMLAudioElement }).audio = audio; // for the e2e tests
 const session = navigator.mediaSession;
-let station: Station | undefined;
 type Show = { slug: string; title: string };
 // The station shown as playing: set on click, cleared when it stops.
 let active: Show | undefined;
 // The station in the player bar: the playing one, else the last one played,
 // else the page's first, else the site's first show (#player's data).
 let shown: Show | undefined;
-// The shown station's track, from the page or the stream's metadata.
-let now = { track: "", artist: "", cover: "" };
+// The shown station's track, from the page or now.json.
+type Track = { track: string; artist: string; cover: string };
+let now: Track = { track: "", artist: "", cover: "" };
+// The track last shown for the playing station (slug, track, artist).
+let nowKey = "";
+let nowTimer: ReturnType<typeof setInterval> | undefined;
+// When a dropped stream stops being retried (0: not retrying).
+let retryUntil = 0;
 
 function localTimes() {
   document.querySelectorAll("time[datetime]").forEach((el) => {
@@ -52,27 +51,26 @@ function localTimes() {
 function readPage() {
   if (!shown) return;
   // ui.tsx npData sets all three.
-  const np = document.querySelector<HTMLElement>(`[data-np="${shown.slug}"]`)?.dataset as
-    typeof now | undefined;
+  const np = document.querySelector<HTMLElement>(`[data-np="${shown.slug}"]`)?.dataset as Track | undefined;
   if (np?.track) now = { track: np.track, artist: np.artist, cover: np.cover };
 }
-
-// The playing track's cover: from the page, else the station's current cover
-// (keyed by track so a browser fetches it once per track).
-const coverSrc = (slug: string) => now.cover || `/${slug}/cover.jpg?t=${encodeURIComponent(now.track)}`;
 
 function pickShown() {
   const button = document.querySelector<HTMLElement>("button[data-play]")?.dataset;
   const player = document.getElementById("player")?.dataset;
   const next =
     active ??
-    (station && { slug: station.slug, title: station.title }) ??
     shown ??
     (button && { slug: button.play!, title: button.title! }) ??
     (player?.slug ? { slug: player.slug, title: player.title! } : undefined);
-  if (next?.slug !== shown?.slug) now = { track: "", artist: "", cover: "" };
+  if (next?.slug !== shown?.slug) {
+    now = { track: "", artist: "", cover: "" };
+    nowKey = "";
+  }
   shown = next;
   readPage();
+  // A page without the station's track (an about page, a DJ's other shows).
+  if (shown && !now.track) void fetchNow(shown.slug);
 }
 
 // Show the play state everywhere: play buttons, "Live" labels, the player bar (app/bar.tsx).
@@ -86,115 +84,90 @@ function sync() {
     el.textContent = el.dataset.status === active?.slug ? "Listening · Live" : "Live";
   });
   document.body.classList.toggle("playing", !!active);
-  setBar(shown && { title: shown.title, ...now, cover: coverSrc(shown.slug), playing: !!active });
+  setBar(shown && { title: shown.title, ...now, playing: !!active });
 }
 
-// The stream stopped on its own (a pause is already shown by stop()).
-function stopped(p: IcecastMetadataPlayer) {
-  if (station?.player !== p || station.stopping) return;
-  active = undefined;
-  session.playbackState = "paused";
+// The shown station's track from now.json, for the bar and the page, and the
+// lock screen when it's playing.
+async function fetchNow(slug: string) {
+  const next = await fetch(`/${slug}/now.json`)
+    .then((r) => (r.ok ? (r.json() as Promise<Track>) : undefined))
+    .catch(() => undefined);
+  const key = `${slug}\n${next?.track}\n${next?.artist}`;
+  if (!next || shown?.slug !== slug || key === nowKey) return;
+  nowKey = key;
+  now = next;
   sync();
+  if (active?.slug !== slug) return;
+  // The page's now playing (and with it the cover) catches up.
+  if (document.getElementById("poll")) htmx.trigger("#poll", "refresh");
+  session.metadata = new MediaMetadata({
+    title: now.track,
+    artist: now.artist,
+    album: active.title,
+    artwork: now.cover ? [{ src: now.cover, type: "image/jpeg" }] : [],
+  });
 }
 
-// Start the audio element, as icecast-metadata-player's play() would (to keep
-// iOS's permission from the click), but catch the rejection when the player
-// then loads the stream into it: the player's own call leaves that unhandled.
-function unlock() {
-  audio.play().catch(() => {});
+function playStream(slug: string) {
+  audio.src = `/${slug}/stream`;
+  audio.play().catch((e: DOMException) => {
+    // AbortError: a newer src (a switch, a retry) replaced this one.
+    if (e.name !== "AbortError" && active?.slug === slug && !retryUntil) stop();
+  });
 }
 
-async function start(slug: string, title: string) {
-  // Synchronously, in the click: iOS allows it only there.
-  resumeAudio();
+function start(slug: string, title: string) {
   active = { slug, title };
   shown = active;
   now = { track: "", artist: "", cover: "" };
   readPage();
   sync();
-  const paused = station;
-  if (paused?.stopping) {
-    await paused.stopping;
-    paused.stopping = undefined;
-    if (active?.slug !== slug || station !== paused) return; // another click meanwhile
-  }
-  if (station?.slug === slug && station.player.state !== "stopped") {
-    unlock();
-    return void station.player.play();
-  }
-  // Switch shows without pausing the audio element, so AirPlay (the phone's
-  // audio output) stays on the speaker: a pause, or the silent data: URL that
-  // stop() leaves in the element, lets iOS route the next play() to the phone.
-  // switchEndpoint() keeps the element playing while it fetches the new
-  // stream, and audio.ts keeps its source the same MediaStream throughout.
-  if (station && station.player.state !== "stopped") {
-    station.slug = slug;
-    station.title = title;
-    // The library reads options.bufferLength etc. without a guard, so pass {}.
-    return void station.player.switchEndpoint(`/${slug}/stream`, {});
-  }
-  const old = station;
-  station = undefined;
-  if (old) await old.player.detachAudioElement();
-  if (active?.slug !== slug) return; // another click while the old one stopped
-  const p: IcecastMetadataPlayer = new IcecastMetadataPlayer(`/${slug}/stream`, {
-    audioElement: audio,
-    retryTimeout: 120,
-    // Seconds of audio to hold before playing (default 1), so a dip in
-    // bandwidth drains the buffer instead of stuttering. Icecast's burst
-    // (compose.yml) sends ~10 s on connect, so this rarely delays the start.
-    bufferLength: 5,
-    onMetadata: (metadata: IcyMetadata) => {
-      if (!station || station.player !== p) return;
-      // Read slug/title from station at invocation time: switchEndpoint() reuses
-      // this player for a different show, so captured construction-time vars are stale.
-      const { slug: s, title: t } = station;
-      const raw = metadata.StreamTitle ?? "";
-      const dash = raw.indexOf(" - ");
-      now = {
-        track: dash >= 0 ? raw.slice(dash + 3) : raw,
-        artist: dash >= 0 ? raw.slice(0, dash) : "",
-        cover: "",
-      };
-      sync();
-      // The page's now playing (and with it the cover) catches up.
-      if (document.getElementById("poll")) htmx.trigger("#poll", "refresh");
-      session.metadata = new MediaMetadata({
-        title: now.track,
-        artist: now.artist,
-        album: t,
-        artwork: [{ src: coverSrc(s), sizes: "512x512", type: "image/jpeg" }],
-      });
-    },
-    onPlay: () => {
-      if (station?.player !== p) return;
-      session.playbackState = "playing";
-    },
-    onStop: () => stopped(p),
-    onError: () => {
-      if (p.state === "stopped") stopped(p);
-    },
-  });
-  station = { slug, title, player: p };
-  (window as unknown as { player: unknown }).player = p;
-  sync();
-  unlock();
-  await p.play();
+  retryUntil = 0;
+  nowKey = "";
+  // Synchronously, in the tap: iOS allows play() only there.
+  playStream(slug);
+  void fetchNow(slug);
+  clearInterval(nowTimer);
+  nowTimer = setInterval(() => active && void fetchNow(active.slug), 15_000);
 }
 
 function stop() {
   active = undefined;
   session.playbackState = "paused";
+  clearInterval(nowTimer);
   sync();
-  if (station) station.stopping ??= station.player.stop();
+  audio.pause();
+  // Drop the connection, rather than buffer a live stream nobody hears.
+  audio.removeAttribute("src");
+  audio.load();
 }
 
 function toggle(slug: string, title: string) {
   if (active?.slug === slug) stop();
-  else void start(slug, title);
+  else start(slug, title);
 }
 
-session.setActionHandler("play", () => station && void start(station.slug, station.title));
+audio.addEventListener("playing", () => {
+  retryUntil = 0;
+  if (active) session.playbackState = "playing";
+});
+// The stream dropped (a server restart, a network change): reconnect for up
+// to two minutes. iOS allows play() on an element a tap has started.
+function dropped() {
+  const slug = active?.slug;
+  if (!slug) return;
+  retryUntil ||= Date.now() + 120_000;
+  if (Date.now() > retryUntil) return stop();
+  setTimeout(() => active?.slug === slug && retryUntil && playStream(slug), 3000);
+}
+audio.addEventListener("error", dropped);
+audio.addEventListener("ended", dropped);
+// Paused by the system (a call, Siri, unplugged headphones), not by a switch,
+// which plays again at once.
+audio.addEventListener("pause", () => setTimeout(() => active && audio.paused && !retryUntil && stop()));
+
+session.setActionHandler("play", () => shown && start(shown.slug, shown.title));
 session.setActionHandler("pause", stop);
 session.setActionHandler("stop", stop);
 

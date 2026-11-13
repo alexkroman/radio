@@ -13,10 +13,9 @@ test("titles with unicode, pipes and HTML show exactly as tagged", async ({ page
 test('cover art with a unicode or "&" file name is served', async ({ request }) => {
   expect((await request.get("/covers/default/Beta%20&%20Band-%20Second%20Wind.jpg")).status()).toBe(200);
   await expect(async () => {
-    const res = await request.get("/edge/cover.jpg");
-    expect(res.url()).toContain(
-      "/covers/edge/Zo%C3%AB%20%C3%91and%C3%BA-%20Caf%C3%A9%20_%20Ol%C3%A9%20_b_.jpg",
-    );
+    const { cover } = await (await request.get("/edge/now.json")).json();
+    expect(cover).toBe("/covers/edge/Zo%C3%AB%20%C3%91and%C3%BA-%20Caf%C3%A9%20_%20Ol%C3%A9%20_b_.jpg");
+    const res = await request.get(cover);
     expect(res.status()).toBe(200);
     expect(res.headers()["content-type"]).toBe("image/jpeg");
   }).toPass();
@@ -41,7 +40,7 @@ test("report keeps unicode and the whole title when it contains a pipe", async (
 test("an untagged track is shown by its file name, without cover art", async ({ page, request }) => {
   await page.goto("/plain");
   await waitForTrack(page, "Untitled Thing");
-  expect((await request.get("/plain/cover.jpg")).status()).toBe(404);
+  expect((await (await request.get("/plain/now.json")).json()).cover).toBe("");
   await expect(page.locator("#np img")).toHaveCount(0);
   await expect(page.locator("#np .cover-ph")).toBeVisible();
 });
@@ -84,7 +83,7 @@ test("encoded and dotted paths don't leak files", async ({ request }) => {
     "/assets/..%5c..%5cpackage.json",
     "/..%2fshows/default.md",
     "/%2e%2e/%2e%2e/etc/passwd",
-    "/default/cover.jpg/..%2f..%2fdefault.md",
+    "/default/now.json/..%2f..%2fdefault.md",
     "/reports%2f2026-01",
   ];
   for (const path of paths) {

@@ -1,5 +1,5 @@
 // The web app behind Caddy: the stations list (/), each show's station page
-// (/<slug>) and current cover (/<slug>/cover.jpg), DJ pages (/djs/<dj>), /about,
+// (/<slug>) and current track (/<slug>/now.json), DJ pages (/djs/<dj>), /about,
 // and the SoundExchange reports (/reports). Shows are shows/<slug>.md (app/shows.ts), with
 // their DJs in the front matter; Liquidsoap serves their streams via Caddy.
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -341,14 +341,16 @@ app.get(`/djs/:dj{${SLUG}}/photo`, async (c) => {
   return (photo && (await serveStatic({ path: photo })(c, async () => {}))) || c.notFound();
 });
 
-// The current track's cover: a redirect to its pre-extracted art (play log).
-app.get(`/:slug{${SLUG}}/cover.jpg`, async (c) => {
-  const cover = (await recentPlays(c.req.param("slug"), 1))[0]?.cover;
-  if (!cover) return c.notFound();
-  // ?t= includes the track title so this URL is unique per track; short cache
-  // prevents the browser from refetching the same redirect in rapid succession.
-  c.header("Cache-Control", "private, max-age=15");
-  return c.redirect(coverUrl(cover));
+// The current track, for the player (client.ts) and the lock screen.
+app.get(`/:slug{${SLUG}}/now.json`, async (c) => {
+  const slug = c.req.param("slug");
+  const [show, [play]] = await Promise.all([getShow(slug), recentPlays(slug, 1)]);
+  if (!show) return c.notFound();
+  return c.json({
+    track: play?.title ?? "",
+    artist: play?.artist ?? "",
+    cover: play?.cover ? coverUrl(play.cover) : "",
+  });
 });
 
 // Per-track covers extracted by scripts/import.sh → covers/<show>/<stem>.jpg

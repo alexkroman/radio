@@ -1,3 +1,12 @@
+{
+	# A stream listener leaving mid-stream logs "aborting with incomplete
+	# response" from reverse_proxy; nothing acts on it. (Failed upstreams still
+	# show in the error log.)
+	log default {
+		exclude http.handlers.reverse_proxy
+	}
+}
+
 # Caddy gets and renews the certificate over HTTP-01 on port 80, which
 # otherwise redirects to HTTPS.
 {$DOMAIN:localhost} {
@@ -29,9 +38,8 @@
 		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "no-referrer"
 		Permissions-Policy "geolocation=(), camera=(), microphone=(), usb=(), payment=()"
-		# All assets (fonts included) are self-hosted; icecast-metadata-player needs blob: workers
-		# + WASM, and audio uses MediaSource.
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self'; font-src 'self'; img-src 'self' data:; media-src 'self' blob: data:; connect-src 'self'; worker-src 'self' blob:; child-src blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		# All assets (fonts included) are self-hosted; the audio element plays the streams.
+		Content-Security-Policy "default-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
 		# Strip server banners on every response.
 		-Server
 	}

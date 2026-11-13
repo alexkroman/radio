@@ -46,7 +46,11 @@ function Bar({ onToggle }: { onToggle: () => void }) {
   const parts = [s.track, s.artist].filter(Boolean);
   return (
     <div id="bar" role="region" aria-label="Player">
-      <Cover key={s.cover} src={s.cover} alt={s.track ? `Cover art: ${parts.join(", ")}` : ""} />
+      {s.cover ? (
+        <Cover key={s.cover} src={s.cover} alt={s.track ? `Cover art: ${parts.join(", ")}` : ""} />
+      ) : (
+        <span class="cover cover-44 cover-ph" aria-hidden="true" />
+      )}
       <div class="bar-text">
         <span id="bar-track">{parts.join(" · ")}</span>
         <span class="bar-status">

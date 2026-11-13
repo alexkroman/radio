@@ -172,6 +172,15 @@ test("cover art of the current track is served", async ({ request }) => {
   }).toPass();
 });
 
+// They keep their names across deploys, so a phone mustn't run a stale one.
+test("app.js and app.css are revalidated on every load", async ({ request }) => {
+  for (const f of ["app.js", "app.css"]) {
+    const res = await request.get(`/assets/${f}`);
+    expect(res.status(), f).toBe(200);
+    expect(res.headers()["cache-control"], f).toBe("no-cache");
+  }
+});
+
 test("an unknown show has no stream", async () => {
   expect((await streamHead("/nope/stream")).status).toBe(404);
 });

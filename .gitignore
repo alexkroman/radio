@@ -18,4 +18,5 @@ scripts/beets/library*.db
 /backup/
 .playwright-mcp/
 scripts/beets/staging-*/
+scripts/beets/culled-*.txt
 __pycache__/

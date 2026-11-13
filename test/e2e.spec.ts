@@ -2,7 +2,7 @@
 // on test/fixtures. Run with `npm run e2e`; test/global-setup.ts logs in.
 import { expect, test } from "@playwright/test";
 import { STATE } from "./global-setup.ts";
-import { BASE, month, playerState, SITE_PASSWORD, streamHead, waitForTrack } from "./helpers.ts";
+import { BASE, month, player, playerState, SITE_PASSWORD, streamHead, waitForTrack } from "./helpers.ts";
 
 test("each show is its own MP3 stream", async () => {
   for (const show of ["default", "night"]) {
@@ -166,7 +166,8 @@ test("home page now playing and cover follow the track without a reload", async 
 
 test("cover art of the current track is served", async ({ request }) => {
   await expect(async () => {
-    const res = await request.get("/night/cover.jpg");
+    const { cover } = await (await request.get("/night/now.json")).json();
+    const res = await request.get(cover);
     expect(res.status()).toBe(200);
     expect(res.headers()["content-type"]).toBe("image/jpeg");
   }).toPass();
@@ -238,13 +239,7 @@ test("player plays the stream using only self-hosted assets", async ({ page }) =
   const problems: string[] = [];
   page.on("console", (m) => m.type() === "error" && problems.push(m.text()));
   page.on("pageerror", (e) => problems.push(e.message));
-  page.on(
-    "request",
-    (r) =>
-      !r.url().startsWith(BASE) &&
-      !/^(blob|data):/.test(r.url()) &&
-      problems.push(`external request: ${r.url()}`),
-  );
+  page.on("request", (r) => !r.url().startsWith(BASE) && problems.push(`external request: ${r.url()}`));
   const state = () => playerState(page);
   await page.goto("/night");
   await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
@@ -272,79 +267,45 @@ test("player plays the stream using only self-hosted assets", async ({ page }) =
   expect(problems).toEqual([]);
 });
 
-// With an AirPlay speaker picked, switching shows on an iPhone silenced it:
-// Safari handed the audio element to the speaker while its source was briefly
-// a URL (app/client.ts). The element must stay the phone's, across a switch.
-test("the player never hands its audio element to AirPlay, even across a show switch", async ({ page }) => {
-  const remote = () =>
-    page.evaluate(() => {
-      const a = (window as unknown as { player: { audioElement: HTMLAudioElement } }).player.audioElement;
-      return { disabled: a.disableRemotePlayback, airplay: a.getAttribute("x-webkit-airplay") };
-    });
-  await page.goto("/");
-  await page.getByRole("main").getByRole("button", { name: "Play Fixture Default" }).click();
-  await expect.poll(() => playerState(page)).toBe("playing");
-  expect(await remote()).toEqual({ disabled: true, airplay: "deny" });
-  await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
-  await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
-  await expect.poll(() => playerState(page)).toBe("playing");
-  expect(await remote()).toEqual({ disabled: true, airplay: "deny" });
-});
-
-// AirPlay on an iPhone carries the phone's audio output, and iOS can move it
-// back to the phone when the page's audio pauses, as reloading the audio
-// element does. So switching shows on an iPhone (no MediaSource: the player
-// decodes into an AudioContext) must leave the element playing, with the same
-// source, while the new show's audio flows into it.
-test("switching shows on an iPhone never pauses or reloads the audio element", async ({ page }) => {
+// iOS allows play() only in a tap, and with an AirPlay speaker picked, a
+// switch that didn't simply point the audio element at the new stream and play
+// it there left the speaker silent. The element stays the phone's (AirPlay
+// carries the phone's output), and the track comes from now.json.
+test("switching shows plays the new stream in the tap, on the phone's own output", async ({ page }) => {
   await page.addInitScript(() => {
-    delete (window as { MediaSource?: unknown }).MediaSource;
-    const w = window as unknown as { started: number };
-    w.started = 0;
-    const start = AudioBufferSourceNode.prototype.start;
-    AudioBufferSourceNode.prototype.start = function (...args) {
-      w.started++;
-      return start.apply(this, args);
+    const w = window as unknown as { inTap: boolean; plays: boolean[] };
+    w.plays = [];
+    for (const e of ["click", "keydown"])
+      addEventListener(e, () => ((w.inTap = true), setTimeout(() => (w.inTap = false))), true);
+    const play = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () {
+      w.plays.push(w.inTap);
+      return play.call(this);
     };
   });
-  type W = {
-    player: { audioElement: HTMLAudioElement; endpoint: string; playbackMethod: string };
-    events: string[];
-    source: MediaProvider | null;
-    started: number;
-  };
+  const remote = () =>
+    page.evaluate(() => {
+      const a = (window as unknown as { audio: HTMLAudioElement }).audio;
+      return { disabled: a.disableRemotePlayback, airplay: a.getAttribute("x-webkit-airplay") };
+    });
+  const main = page.getByRole("main");
   await page.goto("/");
-  await page.getByRole("main").getByRole("button", { name: "Play Fixture Default" }).click();
-  await expect.poll(() => playerState(page)).toBe("playing");
-  await page.evaluate(() => {
-    const w = window as unknown as W;
-    const a = w.player.audioElement;
-    w.events = [];
-    w.source = a.srcObject;
-    for (const e of ["pause", "emptied", "loadstart", "abort"]) a.addEventListener(e, () => w.events.push(e));
-  });
-  await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
-  await expect
-    .poll(() => page.evaluate(() => (window as unknown as W).player.endpoint))
-    .toContain("/night/stream");
-  await expect.poll(() => playerState(page)).toBe("playing");
-  // The new show's audio is being scheduled, not just the old one's tail.
-  const before = await page.evaluate(() => (window as unknown as W).started);
-  await expect.poll(() => page.evaluate(() => (window as unknown as W).started)).toBeGreaterThan(before);
-  expect(
-    await page.evaluate(() => {
-      const w = window as unknown as W;
-      const a = w.player.audioElement;
-      return {
-        method: w.player.playbackMethod,
-        events: w.events,
-        sameSource: a.srcObject === w.source,
-        paused: a.paused,
-        live: (a.srcObject as MediaStream).getAudioTracks().map((t) => t.readyState),
-      };
-    }),
-  ).toEqual({ method: "webaudio", events: [], sameSource: true, paused: false, live: ["live"] });
-  await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+  await main.getByRole("button", { name: "Play Fixture Default" }).click();
+  await expect.poll(() => player(page)).toEqual({ src: "/default/stream", playing: true });
+  await main.getByRole("button", { name: "Play Fixture Night" }).click();
+  await expect.poll(() => player(page)).toEqual({ src: "/night/stream", playing: true });
+  await expect(main.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { plays: boolean[] }).plays)).toEqual([true, true]);
+  expect(await remote()).toEqual({ disabled: true, airplay: "deny" });
+  // The lock screen's track, and the bar's off the station's page.
+  const { track } = await (await page.request.get("/night/now.json")).json();
+  await expect.poll(() => page.evaluate(() => navigator.mediaSession.metadata?.title)).toBe(track);
+  await page.getByRole("link", { name: "About" }).first().click();
+  await expect(page).toHaveURL(/\/about$/);
+  await expect(page.locator("#bar-track")).toContainText(track);
+  // Pausing drops the connection.
+  await page.locator("#player").getByRole("button", { name: "Pause Fixture Night" }).click();
+  await expect.poll(() => player(page)).toEqual({ src: null, playing: false });
 });
 
 test("pausing and playing again at once keeps playing", async ({ page }) => {
@@ -352,7 +313,7 @@ test("pausing and playing again at once keeps playing", async ({ page }) => {
   await page.goto("/night");
   await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
   await expect.poll(state).toBe("playing");
-  // Two clicks in one task: the second lands while the player is still stopping.
+  // Two clicks in one task.
   await page.evaluate(() => {
     const b = document.querySelector<HTMLButtonElement>("button[data-play=night]")!;
     b.click();
@@ -365,48 +326,6 @@ test("pausing and playing again at once keeps playing", async ({ page }) => {
   await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
 });
 
-// An iPhone has no MediaSource, so the player decodes into one AudioContext,
-// which iOS suspends when the audio stops with the phone locked (a server
-// restart, say) and lets resume only during a tap.
-test("play resumes an AudioContext that iOS suspended", async ({ page }) => {
-  await page.addInitScript(() => {
-    delete (window as { MediaSource?: unknown }).MediaSource;
-    const w = window as unknown as { inTap: boolean; ctx: AudioContext };
-    for (const e of ["touchstart", "touchend", "mousedown", "click", "keydown"])
-      addEventListener(e, () => ((w.inTap = true), setTimeout(() => (w.inTap = false))), true);
-    window.AudioContext = class extends AudioContext {
-      constructor(options?: AudioContextOptions) {
-        super(options);
-        w.ctx = this;
-      }
-      override resume() {
-        return w.inTap ? super.resume() : Promise.reject(new DOMException("not in a tap", "NotAllowedError"));
-      }
-    };
-  });
-  const audible = () =>
-    page.evaluate(async () => {
-      const { ctx } = window as unknown as { ctx: AudioContext };
-      const t = ctx.currentTime;
-      await new Promise((r) => setTimeout(r, 500));
-      return ctx.state === "running" && ctx.currentTime > t;
-    });
-  await page.goto("/night");
-  await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
-  await expect.poll(() => playerState(page)).toBe("playing");
-  expect(await audible()).toBe(true);
-  await page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" }).click();
-  await expect.poll(() => playerState(page)).toBe("stopped");
-  // Outside a tap (an evaluate counts as one), as iOS does it.
-  await page.evaluate(() =>
-    setTimeout(() => void (window as unknown as { ctx: AudioContext }).ctx.suspend()),
-  );
-  await expect.poll(audible).toBe(false);
-  await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
-  await expect.poll(() => playerState(page)).toBe("playing");
-  await expect.poll(audible).toBe(true);
-});
-
 test("pausing one station and playing another at once plays the other", async ({ page }) => {
   const state = () => playerState(page);
   await page.goto("/");
@@ -417,7 +336,6 @@ test("pausing one station and playing another at once plays the other", async ({
     document.querySelector<HTMLButtonElement>("button[data-play=night]")!.click();
   });
   await expect.poll(state).toBe("playing");
-  // The old player's late cleanup must not take over the audio element.
   await page.waitForTimeout(2000);
   expect(await state()).toBe("playing");
   await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
@@ -507,7 +425,7 @@ test.describe("site password", () => {
 
   test("pages need a login; streams and assets don't", async ({ page, request }) => {
     expect((await request.get("/night")).status()).toBe(401);
-    expect((await request.get("/night/cover.jpg")).status()).toBe(401);
+    expect((await request.get("/night/now.json")).status()).toBe(401);
     expect((await request.get("/assets/app.css")).status()).toBe(200);
     expect((await streamHead("/night/stream")).status).toBe(200);
 

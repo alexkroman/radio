@@ -145,17 +145,24 @@ describe("pages", () => {
   });
 
   test("unknown pages are 404", async () => {
-    for (const path of ["/nope", "/djs/nobody", "/djs/nobody/photo", "/empty/cover.jpg"])
+    for (const path of ["/nope", "/djs/nobody", "/djs/nobody/photo", "/nope/now.json"])
       expect((await page(path)).status, path).toBe(404);
   });
 
-  test("a station's cover redirects to its current track's art", async () => {
-    const res = await page("/default/cover.jpg");
-    expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/covers/default/Beta%20&%20Band-%20Second%20Wind.jpg");
-    const art = await page(res.headers.get("location")!);
+  test("a station's now.json is its current track", async () => {
+    expect(await (await page("/default/now.json")).json()).toEqual({
+      track: "Second Wind",
+      artist: "Beta & Band",
+      cover: "/covers/default/Beta%20&%20Band-%20Second%20Wind.jpg",
+    });
+    const art = await page("/covers/default/Beta%20&%20Band-%20Second%20Wind.jpg");
     expect(art.status).toBe(200);
     expect(art.headers.get("cache-control")).toBe("public, max-age=3600");
+    expect(await (await page("/night/now.json")).json()).toEqual({
+      track: "Midnight",
+      artist: "Gamma",
+      cover: "",
+    });
   });
 
   test("an unchanged page is 304 to a request with its ETag", async () => {

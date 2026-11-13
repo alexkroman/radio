@@ -13,7 +13,7 @@ test("in-stream (ICY) metadata is the current track, in UTF-8", async () => {
   expect(await icyTitle("/odd/stream")).toBe(`${ODD_ARTIST} - ${ODD_TITLE}`);
 });
 
-test("the player picks up track metadata from the stream", async ({ page }) => {
+test("the player picks up the playing track for the lock screen", async ({ page }) => {
   await page.goto("/edge");
   await page.getByRole("main").getByRole("button", { name: "Play Edge Cases" }).click();
   await expect

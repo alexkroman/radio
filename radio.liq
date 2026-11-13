@@ -1,3 +1,9 @@
+# Autocue measures each track (at up to 70x real time) and by default skips a
+# track whose measuring it estimates at over 10 s, i.e. any over ~12 min: those
+# then played without loudness normalization or silence trimming. Allow 60 s
+# (tracks up to 70 min; none is over 15). The measuring isn't bound by
+# settings.request.timeout.
+settings.autocue.internal.timeout := 60.
 enable_autocue_metadata()
 
 # Every shows/<slug>.md is a 24/7 MP3 stream on Icecast mount /<slug> (public

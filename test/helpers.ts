@@ -97,6 +97,11 @@ export async function waitForTrack(page: Page, text: string | RegExp, selector =
   }).toPass();
 }
 
-// The state of the site's icecast-metadata-player (app/client.ts exposes it).
-export const playerState = (page: Page) =>
-  page.evaluate(() => (window as unknown as { player: { state: string } }).player.state);
+// The site's audio element (app/client.ts exposes it): the stream it plays,
+// and whether it is playing (unpaused, with audio buffered).
+export const player = (page: Page) =>
+  page.evaluate(() => {
+    const a = (window as unknown as { audio: HTMLAudioElement }).audio;
+    return { src: a.getAttribute("src"), playing: !a.paused && a.readyState >= 3 };
+  });
+export const playerState = async (page: Page) => ((await player(page)).playing ? "playing" : "stopped");

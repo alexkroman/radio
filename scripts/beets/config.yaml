@@ -57,7 +57,11 @@ import:
 # beets 2.x moved MusicBrainz into a plugin; listing plugins replaces the
 # default list, so without it there are no candidates and every track is
 # imported as-is.
-plugins: musicbrainz chroma fromfilename fetchart embedart scrub mbsync duplicates
+plugins: musicbrainz chroma fromfilename fetchart embedart scrub mbsync duplicates earlyartresizer
+# earlyartresizer (scripts/beets/plugins/, relative to the repo root, where
+# import.sh runs beets): see its docstring; stops a crash on macOS.
+pluginpath:
+  - scripts/beets/plugins
 
 # beets 2.x penalizes a candidate from a different data source than the file's,
 # and an untagged file has none, so every match lost ~11% and never reached

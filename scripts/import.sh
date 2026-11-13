@@ -87,6 +87,17 @@ if [[ ${#show_dirs[@]} -eq 0 ]]; then
   exit 0
 fi
 
+# Audio files in the show folder that aren't in its library. Names are
+# compared ignoring case: macOS treats "For The" and "for the" as one file,
+# and a name differing only in case (left by a tag change) would otherwise
+# look new, be imported again on every run, and end up in the library twice.
+not_in_library() {
+  # shellcheck disable=SC2016 # $path is a beets format field, not shell
+  awk 'FILENAME == ARGV[1] { lib[tolower($0)]; next } !(tolower($0) in lib)' \
+    <($BEET ls -f '$path' </dev/null) \
+    <(find "$PWD/$show_dir" -maxdepth 1 \( -name "*.mp3" -o -name "*.flac" -o -name "*.m4a" \))
+}
+
 # ── Process each show ────────────────────────────────────────────────────────
 for show_dir in "${show_dirs[@]}"; do
   [[ -d $show_dir ]] || {
@@ -133,11 +144,7 @@ for show_dir in "${show_dirs[@]}"; do
     unstage
     mkdir -p "$staging"
     trap unstage EXIT
-    # shellcheck disable=SC2016 # $path is a beets format field, not shell
-    comm -23 \
-      <(find "$PWD/$show_dir" -maxdepth 1 \( -name "*.mp3" -o -name "*.flac" -o -name "*.m4a" \) | sort) \
-      <($BEET ls -f '$path' </dev/null | sort) |
-      while IFS= read -r file; do mv -n "$file" "$staging/"; done
+    not_in_library | while IFS= read -r file; do mv -n "$file" "$staging/"; done
     new=$(find "$staging" -type f | wc -l | tr -d ' ')
     if [[ $new -gt 0 ]]; then
       echo "  $new new"
@@ -174,10 +181,7 @@ for show_dir in "${show_dirs[@]}"; do
   #    plugin finds library tracks matched to the same MusicBrainz recording
   #    under different titles.
   echo "── Duplicates (not deleted; remove by hand)"
-  # shellcheck disable=SC2016 # $path is a beets format field, not shell
-  comm -23 \
-    <(find "$PWD/$show_dir" -maxdepth 1 \( -name "*.mp3" -o -name "*.flac" -o -name "*.m4a" \) | sort) \
-    <($BEET ls -f '$path' </dev/null | sort) |
+  not_in_library |
     sed 's|^|  not imported (a library track has its artist and title): |'
   # shellcheck disable=SC2016
   $BEET duplicates -s -F -k mb_trackid -f '  same recording: $path' </dev/null

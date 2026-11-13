@@ -2,21 +2,24 @@
 # Import and tag music for one or all shows, then extract cover art.
 #
 # Usage:
-#   scripts/import.sh              # process every show under music/
-#   scripts/import.sh frequency    # process music/frequency/ only
+#   scripts/import.sh                    # process every show under music/
+#   scripts/import.sh frequency          # process music/frequency/ only
+#   scripts/import.sh --all frequency    # re-match every track, not just new
+#                                        # ones, for MusicBrainz additions and
+#                                        # fixes (hours per show)
 #
 # What it does (safe to re-run; re-checks tags/covers for changed files):
 #   1. Remove exact duplicate files within each show directory
 #   2. beet import     – group new tracks into albums by their tags, fingerprint
 #                        + MusicBrainz lookup, then embed the best cover art
-#                        found (fetchart + embedart); then the same again for
-#                        library tracks that still have no release match
-#   3. beet update     – refresh tags for files changed since last run
-#   4. beet mbsync     – re-sync MusicBrainz data (ISRC, album artist)
-#   5. beet move       – rename to "Artist - Title.ext"
-#   6. report duplicates (files import skipped, and tracks matched to the same
+#                        found (fetchart + embedart). With --all, every track
+#                        in the folder, matched or not.
+#   3. beet update     – refresh tags for files changed since last run, then
+#                        write tags back (beet write) so an album's files agree
+#   4. beet move       – rename to "Artist - Title.ext"
+#   5. report duplicates (files import skipped, and tracks matched to the same
 #      MusicBrainz recording); nothing is deleted
-#   7. ffmpeg          – extract embedded cover art to covers/<show>/<stem>.jpg
+#   6. ffmpeg          – extract embedded cover art to covers/<show>/<stem>.jpg
 #                        (and remove covers whose track is gone)
 #
 # Requirements:
@@ -67,6 +70,11 @@ if ! echo "$beet_ver" | grep -q "chroma" || ! "$beet_python" -c "import PIL" 2>/
 fi
 
 # ── Determine which shows to process ────────────────────────────────────────
+all=false
+if [[ ${1:-} == "--all" ]]; then
+  all=true
+  shift
+fi
 if [[ ${1:-} != "" ]]; then
   show_dirs=("$MUSIC_DIR/$1")
 else
@@ -78,6 +86,17 @@ if [[ ${#show_dirs[@]} -eq 0 ]]; then
   echo "No show directories found under $MUSIC_DIR/."
   exit 0
 fi
+
+# Audio files in the show folder that aren't in its library. Names are
+# compared ignoring case: macOS treats "For The" and "for the" as one file,
+# and a name differing only in case (left by a tag change) would otherwise
+# look new, be imported again on every run, and end up in the library twice.
+not_in_library() {
+  # shellcheck disable=SC2016 # $path is a beets format field, not shell
+  awk 'FILENAME == ARGV[1] { lib[tolower($0)]; next } !(tolower($0) in lib)' \
+    <($BEET ls -f '$path' </dev/null) \
+    <(find "$PWD/$show_dir" -maxdepth 1 \( -name "*.mp3" -o -name "*.flac" -o -name "*.m4a" \))
+}
 
 # ── Process each show ────────────────────────────────────────────────────────
 for show_dir in "${show_dirs[@]}"; do
@@ -103,43 +122,71 @@ for show_dir in "${show_dirs[@]}"; do
   # 2. Import new tracks, grouped into albums by their tags (config.yaml);
   #    fetchart and embedart add cover art as each album is imported.
   # beet import exits 1 when tracks are imported as-is (no MusicBrainz match); that's expected.
-  echo "── Importing new tracks (beet import)"
-  $BEET import -q "$show_dir" </dev/null || true
-
-  # Retry library tracks without a release match: unmatched ones (import skips
-  # them as already imported, and mbsync needs a match to start from) and ones
-  # imported as singletons before albums. -L re-imports library items in place.
-  echo "── Re-matching tracks without a release (beet import -L)"
-  $BEET import -L -q 'mb_albumid::^$' </dev/null || true
+  if $all; then
+    # beets re-matches files already in the library, so this redoes them all:
+    # unmatched tracks MusicBrainz has since added get a match, and matched
+    # ones pick up its corrections.
+    echo "── Re-importing every track (beet import)"
+    $BEET import -q "$show_dir" </dev/null || true
+  else
+    # Only files not in the library yet: move them to a staging folder (on the
+    # same disk, outside music/ so Liquidsoap doesn't see it) and import that
+    # with -m, which moves each one back into the show folder under its
+    # library name. A file import skips (a duplicate) stays in staging and is
+    # moved back after, as are files left by an interrupted run.
+    echo "── Importing new tracks (beet import)"
+    staging="scripts/beets/staging-$slug"
+    unstage() {
+      [[ -d $staging ]] || return 0
+      find "$staging" -type f -exec mv -n {} "$show_dir/" \;
+      find "$staging" -depth -type d -empty -delete
+    }
+    unstage
+    mkdir -p "$staging"
+    trap unstage EXIT
+    not_in_library | while IFS= read -r file; do mv -n "$file" "$staging/"; done
+    new=$(find "$staging" -type f | wc -l | tr -d ' ')
+    if [[ $new -gt 0 ]]; then
+      echo "  $new new"
+      $BEET import -q -m "$staging" </dev/null || true
+    fi
+    unstage
+    trap - EXIT
+  fi
 
   # 3. Refresh tags for files changed on disk since last run
   echo "── Updating changed files (beet update)"
   $BEET update </dev/null
+  # update reads each file, then sets album-wide fields (genre, label, ...)
+  # on every track from the album's first one. Where an album's files
+  # disagree, the library no longer matches them, so the next update reads
+  # and resets them again, every run. Writing the library's tags back makes
+  # them agree (only files that differ are written).
+  $BEET write </dev/null
 
-  # 4. Re-sync MusicBrainz data for complete ISRC and album artist
-  # beet mbsync exits 1 when no items match; that's expected.
-  echo "── Syncing MusicBrainz metadata (beet mbsync)"
-  $BEET mbsync </dev/null || true
-
-  # 5. Rename files to "Artist - Title.ext" within the show directory
+  # 4. Rename files to "Artist - Title.ext" within the show directory
+  # Two tracks with the same artist and title get "Name.mp3" and "Name.1.mp3".
+  # beets then moves the second on every run, since its name isn't the plain
+  # one, but skips its own name looking for a free one: .1 becomes .2, then .1
+  # again, and each rename re-extracts its cover. So files already numbered
+  # stay put (as do the few titles that end in ".<digits>" themselves, like
+  # "Pt.1": they're already named, they just won't follow a tag change).
   echo "── Renaming files (beet move)"
-  $BEET move </dev/null
+  # shellcheck disable=SC2016 # a beets query, not shell
+  $BEET move '^path::\.[0-9]+\.[^./]+$' </dev/null
 
-  # 6. Report duplicates; deleting is left to you. Import skips a file whose
+  # 5. Report duplicates; deleting is left to you. Import skips a file whose
   #    artist and title (after matching, so two rips of one song) are already
   #    in the library, but the file stays here and still plays. The duplicates
   #    plugin finds library tracks matched to the same MusicBrainz recording
   #    under different titles.
   echo "── Duplicates (not deleted; remove by hand)"
-  # shellcheck disable=SC2016 # $path is a beets format field, not shell
-  comm -23 \
-    <(find "$PWD/$show_dir" -maxdepth 1 \( -name "*.mp3" -o -name "*.flac" -o -name "*.m4a" \) | sort) \
-    <($BEET ls -f '$path' </dev/null | sort) |
+  not_in_library |
     sed 's|^|  not imported (a library track has its artist and title): |'
   # shellcheck disable=SC2016
   $BEET duplicates -s -F -k mb_trackid -f '  same recording: $path' </dev/null
 
-  # 7. Extract embedded cover art from each track to covers/<show>/<stem>.jpg.
+  # 6. Extract embedded cover art from each track to covers/<show>/<stem>.jpg.
   #    Re-extracts if the audio file is newer than the existing cover.
   echo "── Extracting covers"
   cover_dir="$COVERS_DIR/$slug"
@@ -154,10 +201,20 @@ for show_dir in "${show_dirs[@]}"; do
 
     # Extract the first video stream (embedded album art) and convert to JPEG.
     # ffmpeg exits non-zero when no video stream exists; that's fine.
-    if ffmpeg -nostdin -i "$file" -map 0:v:0 "$out" -y -loglevel error 2>/dev/null; then
-      echo "  ✓ $stem"
+    # A file whose tags were rewritten (--all) is newer than its cover even
+    # when its art is the same: then keep the cover as it is (so a deploy
+    # doesn't upload it again) and only mark it current.
+    tmp="$cover_dir/.$stem.tmp.jpg"
+    if ffmpeg -nostdin -i "$file" -map 0:v:0 "$tmp" -y -loglevel error 2>/dev/null; then
+      if [[ -f $out ]] && cmp -s "$tmp" "$out"; then
+        rm -f "$tmp"
+        touch "$out"
+      else
+        mv -f "$tmp" "$out"
+        echo "  ✓ $stem"
+      fi
     else
-      rm -f "$out"
+      rm -f "$tmp" "$out"
     fi
   done < <(find "$show_dir" -maxdepth 1 \( -name "*.mp3" -o -name "*.flac" -o -name "*.m4a" \) -print0 | sort -z)
 
@@ -170,4 +227,4 @@ for show_dir in "${show_dirs[@]}"; do
 done
 
 echo ""
-echo "Done. If the stack is running and you added or removed a show, run: docker compose exec icecast sh /icecast/config.sh reload && docker compose restart liquidsoap"
+echo "Done. Now run: scripts/deploy.sh"

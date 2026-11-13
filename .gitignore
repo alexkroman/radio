@@ -1,6 +1,4 @@
 /music/
-shows/*
-!shows/.gitkeep
 covers/*
 !covers/.gitkeep
 logs/*
@@ -19,3 +17,5 @@ scripts/beets/library*.db
 *.bak
 /backup/
 .playwright-mcp/
+scripts/beets/staging-*/
+__pycache__/

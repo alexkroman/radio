@@ -20,3 +20,4 @@ scripts/beets/library*.db
 /backup/
 .playwright-mcp/
 scripts/beets/staging-*/
+__pycache__/

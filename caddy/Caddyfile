@@ -61,6 +61,10 @@
 	# Compress the pages and assets (not the streams: MP3 doesn't compress).
 	handle {
 		encode zstd gzip
-		reverse_proxy app:3000
+		# While a deploy replaces the app container (about a second), keep
+		# retrying rather than answer 502.
+		reverse_proxy app:3000 {
+			lb_try_duration 10s
+		}
 	}
 }

@@ -115,6 +115,9 @@ services:
     image: radio-app
     pull_policy: build
     build: { context: ., target: app }
+    # Node as PID 1 ignores SIGTERM, so each stop waited Docker's 10 s before
+    # a SIGKILL; with an init process it exits at once.
+    init: true
     environment:
       TZ: ${TZ:-UTC}
       SITE_TITLE: ${SITE_TITLE:-Mazes Radio}

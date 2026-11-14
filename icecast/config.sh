@@ -30,18 +30,22 @@ for f in /shows/*.md; do
   [ -e "$f" ] || continue
   slug=$(basename "$f" .md)
   cp "$here/silence.mp3" "$web/fallback-$slug.mp3"
-  mounts="$mounts<mount type=\"normal\"><mount-name>/$slug</mount-name><fallback-mount>/fallback-$slug.mp3</fallback-mount><fallback-override>1</fallback-override></mount>"
+  mounts="$mounts<mount type=\"normal\"><mount-name>/$slug</mount-name><fallback-mount>/fallback-$slug.mp3</fallback-mount><fallback-override>all</fallback-override></mount>"
 done
+# Seed Icecast's random numbers from /dev/urandom and /proc; without it, it
+# warns at every start and uses libigloo's defaults.
+prng='<prng-seed type="profile">linux</prng-seed>'
 sed \
   -e "s|<hostname>localhost</hostname>|<hostname>$DOMAIN</hostname>|" \
   -e 's|<errorlog>-</errorlog>|<errorlog>error.log</errorlog>|' \
   -e "s|<webroot>[^<]*</webroot>|<webroot>$web</webroot>|" \
+  -e "s|</security>|$prng</security>|" \
   -e "s|</icecast>|<mount type=\"default\"><charset>UTF-8</charset></mount>$mounts</icecast>|" \
   -e 's|<burst-size>[0-9]*</burst-size>|<burst-size>327680</burst-size>|' \
   -e 's|<queue-size>[0-9]*</queue-size>|<queue-size>1048576</queue-size>|' \
   /etc/icecast.xml >/tmp/icecast.xml.new
 chmod 600 /tmp/icecast.xml.new
-for want in '<charset>UTF-8' '<burst-size>327680<' '<queue-size>1048576<' "<webroot>$web<"; do
+for want in '<charset>UTF-8' "$prng" '<burst-size>327680<' '<queue-size>1048576<' "<webroot>$web<"; do
   grep -qF "$want" /tmp/icecast.xml.new || {
     echo "config.sh: $want missing from the generated config" >&2
     exit 1

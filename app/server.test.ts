@@ -176,6 +176,16 @@ describe("pages", () => {
   });
 });
 
+describe("manifesto", () => {
+  test("is linked from the site, and the old /about redirects to it", async () => {
+    expect(await (await page("/")).text()).toContain('href="/manifesto"');
+    expect((await page("/manifesto")).status).toBe(200);
+    const old = await page("/about");
+    expect(old.status).toBe(301);
+    expect(old.headers.get("location")).toBe("/manifesto");
+  });
+});
+
 describe("reports", () => {
   test("are linked from the site and list this month", async () => {
     expect(await (await page("/")).text()).toContain('href="/reports"');

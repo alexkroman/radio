@@ -1,5 +1,5 @@
 // The web app behind Caddy: the stations list (/), each show's station page
-// (/<slug>) and current track (/<slug>/now.json), DJ pages (/djs/<dj>), /about,
+// (/<slug>) and current track (/<slug>/now.json), DJ pages (/djs/<dj>), /manifesto,
 // and the SoundExchange reports (/reports). Shows are shows/<slug>.md (app/shows.ts), with
 // their DJs in the front matter; Liquidsoap serves their streams via Caddy.
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -190,40 +190,110 @@ app.get("/", async (c) => {
   );
 });
 
-app.get("/about", async (c) => {
+app.get("/about", (c) => c.redirect("/manifesto", 301));
+
+app.get("/manifesto", async (c) => {
   const shows = await getShows();
   const host = c.req.header("host") ?? "";
   return c.render(
-    <main class="page page-about">
-      <SiteHeader current="about" />
-      <h1 class="display">About</h1>
-      {/* Sample copy: placeholder text until the real About copy is written. */}
-      <p class="lead">
-        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis
-        dapibus, a pellentesque sem lacinia quam.
-      </p>
-      <section class="prose" aria-labelledby="about-stations">
-        <h2 id="about-stations" class="label">
-          The stations
+    <main class="page page-manifesto">
+      <SiteHeader current="manifesto" />
+      <h1 class="display">Manifesto</h1>
+      <p class="lead">Public radio for the streaming era: a nonprofit alternative to Spotify.</p>
+      <section class="prose" aria-labelledby="manifesto-why">
+        <h2 id="manifesto-why" class="label">
+          Why
         </h2>
         <p>
-          Sed posuere consectetur est at lobortis. Cras mattis consectetur purus sit amet fermentum. Donec
-          ullamcorper nulla non metus auctor fringilla. Vestibulum id ligula porta felis euismod semper,
-          nullam quis risus eget urna mollis ornare vel eu leo.
+          Radio was free to anyone with a receiver, heard by everyone at once, programmed by people and paid
+          for in the open. You didn't need an account to hear a song, and nobody kept a record of what you
+          heard.
         </p>
         <p>
-          Maecenas faucibus mollis interdum, with an <a href="/">inline link</a> to the stations. Aenean eu
-          leo quam pellentesque ornare sem lacinia quam venenatis vestibulum.
+          Streaming made listening private. It needs an account, reports every play back to a company and
+          mixes the music with advertising. Algorithms pick songs to keep you listening longer, not to play
+          you something good. And subscription money flows into a pool where the biggest artists take most of
+          it.
+        </p>
+        <p>
+          Listeners didn't choose this; licensing costs did. On-demand music is so expensive to license that
+          only companies selling attention at scale can afford the catalogue.
+        </p>
+        <p>
+          The way a culture hears its music shouldn't have to be an advertising product. Musicians need a
+          place where every play pays the same rate and pays them directly. Listeners need a way to hear music
+          that doesn't watch them back. The law already allows it. It just needs building.
         </p>
       </section>
-      <section class="prose" aria-labelledby="about-listen">
-        <h2 id="about-listen" class="label">
-          Listening
+      <section class="prose" aria-labelledby="manifesto-how">
+        <h2 id="manifesto-how" class="label">
+          How
         </h2>
         <p>
-          Curabitur blandit tempus porttitor. Nulla vitae elit libero, a pharetra augue: each station has a
-          direct stream URL for apps and players.
+          Spotify pays roughly 70% of its revenue for on-demand licenses, on every stream, for as long as it
+          runs. A station like this one, where you can't pick the song, uses the statutory license in US
+          copyright law instead:
         </p>
+        <ul>
+          <li>Every recording is licensed from day one. No label deals, no holdouts.</li>
+          <li>
+            A noncommercial station pays a flat minimum per channel that covers a large block of listening
+            hours. Until we pass it, one more listener costs nothing.
+          </li>
+          <li>Nobody takes a cut of revenue, and no shareholder is owed growth.</li>
+        </ul>
+        <p>So the station doesn't need a big audience to survive.</p>
+      </section>
+      <section class="prose" aria-labelledby="manifesto-what">
+        <h2 id="manifesto-what" class="label">
+          What it is
+        </h2>
+        <p>
+          A few <a href="/">channels</a>, each programmed by a person, playing around the clock: music for
+          work, driving, cooking, the background of a day. No ads. No account. No tracking.
+        </p>
+        <p>It isn't trying to be a better Spotify. It's trying to be what Spotify's business can't be.</p>
+      </section>
+      <section class="prose" aria-labelledby="manifesto-money">
+        <h2 id="manifesto-money" class="label">
+          Where the money goes
+        </h2>
+        <p>
+          Through SoundExchange, every play pays the same rate, superstar or unknown. The law sets the split:
+          50% to the rights owner, 45% straight to the featured artists rather than through their label, and
+          5% to session musicians and singers. On Spotify, most of the money goes to the top artists, through
+          label deals.
+        </p>
+        <p>
+          When a channel here plays a band, the band gets paid, directly, at the same rate as anyone else. Our{" "}
+          <a href="/reports">reports</a> show every play.
+        </p>
+      </section>
+      <section class="prose" aria-labelledby="manifesto-not">
+        <h2 id="manifesto-not" class="label">
+          What we don't do
+        </h2>
+        <ul>
+          <li>
+            On-demand, offline or personal libraries. The license forbids them, so this complements Spotify
+            rather than replacing it.
+          </li>
+          <li>
+            Artist marathons or whole albums. The license limits how many tracks from one artist or album can
+            play in a row.
+          </li>
+          <li>Algorithms. People pick every song.</li>
+          <li>
+            Ads, or selling your data. Listening is free and untracked. The station runs on listeners who
+            choose to pay, which is enough because the costs are flat.
+          </li>
+        </ul>
+      </section>
+      <section class="prose" aria-labelledby="manifesto-listen">
+        <h2 id="manifesto-listen" class="label">
+          Listening
+        </h2>
+        <p>Press play on any station, or open its stream URL in a radio app or VLC.</p>
         <dl class="streams">
           {shows.map((s) => (
             <div>
@@ -239,18 +309,18 @@ app.get("/about", async (c) => {
           </div>
         </dl>
       </section>
-      <section class="prose" aria-labelledby="about-contact">
-        <h2 id="about-contact" class="label">
+      <section class="prose" aria-labelledby="manifesto-contact">
+        <h2 id="manifesto-contact" class="label">
           Contact
         </h2>
         <p>
-          Donec id elit non mi porta gravida at eget metus:{" "}
+          Questions, records we should hear, takedowns:{" "}
           <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
         </p>
       </section>
       <footer class="footer footer-rule">{host}</footer>
     </main>,
-    { title: "About" },
+    { title: "Manifesto" },
   );
 });
 

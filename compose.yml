@@ -56,8 +56,15 @@ services:
       ICECAST_SOURCE_PASSWORD: &password ${PASSWORD:?Set PASSWORD in .env}
       ICECAST_ADMIN_PASSWORD: *password
       ICECAST_RELAY_PASSWORD: *password
-      # One source per show (the image's default is 2).
-      ICECAST_MAX_SOURCES: 100
+      # Two per show: its Liquidsoap source and its silence fallback (the
+      # image's default is 2). Icecast logs an error at start unless the client
+      # limit below is more than twice this ("Client limit (200) is too small
+      # for given source limit (100)"), so keep MAX_LISTENERS over 80.
+      ICECAST_MAX_SOURCES: 40
+      # Shown on Icecast's status pages (not public: Caddy only exposes the
+      # streams). Unset, Icecast warns at every start.
+      ICECAST_ADMIN_EMAIL: admin@${DOMAIN:-localhost}
+      ICECAST_LOCATION: ${DOMAIN:-localhost}
       # Every connection across all mounts (listeners, sources, Liquidsoap's
       # status checks); the image's default is 100. Each listener takes 256
       # kbps of upload, so set this to what the connection can carry.

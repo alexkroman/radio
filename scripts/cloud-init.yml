@@ -3,7 +3,16 @@
 # own packages (the image already has rsync and unattended-upgrades).
 package_update: true
 packages: [docker.io, docker-compose-v2, docker-buildx]
+# SSH keys only: bots try thousands of passwords a day.
+ssh_pwauth: false
 write_files:
+  # Read before cloud-init's and the image's own sshd_config.d files, so these
+  # win (sshd keeps the first value it sees).
+  - path: /etc/ssh/sshd_config.d/10-hardening.conf
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      X11Forwarding no
   # Reboot after security updates that need it (kernel, libc), at 11:00 UTC
   # (3-4 am Pacific). Docker restarts the station afterwards.
   - path: /etc/apt/apt.conf.d/52unattended-reboot

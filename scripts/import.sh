@@ -9,7 +9,8 @@
 #                                        # fixes (hours per show)
 #
 # What it does (safe to re-run; re-checks tags/covers for changed files):
-#   1. Remove exact duplicate files within each show directory
+#   1. Remove exact duplicate files within each show directory, and move
+#      tracks over 15 minutes to the Trash
 #   2. beet import     – group new tracks into albums by their tags, fingerprint
 #                        + MusicBrainz lookup, then embed the best cover art
 #                        found (fetchart + embedart). With --all, every track
@@ -36,15 +37,17 @@ cd "$(dirname "$0")/.."
 MUSIC_DIR="music"
 COVERS_DIR="covers"
 CONFIG="scripts/beets/config.yaml"
+MAX_SECONDS=900 # longer tracks are removed (step 1b)
 
 # ── Validate dependencies ────────────────────────────────────────────────────
-for cmd in beet fpcalc ffmpeg fdupes; do
+for cmd in beet fpcalc ffmpeg ffprobe fdupes trash; do
   if ! command -v "$cmd" &>/dev/null; then
     echo "ERROR: '$cmd' not found." >&2
     case "$cmd" in
     beet) echo "  brew install pipx && pipx install beets && pipx inject beets pyacoustid pillow" >&2 ;;
     fpcalc) echo "  brew install chromaprint" >&2 ;;
-    ffmpeg) echo "  brew install ffmpeg" >&2 ;;
+    ffmpeg | ffprobe) echo "  brew install ffmpeg" >&2 ;;
+    trash) echo "  macOS 15 or later has /usr/bin/trash" >&2 ;;
     fdupes) echo "  brew install fdupes" >&2 ;;
     esac
     exit 1
@@ -118,6 +121,20 @@ for show_dir in "${show_dirs[@]}"; do
   # 1. Remove exact duplicates (same audio content, different filenames)
   echo "── Deduplication"
   fdupes --delete --noprompt --quiet "$show_dir"
+
+  # 1b. Remove tracks over 15 minutes (to the Trash). Liquidsoap's autocue
+  #     can't measure a track that long in time (radio.liq), so it would play
+  #     without loudness normalization or silence trimming. Length is ffprobe's,
+  #     not beets': beets has some files' lengths badly wrong.
+  echo "── Removing tracks over $((MAX_SECONDS / 60)) minutes"
+  while IFS= read -r -d '' file; do
+    secs=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 "$file" </dev/null || true)
+    [[ $secs =~ ^[0-9]+ ]] || continue
+    secs=${BASH_REMATCH[0]}
+    if ((secs <= MAX_SECONDS)); then continue; fi
+    echo "  $((secs / 60)) min: $(basename "$file")"
+    trash "$file"
+  done < <(find "$show_dir" -maxdepth 1 \( -name "*.mp3" -o -name "*.flac" -o -name "*.m4a" \) -print0)
 
   # 2. Import new tracks, grouped into albums by their tags (config.yaml);
   #    fetchart and embedart add cover art as each album is imported.

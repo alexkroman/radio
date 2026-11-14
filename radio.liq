@@ -8,12 +8,18 @@ settings.log.level := 2
 # are about every file and harmless; keep its errors.
 settings.ffmpeg.log.verbosity := "error"
 
+# Each track change stalls the output clock for up to ~0.6 s (closing one file,
+# opening the next, the crossfade starting), which Liquidsoap then catches up.
+# Listeners never hear it: Icecast and players buffer seconds of audio. It
+# logged "Latency is too high: we must catchup" at every track change (the
+# default threshold is 0.2 s); warn only past 1 s, where it may be audible.
+settings.clock.log_delay_threshold := 1.
+
 # Autocue measures each track ahead of play (default: at up to 70x real time)
 # and skips a track whose measuring it estimates at over 10 s (default), i.e.
 # any over ~12 min: those then played without loudness normalization or
-# silence trimming. The measuring bursts held up the output clock ("Latency is
-# too high: we must catchup", hundreds a day), so measure at up to 30x and
-# allow 90 s (tracks up to 45 min; the longest is 30). A track is measured
+# silence trimming. Measure at up to 30x, which spreads out its CPU use,
+# and allow 90 s (tracks up to 45 min; the longest is 30). A track is measured
 # while the one before it plays. The measuring isn't bound by
 # settings.request.timeout.
 settings.autocue.internal.ratio := 30.

@@ -1,8 +1,14 @@
 {
+	# Warnings and errors only (certificate renewal failures among them). At
+	# info, every deploy's `caddy reload` logged three admin API lines, and
+	# bots probing the bare IP on port 80 (/.env, /.git/config...) logged their
+	# redirects to HTTPS: the site's own access log (below) doesn't cover the
+	# port 80 redirect.
 	# A stream listener leaving mid-stream logs "aborting with incomplete
 	# response" from reverse_proxy; nothing acts on it. (Failed upstreams still
 	# show in the error log.)
 	log default {
+		level WARN
 		exclude http.handlers.reverse_proxy
 	}
 }

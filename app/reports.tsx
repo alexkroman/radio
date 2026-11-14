@@ -52,7 +52,7 @@ reports.get("/", (c) => {
   );
   return c.render(
     <main class="page page-reports">
-      <SiteHeader current="reports" />
+      <SiteHeader />
       <h1 class="display">Reports</h1>
       <p class="lead">
         Monthly SoundExchange Reports of Use: every song played on every station, with its listener count.

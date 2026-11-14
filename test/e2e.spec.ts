@@ -215,8 +215,8 @@ test("security headers are set and the server banner is stripped", async ({ requ
 });
 
 test("SoundExchange report counts plays from every show with file tags", async ({ page, request }) => {
-  await page.goto("/");
-  await page.getByRole("link", { name: "Reports" }).click();
+  await page.goto("/manifesto");
+  await page.getByRole("link", { name: "reports", exact: true }).click();
   await expect(page.locator(`a[href="/reports/${month}"]`)).toBeVisible();
   await expect(async () => {
     const res = await request.get(`/reports/${month}`);

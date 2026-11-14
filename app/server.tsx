@@ -1,5 +1,5 @@
 // The web app behind Caddy: the stations list (/), each show's station page
-// (/<slug>) and current track (/<slug>/now.json), DJ pages (/djs/<dj>), /about,
+// (/<slug>) and current track (/<slug>/now.json), DJ pages (/djs/<dj>), /manifesto,
 // and the SoundExchange reports (/reports). Shows are shows/<slug>.md (app/shows.ts), with
 // their DJs in the front matter; Liquidsoap serves their streams via Caddy.
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -190,58 +190,72 @@ app.get("/", async (c) => {
   );
 });
 
-app.get("/about", async (c) => {
+app.get("/about", (c) => c.redirect("/manifesto", 301));
+
+app.get("/manifesto", async (c) => {
   const shows = await getShows();
   const host = c.req.header("host") ?? "";
   return c.render(
-    <main class="page page-about">
-      <SiteHeader current="about" />
-      <h1 class="display">About</h1>
+    <main class="page page-manifesto">
+      <SiteHeader current="manifesto" />
+      <h1 class="display">Manifesto</h1>
       <p class="lead">
-        A nonprofit alternative to Spotify: a handful of radio stations programmed by people, with no ads, no
-        subscription and no algorithm.
+        Music is not content. This is a nonprofit alternative to Spotify: radio made by people, for nobody's
+        profit.
       </p>
-      <section class="prose" aria-labelledby="about-why">
-        <h2 id="about-why" class="label">
-          Why
+      <section class="prose" aria-labelledby="manifesto-people">
+        <h2 id="manifesto-people" class="label">
+          People, not algorithms
         </h2>
         <p>
-          Streaming services are built to keep you listening, and what they play is chosen by whatever serves
-          that goal. We would rather hear what another person loves. Nobody here is selling your attention, so
-          there is nothing to optimise: no ads between songs, no feed, no account to sign up for, no premium
-          tier.
+          A song chosen by a person means more than a song chosen by a machine. Every one of{" "}
+          <a href="/">our stations</a> is put together by hand, by a DJ who loves what they are playing. No
+          recommendation engine, no guess at what will keep you here longest.
         </p>
+      </section>
+      <section class="prose" aria-labelledby="manifesto-listeners">
+        <h2 id="manifesto-listeners" class="label">
+          Listeners, not users
+        </h2>
         <p>
-          We are not a company and nobody makes money from this. It runs on a small server and{" "}
+          We refuse ads. We refuse subscriptions, premium tiers and sign-up forms. We will not sell your
+          attention, because we sell nothing at all. We are not a company, and nobody makes money from this.
+        </p>
+      </section>
+      <section class="prose" aria-labelledby="manifesto-radio">
+        <h2 id="manifesto-radio" class="label">
+          Radio, not a feed
+        </h2>
+        <p>
+          Everyone who tunes in hears the same song at the same moment. You cannot skip, search or queue. You
+          can only listen. We believe that giving up control is how you hear the thing you would never have
+          looked for.
+        </p>
+      </section>
+      <section class="prose" aria-labelledby="manifesto-artists">
+        <h2 id="manifesto-artists" class="label">
+          Artists, not catalogues
+        </h2>
+        <p>
+          Music is made by people who deserve to be named and paid. Every play is logged and published in our{" "}
+          <a href="/reports">reports</a>, in the format SoundExchange uses to pay royalties to artists and
+          labels. The title and artist are always on screen. If you love something, go and buy the record.
+        </p>
+      </section>
+      <section class="prose" aria-labelledby="manifesto-open">
+        <h2 id="manifesto-open" class="label">
+          Yours to take
+        </h2>
+        <p>
+          Radio should belong to whoever wants to make it. This station runs on a small server and{" "}
           <a href="https://github.com/alexkroman/radio" rel="noopener">
             open-source software
-          </a>{" "}
-          that anyone can copy to start a station of their own.
+          </a>
+          . Copy it. Start your own.
         </p>
       </section>
-      <section class="prose" aria-labelledby="about-stations">
-        <h2 id="about-stations" class="label">
-          The stations
-        </h2>
-        <p>
-          Each of <a href="/">the stations</a> is a collection one or two DJs have put together by hand,
-          playing around the clock. Everyone who tunes in hears the same song at the same moment, as on any
-          radio. You can't skip, search or queue; you can only listen, and maybe hear something you would
-          never have looked for.
-        </p>
-      </section>
-      <section class="prose" aria-labelledby="about-artists">
-        <h2 id="about-artists" class="label">
-          Artists
-        </h2>
-        <p>
-          Every play is logged and published in our <a href="/reports">reports</a>, in the format
-          SoundExchange uses to pay royalties to the artists and labels behind the recordings. If you hear
-          something you like, the track's title and artist are always on screen: go and buy the record.
-        </p>
-      </section>
-      <section class="prose" aria-labelledby="about-listen">
-        <h2 id="about-listen" class="label">
+      <section class="prose" aria-labelledby="manifesto-listen">
+        <h2 id="manifesto-listen" class="label">
           Listening
         </h2>
         <p>
@@ -263,8 +277,8 @@ app.get("/about", async (c) => {
           </div>
         </dl>
       </section>
-      <section class="prose" aria-labelledby="about-contact">
-        <h2 id="about-contact" class="label">
+      <section class="prose" aria-labelledby="manifesto-contact">
+        <h2 id="manifesto-contact" class="label">
           Contact
         </h2>
         <p>
@@ -274,7 +288,7 @@ app.get("/about", async (c) => {
       </section>
       <footer class="footer footer-rule">{host}</footer>
     </main>,
-    { title: "About" },
+    { title: "Manifesto" },
   );
 });
 

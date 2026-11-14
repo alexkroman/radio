@@ -84,7 +84,7 @@ button {
   gap: 56px;
 }
 
-.page-about {
+.page-manifesto {
   --width: var(--width-prose);
 }
 
@@ -543,7 +543,7 @@ img.cover {
   gap: 16px;
 }
 
-/* ── About ── */
+/* ── Manifesto ── */
 .lead {
   font: var(--type-lead);
   letter-spacing: -0.01em;

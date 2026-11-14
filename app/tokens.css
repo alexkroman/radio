@@ -7,7 +7,7 @@
   /* Color */
   --color-bg: #ffffff;
   --color-ink: #111111; /* headings, primary text, filled buttons */
-  --color-body: #333333; /* long-form paragraphs (About) */
+  --color-body: #333333; /* long-form paragraphs (Manifesto) */
   --color-muted: #6b6b6b; /* secondary text, labels, times (passes 4.5:1 on white) */
   --color-hairline: #e6e6e6; /* row dividers, outlined secondary buttons */
   --color-hairline-soft: #efefef; /* dividers inside the Recently played list */
@@ -29,11 +29,11 @@
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
   /* Type scale (size / weight / tracking / line-height) */
-  --type-display: 600 56px/1 var(--font-sans); /* page titles: station name, "About" — tracking -0.03em */
+  --type-display: 600 56px/1 var(--font-sans); /* page titles: station name, "Manifesto" — tracking -0.03em */
   --type-station-name: 600 28px/1.2 var(--font-sans); /* station name in list, now-playing title — tracking -0.02em */
-  --type-lead: 400 22px/1.45 var(--font-sans); /* About lead paragraph — tracking -0.01em */
+  --type-lead: 400 22px/1.45 var(--font-sans); /* Manifesto lead paragraph — tracking -0.01em */
   --type-subtitle: 400 18px/1.4 var(--font-sans); /* station description on station page, artist under now playing */
-  --type-body: 400 17px/1.65 var(--font-sans); /* About paragraphs */
+  --type-body: 400 17px/1.65 var(--font-sans); /* Manifesto paragraphs */
   --type-track: 400 16px/1.4 var(--font-sans); /* track titles in Recently played */
   --type-small: 400 15px/1.4 var(--font-sans); /* descriptions & now playing in list */
   --type-nav: 400 14px/1.4 var(--font-sans);
@@ -48,7 +48,7 @@
   --page-pad-bottom: 96px;
   --width-index: 1040px; /* stations list */
   --width-station: 760px; /* station page */
-  --width-prose: 640px; /* About */
+  --width-prose: 640px; /* Manifesto */
 
   /* Radius */
   --radius-art-sm: 3px; /* 40–44px covers */

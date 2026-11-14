@@ -17,10 +17,20 @@ x-hardening: &hardening
   cap_drop:
     - ALL
 
+# Docker keeps each container's console log forever unless told otherwise:
+# cap it at 3 files of 10 MB, rotated. (Icecast's and Caddy's own log files
+# under logs/ rotate themselves.)
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
 services:
   init:
     image: busybox:1.38.0
-    <<: *hardening
+    <<: [*hardening, *logging]
     user: "0:0"
     cap_add:
       - CHOWN
@@ -46,7 +56,7 @@ services:
   # stay connected through a Liquidsoap restart: see icecast/config.sh, which
   # also reloads the config for a new show without dropping anyone.
   icecast:
-    <<: *hardening
+    <<: [*hardening, *logging]
     group_add: ["10001"]
     restart: unless-stopped
     image: libretime/icecast:2.5.0
@@ -79,7 +89,7 @@ services:
   # One 24/7 stream per show (radio.liq), sent to Icecast; writes the play log
   # (plays/YYYY-MM.jsonl).
   liquidsoap:
-    <<: *hardening
+    <<: [*hardening, *logging]
     group_add: ["10001"]
     restart: unless-stopped
     image: savonet/liquidsoap:v2.4.6
@@ -99,7 +109,7 @@ services:
 
   # Show list, player pages and reports (app/).
   app:
-    <<: *hardening
+    <<: [*hardening, *logging]
     group_add: ["10001"]
     restart: unless-stopped
     image: radio-app
@@ -118,7 +128,7 @@ services:
       init: { condition: service_completed_successfully }
 
   caddy:
-    <<: *hardening
+    <<: [*hardening, *logging]
     user: "10001:10001"
     # Allow the non-root user to bind ports 80 and 443.
     sysctls:

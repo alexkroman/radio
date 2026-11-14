@@ -187,8 +187,9 @@ describe("manifesto", () => {
 });
 
 describe("reports", () => {
-  test("are linked from the site and list this month", async () => {
-    expect(await (await page("/")).text()).toContain('href="/reports"');
+  test("are linked from the manifesto, not the nav, and list this month", async () => {
+    expect(await (await page("/")).text()).not.toContain('href="/reports"');
+    expect(await (await page("/manifesto")).text()).toContain('href="/reports"');
     const res = await page("/reports");
     expect(res.status).toBe(200);
     expect(await res.text()).toContain(`href="/reports/${month}"`);

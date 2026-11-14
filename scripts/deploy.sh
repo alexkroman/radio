@@ -6,6 +6,24 @@ set -eu
 cd "$(dirname "$0")/.."
 export OS_REGION_NAME="${OS_REGION_NAME:-US-WEST-OR-1}"
 [ -f .env ] || { echo "Create .env first (see .env.example)" >&2 && exit 1; }
+
+# The server mirrors this checkout, so deploy only main as it is on GitHub: a
+# branch (a PR not merged yet) would go live, and the next deploy of main would
+# quietly undo it. Files git doesn't track (music/, covers/, shows/ besides
+# their .md files) are synced as they are.
+git fetch -q origin main
+if [ "$(git branch --show-current)" != main ] ||
+  [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ] ||
+  ! git diff --quiet HEAD; then
+  echo "Deploy from main as on GitHub, with nothing uncommitted:" >&2
+  echo "  git checkout main && git pull" >&2
+  exit 1
+fi
+# A show without its music folder would play nothing but silence.
+for show in shows/*.md; do
+  slug=$(basename "$show" .md)
+  [ -d "music/$slug" ] || { echo "$show has no music/$slug/" >&2 && exit 1; }
+done
 SSH="ssh -o StrictHostKeyChecking=accept-new -o ControlMaster=auto -o ControlPath=$HOME/.ssh/radio-%C -o ControlPersist=60"
 ipv4() { grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -n1; }
 

@@ -124,7 +124,10 @@ services:
       # Keep Caddy's config/data under the writable /data volume (non-root).
       XDG_CONFIG_HOME: /data
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # The directory, not the file: rsync (deploy.sh) replaces a file with a new
+      # one, which a single-file bind mount never sees, so `caddy reload` would
+      # keep reading the old config.
+      - ./caddy:/etc/caddy:ro
       - ./logs:/srv/logs
       - caddy:/data
     depends_on:

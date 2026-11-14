@@ -1,9 +1,18 @@
-# Autocue measures each track (at up to 70x real time) and by default skips a
-# track whose measuring it estimates at over 10 s, i.e. any over ~12 min: those
-# then played without loudness normalization or silence trimming. Allow 60 s
-# (tracks up to 70 min; none is over 15). The measuring isn't bound by
+# Log warnings and errors only. Level 3 (the default) logged ~2,000 lines an
+# hour of routine detail ("Content type is ...", every decoder step) and a
+# notice for each beets AcoustID fingerprint tag too long to recode.
+settings.log.level := 2
+
+# Autocue measures each track ahead of play (default: at up to 70x real time)
+# and skips a track whose measuring it estimates at over 10 s (default), i.e.
+# any over ~12 min: those then played without loudness normalization or
+# silence trimming. The measuring bursts held up the output clock ("Latency is
+# too high: we must catchup", hundreds a day), so measure at up to 30x and
+# allow 90 s (tracks up to 45 min; the longest is 30). A track is measured
+# while the one before it plays. The measuring isn't bound by
 # settings.request.timeout.
-settings.autocue.internal.timeout := 60.
+settings.autocue.internal.ratio := 30.
+settings.autocue.internal.timeout := 90.
 enable_autocue_metadata()
 
 # Every shows/<slug>.md is a 24/7 MP3 stream on Icecast mount /<slug> (public

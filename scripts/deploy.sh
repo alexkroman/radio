@@ -67,14 +67,21 @@ shows_changed=$(printf '%s\n' "$out" | grep -cE '^(>f\+{9}|\*deleting) +shows/[^
 if [ "$shows_changed" -gt 0 ] || changed icecast/; then
   $SSH "$HOST" 'cd radio && docker compose exec -T icecast sh /icecast/config.sh reload'
 fi
-if [ "$shows_changed" -gt 0 ] || changed radio.liq; then
+# radio.liq is a single-file bind mount, so the container keeps the file it
+# started with after rsync replaces it: restart when that differs from the
+# synced one, rather than when this run's rsync changed it, so a deploy that
+# stopped after the sync but before this restart is caught up by the next one.
+# (A restart mounts the file afresh.)
+liq_stale=$($SSH "$HOST" 'cd radio &&
+  docker compose exec -T liquidsoap cat /radio.liq | cmp -s - radio.liq || echo yes')
+if [ "$shows_changed" -gt 0 ] || [ -n "$liq_stale" ]; then
   $SSH "$HOST" 'cd radio && docker compose restart liquidsoap'
 fi
 
-# Caddy can reload its config in-place without dropping TLS connections.
-if changed Caddyfile; then
-  $SSH "$HOST" 'cd radio && docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile'
-fi
+# Caddy reloads its config in place without dropping connections (a no-op
+# when it's unchanged), so do it every time, which also catches up after an
+# interrupted deploy.
+$SSH "$HOST" 'cd radio && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile'
 
 # Back up the play log (the only record for SoundExchange reports) to
 # backup/plays/. Never deletes, and never touches the local plays/.

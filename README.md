@@ -30,7 +30,7 @@ Open <https://localhost/>. On localhost your browser warns about the certificate
 | `docker compose down`               | Stop (`down -v` also deletes stats and history!)     |
 | `docker compose logs -f`            | Follow logs (Ctrl-C stops watching, not the station) |
 | `docker compose ps`                 | Show which services are running                      |
-| `docker compose restart caddy`      | Pick up edits to `Caddyfile`                         |
+| `docker compose restart caddy`      | Pick up edits to `caddy/Caddyfile`                   |
 | `docker compose restart liquidsoap` | Pick up edits to `radio.liq` (listeners stay on)     |
 
 Add or remove files in `music/<show>/` any time; they're picked up without a restart. Anything ffmpeg can decode works.

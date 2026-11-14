@@ -197,23 +197,47 @@ app.get("/about", async (c) => {
     <main class="page page-about">
       <SiteHeader current="about" />
       <h1 class="display">About</h1>
-      {/* Sample copy: placeholder text until the real About copy is written. */}
       <p class="lead">
-        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis
-        dapibus, a pellentesque sem lacinia quam.
+        A nonprofit alternative to Spotify: a handful of radio stations programmed by people, with no ads, no
+        subscription and no algorithm.
       </p>
+      <section class="prose" aria-labelledby="about-why">
+        <h2 id="about-why" class="label">
+          Why
+        </h2>
+        <p>
+          Streaming services are built to keep you listening, and what they play is chosen by whatever serves
+          that goal. We would rather hear what another person loves. Nobody here is selling your attention, so
+          there is nothing to optimise: no ads between songs, no feed, no account to sign up for, no premium
+          tier.
+        </p>
+        <p>
+          We are not a company and nobody makes money from this. It runs on a small server and{" "}
+          <a href="https://github.com/alexkroman/radio" rel="noopener">
+            open-source software
+          </a>{" "}
+          that anyone can copy to start a station of their own.
+        </p>
+      </section>
       <section class="prose" aria-labelledby="about-stations">
         <h2 id="about-stations" class="label">
           The stations
         </h2>
         <p>
-          Sed posuere consectetur est at lobortis. Cras mattis consectetur purus sit amet fermentum. Donec
-          ullamcorper nulla non metus auctor fringilla. Vestibulum id ligula porta felis euismod semper,
-          nullam quis risus eget urna mollis ornare vel eu leo.
+          Each of <a href="/">the stations</a> is a collection one or two DJs have put together by hand,
+          playing around the clock. Everyone who tunes in hears the same song at the same moment, as on any
+          radio. You can't skip, search or queue; you can only listen, and maybe hear something you would
+          never have looked for.
         </p>
+      </section>
+      <section class="prose" aria-labelledby="about-artists">
+        <h2 id="about-artists" class="label">
+          Artists
+        </h2>
         <p>
-          Maecenas faucibus mollis interdum, with an <a href="/">inline link</a> to the stations. Aenean eu
-          leo quam pellentesque ornare sem lacinia quam venenatis vestibulum.
+          Every play is logged and published in our <a href="/reports">reports</a>, in the format
+          SoundExchange uses to pay royalties to the artists and labels behind the recordings. If you hear
+          something you like, the track's title and artist are always on screen: go and buy the record.
         </p>
       </section>
       <section class="prose" aria-labelledby="about-listen">
@@ -221,8 +245,8 @@ app.get("/about", async (c) => {
           Listening
         </h2>
         <p>
-          Curabitur blandit tempus porttitor. Nulla vitae elit libero, a pharetra augue: each station has a
-          direct stream URL for apps and players.
+          Press play on any station in your browser. Each one also has a direct stream URL that works in radio
+          apps, VLC and most internet-radio hardware.
         </p>
         <dl class="streams">
           {shows.map((s) => (
@@ -244,7 +268,7 @@ app.get("/about", async (c) => {
           Contact
         </h2>
         <p>
-          Donec id elit non mi porta gravida at eget metus:{" "}
+          Questions, a record we should hear, or a takedown request:{" "}
           <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
         </p>
       </section>

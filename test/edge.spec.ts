@@ -22,7 +22,7 @@ test('cover art with a unicode or "&" file name is served', async ({ request }) 
 });
 
 test("an unchanged page or asset is 304 through Caddy's compression", async ({ request }) => {
-  for (const path of ["/about", "/assets/app.js"]) {
+  for (const path of ["/manifesto", "/assets/app.js"]) {
     const headers = { "accept-encoding": "gzip" };
     const res = await request.get(path, { headers });
     expect(res.headers()["content-encoding"], path).toBe("gzip");

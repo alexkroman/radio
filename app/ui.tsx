@@ -29,7 +29,7 @@ export const SiteHeader = ({
   current,
   home,
 }: {
-  current?: "stations" | "about" | "reports";
+  current?: "stations" | "manifesto" | "reports";
   home?: boolean;
 }) => (
   <header class="site-header">
@@ -44,8 +44,8 @@ export const SiteHeader = ({
       <a href="/" aria-current={current === "stations" ? "page" : undefined}>
         Stations
       </a>
-      <a href="/about" aria-current={current === "about" ? "page" : undefined}>
-        About
+      <a href="/manifesto" aria-current={current === "manifesto" ? "page" : undefined}>
+        Manifesto
       </a>
       <a href="/reports" aria-current={current === "reports" ? "page" : undefined}>
         Reports

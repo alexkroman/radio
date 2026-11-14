@@ -73,7 +73,7 @@ djs:
   "e-plain.md": "Just a description.\n",
   "f-bad-yaml.md": "---\ntitle: [unclosed\n---\nBody.\n",
   "g-crlf.md": "---\r\ntitle: Windows\r\ndjs:\r\n  - Ana Ruiz\r\n---\r\nBody.\r\n",
-  "about.md": "---\ntitle: Reserved\n---\n",
+  "manifesto.md": "---\ntitle: Reserved\n---\n",
   "Not-A-Show.md": "---\ntitle: Ignored\n---\n",
 };
 
@@ -100,7 +100,7 @@ describe("shows", () => {
       "g-crlf",
       "h-not-list",
     ]);
-    expect(await shows.getShow("about")).toBeUndefined();
+    expect(await shows.getShow("manifesto")).toBeUndefined();
     expect(await shows.getShow("nope")).toBeUndefined();
   });
 

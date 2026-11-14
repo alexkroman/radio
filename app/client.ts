@@ -69,7 +69,7 @@ function pickShown() {
   }
   shown = next;
   readPage();
-  // A page without the station's track (an about page, a DJ's other shows).
+  // A page without the station's track (the manifesto, a DJ's other shows).
   if (shown && !now.track) void fetchNow(shown.slug);
 }
 

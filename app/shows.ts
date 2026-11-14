@@ -28,7 +28,7 @@ const SHOWS = resolve(process.env.SHOWS_DIR ?? "/shows");
 export const SLUG = "[a-z0-9-]+";
 const SHOW_FILE = new RegExp(`^${SLUG}\\.md$`);
 // Pages with their own routes; a show with one of these slugs isn't listed.
-const RESERVED = new Set(["about", "assets", "covers", "djs", "login", "reports"]);
+const RESERVED = new Set(["manifesto", "assets", "covers", "djs", "login", "reports"]);
 // DJ photos: image files (served by serveStatic, which types them by extension).
 const PHOTO_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif"]);
 

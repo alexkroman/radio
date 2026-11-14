@@ -1,5 +1,5 @@
 // The web app behind Caddy: the stations list (/), each show's station page
-// (/<slug>) and current track (/<slug>/now.json), DJ pages (/djs/<dj>), /about,
+// (/<slug>) and current track (/<slug>/now.json), DJ pages (/djs/<dj>), /manifesto,
 // and the SoundExchange reports (/reports). Shows are shows/<slug>.md (app/shows.ts), with
 // their DJs in the front matter; Liquidsoap serves their streams via Caddy.
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -190,40 +190,42 @@ app.get("/", async (c) => {
   );
 });
 
-app.get("/about", async (c) => {
+app.get("/manifesto", async (c) => {
   const shows = await getShows();
   const host = c.req.header("host") ?? "";
   return c.render(
-    <main class="page page-about">
-      <SiteHeader current="about" />
-      <h1 class="display">About</h1>
-      {/* Sample copy: placeholder text until the real About copy is written. */}
-      <p class="lead">
-        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis
-        dapibus, a pellentesque sem lacinia quam.
-      </p>
-      <section class="prose" aria-labelledby="about-stations">
-        <h2 id="about-stations" class="label">
-          The stations
+    <main class="page page-manifesto">
+      <SiteHeader current="manifesto" />
+      <h1 class="display">Manifesto</h1>
+      <p class="lead">Music is not a feed. We are taking it back from Spotify and Apple Music.</p>
+      <section class="prose" aria-labelledby="manifesto-problem">
+        <h2 id="manifesto-problem" class="label">
+          What went wrong
         </h2>
         <p>
-          Sed posuere consectetur est at lobortis. Cras mattis consectetur purus sit amet fermentum. Donec
-          ullamcorper nulla non metus auctor fringilla. Vestibulum id ligula porta felis euismod semper,
-          nullam quis risus eget urna mollis ornare vel eu leo.
-        </p>
-        <p>
-          Maecenas faucibus mollis interdum, with an <a href="/">inline link</a> to the stations. Aenean eu
-          leo quam pellentesque ornare sem lacinia quam venenatis vestibulum.
+          Streaming turned music into a utility: rented by the month, sorted by an algorithm, and paid for in
+          fractions of a cent. You own nothing, and nobody chose any of it for you.
         </p>
       </section>
-      <section class="prose" aria-labelledby="about-listen">
-        <h2 id="about-listen" class="label">
-          Listening
+      <section class="prose" aria-labelledby="manifesto-stations">
+        <h2 id="manifesto-stations" class="label">
+          What we do instead
         </h2>
         <p>
-          Curabitur blandit tempus porttitor. Nulla vitae elit libero, a pharetra augue: each station has a
-          direct stream URL for apps and players.
+          People pick the records. Every <a href="/">station</a> here is programmed by a DJ with a name and
+          taste, and plays the same song for everyone at the same time. No algorithm, no profile, no skip
+          button.
         </p>
+        <p>
+          Every play is logged, and the <a href="/reports">reports</a> are public, so the people who made the
+          music get paid.
+        </p>
+      </section>
+      <section class="prose" aria-labelledby="manifesto-listen">
+        <h2 id="manifesto-listen" class="label">
+          Listening
+        </h2>
+        <p>Radio belongs in any player, not one company's app. Each station has a direct stream URL.</p>
         <dl class="streams">
           {shows.map((s) => (
             <div>
@@ -239,18 +241,17 @@ app.get("/about", async (c) => {
           </div>
         </dl>
       </section>
-      <section class="prose" aria-labelledby="about-contact">
-        <h2 id="about-contact" class="label">
+      <section class="prose" aria-labelledby="manifesto-contact">
+        <h2 id="manifesto-contact" class="label">
           Contact
         </h2>
         <p>
-          Donec id elit non mi porta gravida at eget metus:{" "}
-          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
+          Want in? Write to <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
         </p>
       </section>
       <footer class="footer footer-rule">{host}</footer>
     </main>,
-    { title: "About" },
+    { title: "Manifesto" },
   );
 });
 

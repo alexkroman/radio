@@ -67,9 +67,11 @@ rs music covers shows "$HOST:radio/"
 out=$(cat "$log")
 
 # Pre-create bind-mounted dirs so Docker doesn't create them as root on first run.
+# No build attestations: they're stamped with the build time, so every deploy
+# made a new app image (even one built all from cache) and recreated the app.
 $SSH "$HOST" 'chmod 600 radio/.env && cd radio &&
   mkdir -p music plays logs covers &&
-  docker compose up -d --build --remove-orphans'
+  BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose up -d --build --remove-orphans'
 
 changed() { printf '%s\n' "$out" | grep -qF "$1"; }
 

@@ -32,14 +32,21 @@ fi
 HOST=ubuntu@$IP
 
 # Mirror local files to the server. -O: the ubuntu user can't set times on the
-# dirs compose.yml's init service owns.
-rs() { rsync -rltO --delete --chmod=D755,F644 -e "$SSH" "$@"; }
+# dirs compose.yml's init service owns. -i lists each change as it happens; tee
+# keeps a copy in $log to know what changed (sh has no pipefail, so rsync's exit
+# status goes through $log.status).
+log=$(mktemp)
+trap 'rm -f "$log" "$log.status"' EXIT
+rs() {
+  { rsync -rltO --delete --chmod=D755,F644 -e "$SSH" -i "$@" ||
+    echo $? >"$log.status"; } | tee -a "$log"
+  [ ! -s "$log.status" ]
+}
 
-# Sync everything; capture itemized output to know what changed.
-out=$(
-  { git ls-files -z && printf '.env\0'; } | rs -i --from0 --files-from=- ./ "$HOST:radio/" &&
-    rs -i music covers shows "$HOST:radio/"
-)
+# Sync everything.
+{ git ls-files -z && printf '.env\0'; } | rs --from0 --files-from=- ./ "$HOST:radio/"
+rs music covers shows "$HOST:radio/"
+out=$(cat "$log")
 
 # Pre-create bind-mounted dirs so Docker doesn't create them as root on first run.
 $SSH "$HOST" 'chmod 600 radio/.env && cd radio &&

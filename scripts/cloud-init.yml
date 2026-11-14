@@ -13,6 +13,10 @@ write_files:
       PasswordAuthentication no
       KbdInteractiveAuthentication no
       X11Forwarding no
+      PermitRootLogin no
+      AllowAgentForwarding no
+      MaxAuthTries 3
+      LoginGraceTime 20
   # Reboot after security updates that need it (kernel, libc), at 11:00 UTC
   # (3-4 am Pacific). Docker restarts the station afterwards.
   - path: /etc/apt/apt.conf.d/52unattended-reboot

@@ -3,6 +3,11 @@
 # notice for each beets AcoustID fingerprint tag too long to recode.
 settings.log.level := 2
 
+# FFmpeg's own warnings ("stream 1, timescale not set" for cover art in .m4a,
+# "Could not update timestamps for skipped samples" at MP3 encoder padding)
+# are about every file and harmless; keep its errors.
+settings.ffmpeg.log.verbosity := "error"
+
 # Autocue measures each track ahead of play (default: at up to 70x real time)
 # and skips a track whose measuring it estimates at over 10 s (default), i.e.
 # any over ~12 min: those then played without loudness normalization or
@@ -80,9 +85,9 @@ end
 # Listeners on an Icecast mount right now, from its status page; 0 on error.
 def listeners(mount) =
   try
-    let json.parse ({icestats = {source}} : {icestats: {source: {listeners: int}}}) =
+    let json.parse (status : {icestats: {source: {listeners: int}}}) =
       http.get(timeout=2., "http://icecast:8000/status-json.xsl?mount=/#{mount}")
-    source.listeners
+    status.icestats.source.listeners
   catch _ do
     0
   end
@@ -196,6 +201,10 @@ def show(f) =
   output.icecast(
     %mp3(bitrate = 256),
     encoding="UTF-8",
+    # Only "song" ("Artist - Title"), which Icecast shows players as the
+    # StreamTitle. Sending artist and title too made Icecast warn on every
+    # track that it got "song" but also "artist" and/or "title".
+    icy_metadata=["song"],
     host="icecast",
     password=environment.get("PASSWORD"),
     mount=slug,

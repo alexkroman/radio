@@ -19,12 +19,16 @@ settings.clock.log_delay_threshold := 1.
 # and skips a track whose measuring it estimates at over 10 s (default), i.e.
 # any over ~12 min: those then played without loudness normalization or
 # silence trimming. Measure at up to 30x, which spreads out its CPU use,
-# and allow 90 s (tracks up to 45 min; the longest is 30). A track is measured
-# while the one before it plays. The measuring isn't bound by
-# settings.request.timeout.
+# and allow 90 s: tracks up to 45 min (gloaming has a few up to 2 hours, which
+# play unmeasured). A track is measured while the one before it plays.
 settings.autocue.internal.ratio := 30.
 settings.autocue.internal.timeout := 90.
 enable_autocue_metadata()
+
+# Preparing a track (measuring included) may take as long as autocue allows.
+# The measuring isn't cut off at this limit (default 29 s), but Liquidsoap
+# warned "Time limit exceeded" for every track over ~15 min.
+settings.request.timeout := 120.
 
 # Every shows/<slug>.md is a 24/7 MP3 stream on Icecast mount /<slug> (public
 # at /<slug>/stream via Caddy) playing music/<slug>/ on shuffle. Each play is

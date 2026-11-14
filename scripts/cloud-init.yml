@@ -10,6 +10,11 @@ write_files:
     content: |
       Unattended-Upgrade::Automatic-Reboot "true";
       Unattended-Upgrade::Automatic-Reboot-Time "11:00";
+  # Keep containers (and the streams) running while Docker itself restarts,
+  # e.g. after a docker.io update; without it, every listener is dropped.
+  - path: /etc/docker/daemon.json
+    content: |
+      {"live-restore": true}
 runcmd:
   # Group 10001 owns the data dirs (compose.yml's init service), so rsync can
   # update covers/.

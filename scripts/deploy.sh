@@ -80,8 +80,12 @@ fi
 
 # Caddy reloads its config in place without dropping connections (a no-op
 # when it's unchanged), so do it every time, which also catches up after an
-# interrupted deploy.
-$SSH "$HOST" 'cd radio && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile'
+# interrupted deploy. Its output (info lines like "using config from file")
+# is shown only if the reload fails.
+# shellcheck disable=SC2016 # $out expands on the server
+$SSH "$HOST" 'cd radio &&
+  out=$(docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>&1) ||
+  { printf "%s\n" "$out" >&2; exit 1; }'
 
 # Back up the play log (the only record for SoundExchange reports) to
 # backup/plays/. Never deletes, and never touches the local plays/.

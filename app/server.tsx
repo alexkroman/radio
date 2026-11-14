@@ -199,69 +199,101 @@ app.get("/manifesto", async (c) => {
     <main class="page page-manifesto">
       <SiteHeader current="manifesto" />
       <h1 class="display">Manifesto</h1>
-      <p class="lead">
-        Music is not content. This is a nonprofit alternative to Spotify: radio made by people, for nobody's
-        profit.
-      </p>
-      <section class="prose" aria-labelledby="manifesto-people">
-        <h2 id="manifesto-people" class="label">
-          People, not algorithms
+      <p class="lead">Public radio for the streaming era: a nonprofit alternative to Spotify.</p>
+      <section class="prose" aria-labelledby="manifesto-why">
+        <h2 id="manifesto-why" class="label">
+          Why
         </h2>
         <p>
-          A song chosen by a person means more than a song chosen by a machine. Every one of{" "}
-          <a href="/">our stations</a> is put together by hand, by a DJ who loves what they are playing. No
-          recommendation engine, no guess at what will keep you here longest.
+          Radio was free to anyone with a receiver, heard by everyone at once, programmed by people and paid
+          for in the open. You didn't need an account to hear a song, and nobody kept a record of what you
+          heard.
+        </p>
+        <p>
+          Streaming made listening private. It needs an account, reports every play back to a company and
+          mixes the music with advertising. Algorithms pick songs to keep you listening longer, not to play
+          you something good. And subscription money flows into a pool where the biggest artists take most of
+          it.
+        </p>
+        <p>
+          Listeners didn't choose this; licensing costs did. On-demand music is so expensive to license that
+          only companies selling attention at scale can afford the catalogue.
+        </p>
+        <p>
+          The way a culture hears its music shouldn't have to be an advertising product. Musicians need a
+          place where every play pays the same rate and pays them directly. Listeners need a way to hear music
+          that doesn't watch them back. The law already allows it. It just needs building.
         </p>
       </section>
-      <section class="prose" aria-labelledby="manifesto-listeners">
-        <h2 id="manifesto-listeners" class="label">
-          Listeners, not users
+      <section class="prose" aria-labelledby="manifesto-how">
+        <h2 id="manifesto-how" class="label">
+          How
         </h2>
         <p>
-          We refuse ads. We refuse subscriptions, premium tiers and sign-up forms. We will not sell your
-          attention, because we sell nothing at all. We are not a company, and nobody makes money from this.
+          Spotify pays roughly 70% of its revenue for on-demand licenses, on every stream, for as long as it
+          runs. A station like this one, where you can't pick the song, uses the statutory license in US
+          copyright law instead:
+        </p>
+        <ul>
+          <li>Every recording is licensed from day one. No label deals, no holdouts.</li>
+          <li>
+            A noncommercial station pays a flat minimum per channel that covers a large block of listening
+            hours. Until we pass it, one more listener costs nothing.
+          </li>
+          <li>Nobody takes a cut of revenue, and no shareholder is owed growth.</li>
+        </ul>
+        <p>So the station doesn't need a big audience to survive.</p>
+      </section>
+      <section class="prose" aria-labelledby="manifesto-what">
+        <h2 id="manifesto-what" class="label">
+          What it is
+        </h2>
+        <p>
+          A few <a href="/">channels</a>, each programmed by a person, playing around the clock: music for
+          work, driving, cooking, the background of a day. No ads. No account. No tracking.
+        </p>
+        <p>It isn't trying to be a better Spotify. It's trying to be what Spotify's business can't be.</p>
+      </section>
+      <section class="prose" aria-labelledby="manifesto-money">
+        <h2 id="manifesto-money" class="label">
+          Where the money goes
+        </h2>
+        <p>
+          Through SoundExchange, every play pays the same rate, superstar or unknown. The law sets the split:
+          50% to the rights owner, 45% straight to the featured artists rather than through their label, and
+          5% to session musicians and singers. On Spotify, most of the money goes to the top artists, through
+          label deals.
+        </p>
+        <p>
+          When a channel here plays a band, the band gets paid, directly, at the same rate as anyone else. Our{" "}
+          <a href="/reports">reports</a> show every play.
         </p>
       </section>
-      <section class="prose" aria-labelledby="manifesto-radio">
-        <h2 id="manifesto-radio" class="label">
-          Radio, not a feed
+      <section class="prose" aria-labelledby="manifesto-not">
+        <h2 id="manifesto-not" class="label">
+          What we don't do
         </h2>
-        <p>
-          Everyone who tunes in hears the same song at the same moment. You cannot skip, search or queue. You
-          can only listen. We believe that giving up control is how you hear the thing you would never have
-          looked for.
-        </p>
-      </section>
-      <section class="prose" aria-labelledby="manifesto-artists">
-        <h2 id="manifesto-artists" class="label">
-          Artists, not catalogues
-        </h2>
-        <p>
-          Music is made by people who deserve to be named and paid. Every play is logged and published in our{" "}
-          <a href="/reports">reports</a>, in the format SoundExchange uses to pay royalties to artists and
-          labels. The title and artist are always on screen. If you love something, go and buy the record.
-        </p>
-      </section>
-      <section class="prose" aria-labelledby="manifesto-open">
-        <h2 id="manifesto-open" class="label">
-          Yours to take
-        </h2>
-        <p>
-          Radio should belong to whoever wants to make it. This station runs on a small server and{" "}
-          <a href="https://github.com/alexkroman/radio" rel="noopener">
-            open-source software
-          </a>
-          . Copy it. Start your own.
-        </p>
+        <ul>
+          <li>
+            On-demand, offline or personal libraries. The license forbids them, so this complements Spotify
+            rather than replacing it.
+          </li>
+          <li>
+            Artist marathons or whole albums. The license limits how many tracks from one artist or album can
+            play in a row.
+          </li>
+          <li>Algorithms. People pick every song.</li>
+          <li>
+            Ads, or selling your data. Listening is free and untracked. The station runs on listeners who
+            choose to pay, which is enough because the costs are flat.
+          </li>
+        </ul>
       </section>
       <section class="prose" aria-labelledby="manifesto-listen">
         <h2 id="manifesto-listen" class="label">
           Listening
         </h2>
-        <p>
-          Press play on any station in your browser. Each one also has a direct stream URL that works in radio
-          apps, VLC and most internet-radio hardware.
-        </p>
+        <p>Press play on any station, or open its stream URL in a radio app or VLC.</p>
         <dl class="streams">
           {shows.map((s) => (
             <div>
@@ -282,7 +314,7 @@ app.get("/manifesto", async (c) => {
           Contact
         </h2>
         <p>
-          Questions, a record we should hear, or a takedown request:{" "}
+          Questions, records we should hear, takedowns:{" "}
           <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
         </p>
       </section>

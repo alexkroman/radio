@@ -560,6 +560,16 @@ img.cover {
   color: var(--color-body);
 }
 
+.prose ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 1.2em;
+  font: var(--type-body);
+  color: var(--color-body);
+  list-style: disc;
+}
+
 /* stylelint-disable-next-line no-descending-specificity -- body-text links only */
 .prose p a {
   text-decoration: underline;

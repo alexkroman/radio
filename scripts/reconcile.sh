@@ -23,5 +23,8 @@ if ! dc exec -T liquidsoap cat /radio.liq | cmp -s - radio.liq ||
   ! dc exec -T liquidsoap sh -c 'for _ in $(seq 30); do [ -e /tmp/shows ] && break; sleep 1; done
     [ "$(sort /tmp/shows)" = "$(ls /shows/*.md 2>/dev/null | sort)" ]'; then
   echo "Restarting Liquidsoap (radio.liq or the shows changed)"
+  # Icecast applies the reload above in the background: a source that stopped
+  # in the same second could lose its fallback and drop its listeners.
+  sleep 5
   dc restart liquidsoap >/dev/null
 fi

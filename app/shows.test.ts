@@ -23,8 +23,6 @@ djs:
       Number: 42
   - Ben Cho
   - name: 李小龙
-  - name: Bad Slug
-    slug: Not A Slug
   - 12345
   - ""
 ---
@@ -34,15 +32,6 @@ The **first** show.
   "b-dj.md": `---
 title: B Dj
 djs: [Ana Ruiz]
----
-`,
-  // One DJ with a slug of their own.
-  "c-dj-map.md": `---
-title: C Dj Map
-djs:
-  - name: 李小龙
-    slug: bruce-lee
-    tagline: Hong Kong
 ---
 `,
   // Details for a DJ another show named first.
@@ -92,7 +81,6 @@ describe("shows", () => {
     expect((await shows.getShows()).map((s) => s.slug)).toEqual([
       "a-list",
       "b-dj",
-      "c-dj-map",
       "d-djs-one",
       "e-accents",
       "e-plain",
@@ -140,10 +128,6 @@ describe("a show's DJs", () => {
     expect(await djs("b-dj")).toEqual([{ slug: "ana-ruiz", name: "Ana Ruiz" }]);
   });
 
-  test("one DJ with a slug of their own", async () => {
-    expect(await djs("c-dj-map")).toEqual([{ slug: "bruce-lee", name: "李小龙" }]);
-  });
-
   test("djs: that isn't a list, or dj:, is no DJs", async () => {
     expect(await djs("h-not-list")).toEqual([]);
   });
@@ -183,10 +167,6 @@ describe("a DJ", () => {
   test("photos outside shows/ or not images are left out", async () => {
     expect((await shows.getDj("ben-cho"))?.photo).toBeUndefined();
     expect((await shows.getDj("zoe-nandu"))?.photo).toBeUndefined();
-  });
-
-  test("with a slug of their own is found by it", async () => {
-    expect(await shows.getDj("bruce-lee")).toMatchObject({ name: "李小龙", tagline: "Hong Kong", links: [] });
   });
 
   test("not on any show is undefined", async () => {

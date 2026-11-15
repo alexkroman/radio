@@ -61,7 +61,7 @@ function djEntry(v: unknown): DjEntry | undefined {
   const o = (typeof v === "object" && v !== null ? v : { name: v }) as Record<string, unknown>;
   const name = str(o["name"]);
   if (!name) return undefined;
-  const slug = str(o["slug"]) ?? slugify(name);
+  const slug = slugify(name);
   if (!new RegExp(`^${SLUG}$`).test(slug)) return undefined;
   const photoFile = str(o["photo"]);
   const photo = photoFile && resolve(SHOWS, photoFile);

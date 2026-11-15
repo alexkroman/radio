@@ -49,49 +49,9 @@ def artists_of(a) =
   list.filter(fun (x) -> x != "", list.map(string.trim, parts))
 end
 
-# Artist and title from an "Artist- Title" file name (or the whole name as
-# title), for untagged files.
-def filename_tags(uri) =
-  name = path.remove_extension(path.basename(uri))
-  parts =
-    string.split(
-      separator="- ",
-      name
-    )
-  if
-    list.length(parts) > 1
-  then
-    [
-      ("artist", list.hd(default="", parts)),
-      (
-        "title",
-        string.concat(
-          separator="- ",
-          list.tl(parts)
-        )
-      )
-    ]
-  else
-    [("title", name)]
-  end
-end
-
-# A track's artists, from its tag or (untagged) its file name.
+# A track's artists, from its tag.
 def track_artists(r) =
-  a = list.assoc(default="", "artist", request.metadata(r))
-  artists_of(if a != "" then a else list.assoc(default="", "artist", filename_tags(request.uri(r))) end)
-end
-
-# Untagged files get artist/title from their file name so they still show up
-# in the log and the report.
-def title_from_filename(m) =
-  if
-    list.assoc(default="", "title", m) != ""
-  then
-    []
-  else
-    filename_tags(list.assoc(default="", "filename", m))
-  end
+  artists_of(list.assoc(default="", "artist", request.metadata(r)))
 end
 
 # Listeners on an Icecast mount right now, from its status page; 0 on error.
@@ -118,9 +78,6 @@ def safe_recode(s) =
     end
   end
 end
-
-# Played on a show that has nothing else to play (optional).
-offline = "/music/offline.mp3"
 
 def show(f) =
   slug = path.remove_extension(path.basename(f))
@@ -151,12 +108,7 @@ def show(f) =
     end
   end
 
-  tracks =
-    metadata.map(
-      insert_missing=true,
-      title_from_filename,
-      playlist(mode="randomize", reload_mode="watch", check_next=artist_not_recent, "/music/#{slug}")
-    )
+  tracks = playlist(mode="randomize", reload_mode="watch", check_next=artist_not_recent, "/music/#{slug}")
 
   # Per track (on the playlist: the crossfaded source doesn't mark every track),
   # from the raw metadata before the text recode below: the play log (with the
@@ -198,13 +150,9 @@ def show(f) =
   # once it has been silent for 10 s.
   music = crossfade(duration=12., fade_in=6., fade_out=6., blank.skip(max_blank=10., amplify(1., tracks)))
 
-  # When the show has nothing to play (no music, or every file fails), play
-  # music/offline.mp3 if there is one, else silence (mksafe), so listeners
-  # stay connected either way.
-  music =
-    if file.exists(offline) then fallback(track_sensitive=false, [music, single(offline)]) else music end
-
   # Limiter catches peaks from tracks autocue boosted and crossfade overlaps.
+  # When the show has nothing to play (no music, or every file fails), it
+  # plays silence (mksafe), so listeners stay connected.
   radio = limit(mksafe(music))
   radio = metadata.map(fun (m) -> list.map(fun (kv) -> (fst(kv), safe_recode(snd(kv))), m), radio)
 

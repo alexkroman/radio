@@ -110,22 +110,16 @@ export const Cover = ({ play, size, labelled }: { play?: Play; size: string; lab
     <span class={`cover ${size} cover-ph`} aria-hidden="true" />
   );
 
-// A station's current track as the player bar shows it (client.ts `Track`):
-// served as /<slug>/now.json and as the data-* attributes of npData.
+// A station's current track as the player bar shows it (client.ts `Track`),
+// in /now.json.
 export const nowTrack = (play?: Play) => ({
   track: play?.title ?? "",
   artist: play?.artist ?? "",
   cover: play?.cover ? coverUrl(play.cover) : "",
 });
 
-// Data the client reads to fill the player bar for a station.
-export const npData = (slug: string, play?: Play) => {
-  const { track, artist, cover } = nowTrack(play);
-  return { "data-np": slug, "data-track": track, "data-artist": artist, "data-cover": cover };
-};
-
-// Re-fetches the page on "refresh" (sent every 15 s by client.ts's one poll)
-// and swaps in just the elements with these ids.
+// Re-fetches the page on "refresh" (sent by client.ts when a station shown
+// here, by data-np, changes track) and swaps in just the elements with these ids.
 export const Poll = ({ path, ids }: { path: string; ids: string[] }) => (
   <div
     id="poll"

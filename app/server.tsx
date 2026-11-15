@@ -1,5 +1,5 @@
 // The web app behind Caddy: the stations list (/), each show's station page
-// (/<slug>) and current track (/<slug>/now.json), DJ pages (/djs/<dj>), /manifesto,
+// (/<slug>), every station's current track (/now.json), DJ pages (/djs/<dj>), /manifesto,
 // and the SoundExchange reports (/reports). Shows are shows/<slug>.md (app/shows.ts), with
 // their DJs in the front matter; Liquidsoap serves their streams via Caddy.
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -18,7 +18,6 @@ import {
   DjCredit,
   ICONS,
   Markdown,
-  npData,
   PlayButton,
   Poll,
   SITE_TITLE,
@@ -61,7 +60,7 @@ const StationRow = ({ show, play, num }: { show: Show; play?: Play; num?: number
       <Markdown class="station-desc" html={show.description} />
       {num !== undefined && <DjCredit djs={show.djs} class="station-credit" />}
     </div>
-    <div id={`np-${show.slug}`} class="station-np" {...npData(show.slug, play)}>
+    <div id={`np-${show.slug}`} class="station-np" data-np={show.slug}>
       <Cover play={play} size="cover-56" labelled />
       <div class="np-lines">
         <TrackLines play={play} cls="np" />
@@ -73,7 +72,7 @@ const StationRow = ({ show, play, num }: { show: Show; play?: Play; num?: number
 
 // The station page's cover and text (the play button stays put when this is refreshed).
 const NowPlaying = ({ show, play }: { show: Show; play?: Play }) => (
-  <div id="np" class="np" {...npData(show.slug, play)}>
+  <div id="np" class="np" data-np={show.slug}>
     <Cover play={play} size="cover-120" labelled />
     <div class="np-text">
       <span class="label np-status">
@@ -430,12 +429,12 @@ app.get(`/djs/:dj{${SLUG}}/photo`, async (c) => {
   return (photo && (await serveStatic({ path: photo })(c, async () => {}))) || c.notFound();
 });
 
-// The current track, for the player (client.ts) and the lock screen.
-app.get(`/:slug{${SLUG}}/now.json`, async (c) => {
-  const slug = c.req.param("slug");
-  const [show, [play]] = await Promise.all([getShow(slug), recentPlays(slug, 1)]);
-  if (!show) return c.notFound();
-  return c.json(nowTrack(play));
+// Every station's current track, by slug: client.ts polls it for the player
+// bar, the lock screen and when to refresh the page.
+app.get("/now.json", async (c) => {
+  const shows = await getShows();
+  const latest = await latestPlays(shows.map((s) => s.slug));
+  return c.json(Object.fromEntries(shows.map((s) => [s.slug, nowTrack(latest.get(s.slug))])));
 });
 
 // Per-track covers extracted by scripts/import.sh → covers/<show>/<stem>.jpg

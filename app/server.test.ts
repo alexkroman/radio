@@ -145,12 +145,13 @@ describe("pages", () => {
   });
 
   test("unknown pages are 404", async () => {
-    for (const path of ["/nope", "/djs/nobody", "/djs/nobody/photo", "/nope/now.json"])
+    for (const path of ["/nope", "/djs/nobody", "/djs/nobody/photo"])
       expect((await page(path)).status, path).toBe(404);
   });
 
-  test("a station's now.json is its current track", async () => {
-    expect(await (await page("/default/now.json")).json()).toEqual({
+  test("now.json has each station's current track", async () => {
+    const now = await (await page("/now.json")).json();
+    expect(now.default).toEqual({
       track: "Second Wind",
       artist: "Beta & Band",
       cover: "/covers/default/Beta%20&%20Band-%20Second%20Wind.jpg",
@@ -158,7 +159,7 @@ describe("pages", () => {
     const art = await page("/covers/default/Beta%20&%20Band-%20Second%20Wind.jpg");
     expect(art.status).toBe(200);
     expect(art.headers.get("cache-control")).toBe("public, max-age=3600");
-    expect(await (await page("/night/now.json")).json()).toEqual({
+    expect(now.night).toEqual({
       track: "Midnight",
       artist: "Gamma",
       cover: "",

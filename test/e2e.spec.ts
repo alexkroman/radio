@@ -160,7 +160,7 @@ test("home page now playing and cover follow the track without a reload", async 
 
 test("cover art of the current track is served", async ({ request }) => {
   await expect(async () => {
-    const { cover } = await (await request.get("/night/now.json")).json();
+    const { cover } = (await (await request.get("/now.json")).json()).night;
     const res = await request.get(cover);
     expect(res.status()).toBe(200);
     expect(res.headers()["content-type"]).toBe("image/jpeg");
@@ -271,7 +271,7 @@ test("switching shows plays the new stream in the tap, on the phone's own output
   expect(await page.evaluate(() => (window as unknown as { plays: boolean[] }).plays)).toEqual([true, true]);
   expect(await remote()).toEqual({ disabled: true, airplay: "deny" });
   // The lock screen's track, and the bar's off the station's page.
-  const { track } = await (await page.request.get("/night/now.json")).json();
+  const { track } = (await (await page.request.get("/now.json")).json()).night;
   await expect.poll(() => page.evaluate(() => navigator.mediaSession.metadata?.title)).toBe(track);
   await page.getByRole("link", { name: "Manifesto" }).first().click();
   await expect(page).toHaveURL(/\/manifesto$/);
@@ -419,7 +419,7 @@ test.describe("logged out", () => {
 
   test("pages need a login; streams and assets don't", async ({ page, request }) => {
     expect((await request.get("/night")).status()).toBe(401);
-    expect((await request.get("/night/now.json")).status()).toBe(401);
+    expect((await request.get("/now.json")).status()).toBe(401);
     expect((await request.get("/assets/app.css")).status()).toBe(200);
     expect((await streamHead("/night/stream")).status).toBe(200);
 

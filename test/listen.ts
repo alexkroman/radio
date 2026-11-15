@@ -1,7 +1,7 @@
-// A listener for test/e2e.sh's deploy checks: plays a show's stream through
-// Caddy, as a player does, and logs each pause in the audio over 1 s, the
-// longest on SIGTERM, and the stream ending (a dropped listener).
-// Run in the e2e container: node test/listen.ts <slug>
+// A listener for test/e2e.sh's deploy checks: plays the stream through Caddy,
+// as a player does, and logs each pause in the audio over 1 s, the longest on
+// SIGTERM, and the stream ending (a dropped listener).
+// Run in the e2e container: node test/listen.ts
 import { request } from "node:https";
 
 const log = (line: string) => console.log(`${new Date().toISOString()} ${line}`);
@@ -9,7 +9,7 @@ const base = process.env.BASE_URL ?? "https://localhost";
 let last = Date.now();
 let longest = 0;
 
-request(new URL(`/${process.argv[2]}/stream`, base), { rejectUnauthorized: false }, (res) => {
+request(new URL("/stream", base), { rejectUnauthorized: false }, (res) => {
   log(`connected ${res.statusCode}`);
   last = Date.now();
   res.on("data", () => {

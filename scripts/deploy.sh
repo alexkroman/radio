@@ -19,6 +19,9 @@ if [ "$(git branch --show-current)" != main ] ||
   echo "  git checkout main && git pull" >&2
   exit 1
 fi
+# The shows' hours must cover every hour of the day exactly once: a gap would
+# be silence on air.
+node app/check-schedule.ts || exit 1
 # A show without its music folder would play nothing but silence.
 for show in shows/*.md; do
   slug=$(basename "$show" .md)

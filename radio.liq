@@ -33,11 +33,80 @@ enable_autocue_metadata()
 # warns "Time limit exceeded" for a track that takes longer.
 settings.request.timeout := 45.
 
-# Every shows/<slug>.md is a 24/7 MP3 stream on Icecast mount /<slug> (public
-# at /<slug>/stream via Caddy) playing music/<slug>/ on shuffle. Each play is
-# appended to /plays/YYYY-MM.jsonl (read by the app's page and report).
-# Adding or removing a show needs an Icecast reload and a Liquidsoap restart
-# (neither drops a listener): scripts/reconcile.sh does both when needed.
+# One 24/7 MP3 stream, Icecast mount /stream (public at /stream via Caddy),
+# playing the shows on a daily schedule. Every shows/<slug>.md is a show,
+# playing music/<slug>/ on shuffle during its `hours:` (front matter, see
+# show_hours); each play is appended to /plays/YYYY-MM.jsonl (read by the app's
+# pages and report). Hours edits apply within a minute; adding or removing a
+# show needs a Liquidsoap restart (no listener is dropped), which
+# scripts/reconcile.sh does when needed.
+
+# A show's hours, from `hours: <start>-<end>` in its front matter: whole hours
+# on a 24-hour clock in local time (TZ), the end not included; 22-6 runs past
+# midnight, 0-24 all day. (0, 0), never on air, when there are none (or no file).
+# app/shows.ts reads them the same way.
+def show_hours(f) =
+  try
+    lines = string.split(separator="\n", file.contents(f))
+    def rec front(acc, ls) =
+      if
+        ls == [] or string.trim(list.hd(ls)) == "---"
+      then
+        acc
+      else
+        front("#{acc}#{list.hd(ls)}\n", list.tl(ls))
+      end
+    end
+    yml = if lines != [] and string.trim(list.hd(lines)) == "---" then front("", list.tl(lines)) else "" end
+    let yaml.parse (meta : {hours?: string}) = yml
+    m = r/^\s*(\d{1,2})\s*-\s*(\d{1,2})\s*$/.exec(meta.hours ?? "")
+    start = int_of_string(list.assoc(1, m))
+    stop = int_of_string(list.assoc(2, m))
+    if start < 24 and stop <= 24 then (start, stop) else (0, 0) end
+  catch _ do
+    (0, 0)
+  end
+end
+
+# Whether hour (0-23) is within hours (show_hours).
+def within(hour, hours) =
+  let (start, stop) = hours
+  if
+    start < stop
+  then
+    hour >= start and hour < stop
+  elsif
+    start > stop
+  then
+    hour >= start or hour < stop
+  else
+    false
+  end
+end
+
+# The show put on air by hand, overriding the schedule ("" for none). Only the
+# end-to-end tests do (test/compose.yml sets ONAIR_PORT): POST /onair with a
+# slug, or nothing to go back to the schedule, on that port, which only the
+# containers' own network reaches.
+onair = ref("")
+onair_port = int_of_string(default=0, environment.get("ONAIR_PORT"))
+if
+  onair_port > 0
+then
+  harbor.http.register.simple(
+    port=onair_port,
+    method="POST",
+    "/onair",
+    fun (req) ->
+      begin
+        onair := string.trim(req.body())
+        log.important(
+          "On air by hand: #{onair()}"
+        )
+        http.response(content_type="text/plain", data="#{onair()}\n")
+      end
+  )
+end
 
 # Artists of a track (split on ",", "&", "feat.", "x", "with").
 def artists_of(a) =
@@ -79,6 +148,7 @@ def safe_recode(s) =
   end
 end
 
+# A show's source.
 def show(f) =
   slug = path.remove_extension(path.basename(f))
 
@@ -133,7 +203,7 @@ def show(f) =
             label = tag(or_tag="publisher", "label"),
             isrc = tag(or_tag="tsrc", "isrc"),
             cover = if file.exists("/covers/#{cover}") then cover else "" end,
-            listeners = listeners(slug)
+            listeners = listeners("stream")
           }
         file.write(
           append=true,
@@ -148,32 +218,114 @@ def show(f) =
   # Dead air: autocue trims silence at a track's ends; blank.skip skips a track
   # (a hidden track after minutes of silence, a file that decodes to nothing)
   # once it has been silent for 10 s.
-  music = crossfade(duration=12., fade_in=6., fade_out=6., blank.skip(max_blank=10., amplify(1., tracks)))
+  music = blank.skip(max_blank=10., amplify(1., tracks))
 
-  # Limiter catches peaks from tracks autocue boosted and crossfade overlaps.
-  # When the show has nothing to play (no music, or every file fails), it
-  # plays silence (mksafe), so listeners stay connected.
-  radio = limit(mksafe(music))
-  radio = metadata.map(fun (m) -> list.map(fun (kv) -> (fst(kv), safe_recode(snd(kv))), m), radio)
-
-  # icecast/silence.mp3 (Icecast's fallback while this restarts; see
-  # icecast/config.sh) is the same format: change both together.
-  output.icecast(
-    %mp3(bitrate = 256),
-    encoding="UTF-8",
-    # Only "song" ("Artist - Title"), which Icecast shows players as the
-    # StreamTitle. Sending artist and title too made Icecast warn on every
-    # track that it got "song" but also "artist" and/or "title".
-    icy_metadata=["song"],
-    host="icecast",
-    password=environment.get("PASSWORD"),
-    mount=slug,
-    radio
-  )
+  music
 end
 
 shows = file.ls(absolute=true, pattern="*.md", "/shows")
-list.iter(show, shows)
+slug_of = fun (f) -> path.remove_extension(path.basename(f))
 
-# The shows this process streams, for scripts/reconcile.sh to compare with /shows.
+# Each show's hours, by slug, re-read every minute so an edit applies without
+# a restart.
+read_hours = fun () -> list.map(fun (f) -> (slug_of(f), show_hours(f)), shows)
+schedule = ref(read_hours())
+
+# Every hour must have exactly one show. app/check-schedule.ts stops a commit
+# or deploy that breaks this; if it happens anyway, it's an error in the log,
+# but the stream goes on: an hour without a show plays silence, and one with
+# two plays the first by slug.
+def check_schedule() =
+  list.iter(
+    fun (s) ->
+      begin
+        log.important(
+          "#{fst(s)}: hours #{snd(s)}"
+        )
+        if
+          snd(s) == (0, 0)
+        then
+          log.severe(
+            "#{fst(s)}: no valid hours (e.g. hours: 6-17)"
+          )
+        end
+      end,
+    schedule()
+  )
+  list.iter(
+    fun (hour) ->
+      begin
+        on = list.map(fst, list.filter(fun (s) -> within(hour, snd(s)), schedule()))
+        if
+          on == []
+        then
+          log.severe(
+            "#{hour}:00: no show on air (silence)"
+          )
+        elsif
+          list.length(on) > 1
+        then
+          log.severe(
+            "#{hour}:00: more than one show on air: #{on}"
+          )
+        end
+      end,
+    list.init(24, fun (h) -> h)
+  )
+end
+check_schedule()
+thread.run(
+  every=60.,
+  fun () ->
+    begin
+      now = read_hours()
+      if
+        now != schedule()
+      then
+        schedule := now
+        check_schedule()
+      end
+    end
+)
+
+# Whether a show is on air: by its hours, or by hand (onair).
+def on_air(slug) =
+  fun () ->
+    if
+      onair() != ""
+    then
+      onair() == slug
+    else
+      within(time.local().hour, list.assoc(default=(0, 0), slug, schedule()))
+    end
+end
+
+# The show on air: when one's hours start, the playing track finishes first
+# (track_sensitive), so a show starts up to a track late. A show off air isn't
+# played at all: it picks up where it left off (and logs nothing meanwhile).
+# Hours no show has, or a show with nothing to play (no music, or every file
+# fails), play silence (mksafe), so listeners stay connected.
+music = switch(track_sensitive=true, list.map(fun (f) -> (on_air(slug_of(f)), show(f)), shows))
+music = crossfade(duration=12., fade_in=6., fade_out=6., music)
+
+# Limiter catches peaks from tracks autocue boosted and crossfade overlaps.
+radio = limit(mksafe(music))
+radio = metadata.map(fun (m) -> list.map(fun (kv) -> (fst(kv), safe_recode(snd(kv))), m), radio)
+
+# icecast/silence.mp3 (Icecast's fallback while this restarts; see
+# icecast/config.sh) is the same format: change both together.
+output.icecast(
+  %mp3(bitrate = 256),
+  encoding="UTF-8",
+  # Only "song" ("Artist - Title"), which Icecast shows players as the
+  # StreamTitle. Sending artist and title too made Icecast warn on every
+  # track that it got "song" but also "artist" and/or "title".
+  icy_metadata=["song"],
+  host="icecast",
+  password=environment.get("PASSWORD"),
+  mount="stream",
+  radio
+)
+
+# The shows this process plays, for scripts/reconcile.sh to compare with /shows.
 file.write(data=string.concat(separator="\n", shows), "/tmp/shows")

@@ -34,8 +34,10 @@ services:
   icecast:
     volumes:
       - e2e-logs:/var/log/icecast
-      - e2e-shows:/shows:ro
   liquidsoap:
+    # The tests put the show they need on air (radio.liq onair; test/helpers.ts).
+    environment:
+      ONAIR_PORT: 7000
     volumes:
       - e2e-shows:/shows:ro
       - e2e-music:/music:ro

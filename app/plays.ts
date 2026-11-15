@@ -56,15 +56,15 @@ async function recent(): Promise<Play[]> {
   }
 }
 
-// A show's newest plays, newest first.
-export async function recentPlays(show: string, limit: number): Promise<Play[]> {
+// The newest plays, newest first: a show's, or the station's.
+export async function recentPlays(limit: number, show?: string): Promise<Play[]> {
   return (await recent())
-    .filter((p) => p.show === show)
+    .filter((p) => !show || p.show === show)
     .slice(-limit)
     .reverse();
 }
 
-// Each show's newest play, by show slug.
-export async function latestPlays(): Promise<Map<string, Play>> {
-  return new Map((await recent()).map((p) => [p.show, p]));
+// The play on air now (the newest; its show is the show on air).
+export async function latestPlay(): Promise<Play | undefined> {
+  return (await recent()).at(-1);
 }

@@ -29,13 +29,16 @@
 	}
 	log_skip @htmx
 
-	# Public: each show's stream at /<slug>/stream (Icecast mount /<slug>; GET
-	# and HEAD only, so no one can publish a source); everything else is the
-	# Node app.
+	# Public: the stream at /stream (Icecast mount /stream; GET and HEAD only,
+	# so no one can publish a source); everything else is the Node app.
 	@stream {
 		method GET HEAD
-		path_regexp ^/[a-z0-9-]+/stream$
+		path /stream
 	}
+	# Each show had its own stream at /<slug>/stream before the one scheduled
+	# stream: send players still using one there.
+	@oldstream path_regexp ^/[a-z0-9-]+/stream$
+	redir @oldstream /stream 301
 
 	header {
 		# Force HTTPS for a year.
@@ -51,7 +54,6 @@
 	}
 
 	handle @stream {
-		rewrite * /{path.0}
 		reverse_proxy icecast:8000 {
 			header_down -Server
 			header_up -Range

@@ -109,21 +109,35 @@ describe("site login", () => {
 });
 
 describe("pages", () => {
-  test("the stations list shows each show's latest play", async () => {
+  test("the home page has the show and track on air, the schedule and the station's history", async () => {
     const res = await page("/");
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("Fixture Default");
+    // On air: the newest play's show.
+    expect(html).toMatch(/<h2 class="display"><a href="\/night">Fixture Night<\/a>/);
+    expect(html).toMatch(/np-track">Midnight/);
+    expect(html).toContain('href="/stream"');
+    // Every show, in the order they start, the one on air marked.
+    const order = [...html.matchAll(/class="station-name" href="\/([a-z-]+)"/g)].map((m) => m[1]);
+    expect(order).toEqual(["default", "edge", "empty", "long", "night", "odd", "plain", "quiet"]);
+    expect(html.match(/On air<\/span>\s*<\/div>/g)).toHaveLength(1);
     expect(html).toContain("Second Wind");
-    expect(html).toContain("Midnight");
-    expect(html).toContain('<div id="player" data-slug="default" data-title="Fixture Default"></div>');
+    expect(html).toContain('<div id="player" data-title="Mazes Radio"></div>');
   });
 
-  test("a station page shows its now playing and history", async () => {
-    const html = await (await page("/default")).text();
-    expect(html).toMatch(/np-track">Second Wind/);
-    expect(html).toContain("First Light");
-    expect(html).not.toContain("Midnight");
+  test("a show page has its hours, and its track only while on air", async () => {
+    const off = await (await page("/default")).text();
+    expect(off).toMatch(
+      /Daily <span class="hours"><time class="time" datetime="[^"]+">12:00 AM<\/time>–<time class="time" datetime="[^"]+">3:00 AM</,
+    );
+    expect(off).toContain("Off air. Next on at");
+    expect(off).not.toContain('class="np-track"');
+    expect(off).toContain("Second Wind");
+    expect(off).toContain("First Light");
+    expect(off).not.toContain("Midnight");
+    const on = await (await page("/night")).text();
+    expect(on).toMatch(/np-track">Midnight/);
+    expect(on).not.toContain("Off air");
   });
 
   test("a DJ page lists their shows", async () => {
@@ -149,21 +163,20 @@ describe("pages", () => {
       expect((await page(path)).status, path).toBe(404);
   });
 
-  test("now.json has each station's current track", async () => {
-    const now = await (await page("/now.json")).json();
-    expect(now.default).toEqual({
-      track: "Second Wind",
-      artist: "Beta & Band",
-      cover: "/covers/default/Beta%20&%20Band-%20Second%20Wind.jpg",
-    });
-    const art = await page("/covers/default/Beta%20&%20Band-%20Second%20Wind.jpg");
-    expect(art.status).toBe(200);
-    expect(art.headers.get("cache-control")).toBe("public, max-age=3600");
-    expect(now.night).toEqual({
+  test("now.json has the track on air and its show", async () => {
+    expect(await (await page("/now.json")).json()).toEqual({
+      show: "night",
+      title: "Fixture Night",
       track: "Midnight",
       artist: "Gamma",
       cover: "",
     });
+  });
+
+  test("covers are served, cached for an hour", async () => {
+    const art = await page("/covers/default/Beta%20&%20Band-%20Second%20Wind.jpg");
+    expect(art.status).toBe(200);
+    expect(art.headers.get("cache-control")).toBe("public, max-age=3600");
   });
 
   test("an unchanged page is 304 to a request with its ETag", async () => {

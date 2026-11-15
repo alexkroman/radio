@@ -91,6 +91,14 @@ export async function loggedPlays(): Promise<Play[]> {
   });
 }
 
+// Put a show on air (radio.liq's onair, which test/compose.yml enables), and
+// wait for its first play: the track playing finishes first.
+export async function onAir(show: string, { wait = true } = {}) {
+  const res = await fetch("http://liquidsoap:7000/onair", { method: "POST", body: show });
+  if (!res.ok) throw new Error(`onair ${show}: ${res.status}`);
+  if (wait) await expect.poll(async () => (await loggedPlays()).at(-1)?.show, { timeout: 90_000 }).toBe(show);
+}
+
 // Reload until the now playing track matches (the show may not have logged it yet).
 export async function waitForTrack(page: Page, text: string | RegExp) {
   await expect(async () => {

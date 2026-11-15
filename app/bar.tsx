@@ -1,11 +1,19 @@
 /** @jsxImportSource hono/jsx/dom */
 // The fixed player bar, rendered in the browser with hono/jsx/dom
 // into #player (outside the swapped page, so it and the audio survive
-// navigation). app/client.ts sets what it shows with setBar(); it always shows,
-// with the last station played (at first, the site's first show), paused.
+// navigation). app/client.ts sets what it shows with setBar(): the show and
+// track on air; it always shows, paused until played.
 import { render, useLayoutEffect, useRef, useState } from "hono/jsx/dom";
 
-export type BarState = { title: string; track: string; artist: string; cover: string; playing: boolean };
+// station: the site's name (what the button plays); title: the show on air.
+export type BarState = {
+  station: string;
+  title: string;
+  track: string;
+  artist: string;
+  cover: string;
+  playing: boolean;
+};
 
 // What the bar shows, and its setter once it has rendered (one bar per page).
 let state: BarState | undefined;
@@ -61,7 +69,7 @@ function Bar({ onToggle }: { onToggle: () => void }) {
       <button
         type="button"
         class="play play-bar"
-        aria-label={`${s.playing ? "Pause" : "Play"} ${s.title}`}
+        aria-label={`${s.playing ? "Pause" : "Play"} ${s.station}`}
         onClick={onToggle}
       >
         {/* ui.tsx PauseIcon and PlayIcon (server JSX, so not shared). */}

@@ -287,13 +287,6 @@ img.cover {
   border-bottom: 1px solid var(--color-hairline);
 }
 
-.station-num {
-  flex: none;
-  width: 40px;
-  font: var(--type-time);
-  color: var(--color-muted);
-}
-
 .station-info {
   flex: 1 1 220px;
   min-width: 0;
@@ -329,7 +322,6 @@ img.cover {
   outline-offset: 2px;
 }
 
-.station .play,
 .station-desc :any-link,
 .station-credit :any-link {
   position: relative;
@@ -343,24 +335,24 @@ img.cover {
   color: var(--color-muted);
 }
 
-.station-np {
-  flex: 1 1 280px;
-  min-width: 0;
+/* A show's hours ("6:00 AM–5:00 PM"): in the schedule's first column. */
+.hours .time {
+  width: auto;
+}
+
+.station-hours {
+  flex: none;
+  width: 150px;
+  font: var(--type-time);
+  color: var(--color-muted);
+}
+
+.on-air {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 16px;
-}
-
-.np-lines {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  font: var(--type-small);
-}
-
-.np-lines .np-artist {
-  color: var(--color-muted);
+  gap: 8px;
+  color: var(--color-ink);
 }
 
 /* ── DJ credit: "with A & B" ── */
@@ -368,9 +360,10 @@ img.cover {
   color: var(--color-muted);
 }
 
-/* Underlined links: DJ credits and body text. */
+/* Underlined links: DJ credits, up next and body text. */
 /* stylelint-disable no-descending-specificity -- unrelated links */
 .credit a,
+.next a,
 .prose p a {
   text-decoration: underline;
   text-decoration-thickness: 1px;
@@ -436,6 +429,18 @@ img.cover {
 .np-text .np-artist {
   font: var(--type-subtitle);
   color: var(--color-muted);
+}
+
+.next {
+  margin: 0;
+  font: var(--type-small);
+  color: var(--color-muted);
+}
+
+.schedule {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .stream {
@@ -715,21 +720,12 @@ img.cover {
   }
 
   .station {
-    display: grid;
-    grid-template-columns: 64px minmax(0, 1fr) var(--tap);
-    grid-template-areas:
-      "cover info play"
-      "cover np play";
     gap: 4px 16px;
     padding: 22px 0;
   }
 
-  .station-num {
-    display: none;
-  }
-
-  .station-info {
-    grid-area: info;
+  .station-hours {
+    width: 100%;
   }
 
   .station-name {
@@ -737,39 +733,13 @@ img.cover {
   }
 
   .station-desc,
-  .station-desc *,
-  .np-lines {
+  .station-desc * {
     font-size: 14px;
   }
 
   .station-credit {
     margin-top: 0;
     font-size: 13px;
-  }
-
-  .station-np {
-    display: contents;
-  }
-
-  .station-np .cover {
-    grid-area: cover;
-    width: 64px;
-    height: 64px;
-  }
-
-  .np-lines {
-    grid-area: np;
-    display: block;
-    margin-top: 6px;
-    color: var(--color-muted);
-  }
-
-  .np-lines .np-artist::before {
-    content: " · ";
-  }
-
-  .play {
-    grid-area: play;
   }
 
   .history li {

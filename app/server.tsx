@@ -1,7 +1,8 @@
-// The web app behind Caddy: the stations list (/), each show's station page
-// (/<slug>), every station's current track (/now.json), DJ pages (/djs/<dj>), /manifesto,
-// and the SoundExchange reports (/reports). Shows are shows/<slug>.md (app/shows.ts), with
-// their DJs in the front matter; Liquidsoap serves their streams via Caddy.
+// The web app behind Caddy: what's on air and the schedule (/), each show's
+// page (/<slug>), the track on air (/now.json), DJ pages (/djs/<dj>),
+// /manifesto, and the SoundExchange reports (/reports). Shows are
+// shows/<slug>.md (app/shows.ts), with their DJs and hours in the front matter;
+// Liquidsoap plays them on their hours on the one stream, /stream (via Caddy).
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -9,8 +10,9 @@ import { etag } from "hono/etag";
 import { createMiddleware } from "hono/factory";
 import { jsxRenderer } from "hono/jsx-renderer";
 import { login, throttle } from "./login.tsx";
-import { latestPlays, type Play, recentPlays } from "./plays.ts";
+import { latestPlay, type Play, recentPlays } from "./plays.ts";
 import { reports } from "./reports.tsx";
+import { nextSlot, scheduled, showAt, upNext } from "./schedule.ts";
 import { getDj, getShow, getShows, type Show, SLUG } from "./shows.ts";
 import {
   Cover,
@@ -48,41 +50,83 @@ const TrackLines = ({ play, cls }: { play?: Play; cls: string }) => (
   </>
 );
 
-// One station in a list: the stations list (numbered, with its DJs) or a DJ's
-// page (neither, since the DJ is the page's subject).
-const StationRow = ({ show, play, num }: { show: Show; play?: Play; num?: number }) => (
+// A show's hours, as times (the listener's own, once client.ts has run).
+const Hours = ({ show, now }: { show: Show; now: Date }) => {
+  const slot = nextSlot(show, now);
+  return slot ? (
+    <span class="hours">
+      <Time at={slot.start} />–<Time at={slot.end} />
+    </span>
+  ) : null;
+};
+
+// One show in a list: the schedule (with its DJs) or a DJ's page (without,
+// since the DJ is the page's subject).
+const ShowRow = ({
+  show,
+  now,
+  onAir,
+  credit,
+}: {
+  show: Show;
+  now: Date;
+  onAir: boolean;
+  credit?: boolean;
+}) => (
   <div class="station">
-    {num !== undefined && <span class="station-num">{String(num).padStart(2, "0")}</span>}
+    <span class="station-hours">
+      <Hours show={show} now={now} />
+    </span>
     <div class="station-info">
       <a class="station-name" href={`/${show.slug}`}>
         {show.title}
       </a>
       <Markdown class="station-desc" html={show.description} />
-      {num !== undefined && <DjCredit djs={show.djs} class="station-credit" />}
+      {credit && <DjCredit djs={show.djs} class="station-credit" />}
     </div>
-    <div id={`np-${show.slug}`} class="station-np" data-np={show.slug}>
-      <Cover play={play} size="cover-56" labelled />
-      <div class="np-lines">
-        <TrackLines play={play} cls="np" />
-      </div>
-    </div>
-    <PlayButton show={show} />
+    {onAir && (
+      <span class="label on-air">
+        <span class="dot" aria-hidden="true" />
+        On air
+      </span>
+    )}
   </div>
 );
 
-// The station page's cover and text (the play button stays put when this is refreshed).
-const NowPlaying = ({ show, play }: { show: Show; play?: Play }) => (
-  <div id="np" class="np" data-np={show.slug}>
-    <Cover play={play} size="cover-120" labelled />
-    <div class="np-text">
-      <span class="label np-status">
-        <span class="dot" aria-hidden="true" />
-        <span data-status={show.slug}>Live</span>
-      </span>
-      <TrackLines play={play} cls="np" />
+// The track on air: its cover and text, with the play button.
+const NowPlaying = ({ play }: { play?: Play }) => (
+  <section class="np-block" aria-label="Now playing">
+    <PlayButton large />
+    <div class="np">
+      <Cover play={play} size="cover-120" labelled />
+      <div class="np-text">
+        <span class="label np-status">
+          <span class="dot" aria-hidden="true" />
+          <span data-status>Live</span>
+        </span>
+        <TrackLines play={play} cls="np" />
+      </div>
     </div>
-  </div>
+  </section>
 );
+
+// The stream's address, to copy into a radio app.
+const StreamUrl = ({ host }: { host: string }) => (
+  <section class="stream" aria-label="Stream URL">
+    <span class="label stream-label">Stream</span>
+    <a class="url" href="/stream" hx-boost="false">{`${host}/stream`}</a>
+    <button type="button" class="copy" data-copy={`https://${host}/stream`}>
+      Copy
+    </button>
+  </section>
+);
+
+// The show on air: the newest play's (the schedule's until anything has played).
+async function onAir(shows: Show[]) {
+  const play = await latestPlay();
+  const show = shows.find((s) => s.slug === play?.show) ?? showAt(shows, new Date());
+  return { show, play: play && play.show === show?.slug ? play : undefined };
+}
 
 const History = ({ plays }: { plays: Play[] }) => (
   <section id="history" class="history" aria-labelledby="recent-heading">
@@ -95,7 +139,7 @@ const History = ({ plays }: { plays: Play[] }) => (
       <ol>
         {plays.map((p) => (
           <li>
-            <Time seconds={p.time} />
+            <Time at={new Date(p.time * 1000)} />
             <Cover play={p} size="cover-40" />
             <TrackLines play={p} cls="h" />
           </li>
@@ -135,12 +179,9 @@ app.on(
   serveStatic({ root: "dist/public" }),
 );
 
-// The player bar's mount, with the station it shows before any is played: the
-// first show.
-async function Player() {
-  const [first] = await getShows();
-  return <div id="player" data-slug={first?.slug} data-title={first?.title} />;
-}
+// The player bar's mount, with the station's name until now.json says
+// what's on.
+const Player = () => <div id="player" data-title={SITE_TITLE} />;
 
 app.use(
   jsxRenderer(({ children, title, script = true }) => (
@@ -179,25 +220,57 @@ login(app);
 app.route("/reports", reports);
 
 app.get("/", async (c) => {
-  const [shows, latest] = await Promise.all([getShows(), latestPlays()]);
+  const shows = await getShows();
+  const [{ show, play }, recent] = await Promise.all([onAir(shows), recentPlays(11)]);
+  const now = new Date();
+  const next = upNext(shows, now);
   return c.render(
-    <main class="page page-index">
-      <SiteHeader current="stations" home />
-      <section id="stations" class="stations" aria-label="Stations">
-        {shows.map((s, i) => (
-          <StationRow show={s} play={latest.get(s.slug)} num={i + 1} />
-        ))}
+    <main class="page page-station page-home">
+      <SiteHeader current="home" home />
+      <header id="on-air" class="title-block">
+        <span class="label">On air</span>
+        {show ? (
+          <>
+            <h2 class="display">
+              <a href={`/${show.slug}`}>{show.title}</a>
+            </h2>
+            <Markdown class="subtitle" html={show.description} />
+            <DjCredit djs={show.djs} class="title-credit" />
+          </>
+        ) : (
+          <h2 class="display">{SITE_TITLE}</h2>
+        )}
+      </header>
+      <div id="np">
+        <NowPlaying play={play} />
+      </div>
+      <p id="next" class="next">
+        {next && (
+          <>
+            Up next: <a href={`/${next.show.slug}`}>{next.show.title}</a> at <Time at={next.start} />
+          </>
+        )}
+      </p>
+      <StreamUrl host={c.req.header("host") ?? ""} />
+      <section id="schedule" class="schedule" aria-labelledby="schedule-heading">
+        <h2 id="schedule-heading" class="label">
+          Schedule
+        </h2>
+        <div class="stations">
+          {scheduled(shows).map((s) => (
+            <ShowRow show={s} now={now} onAir={s.slug === show?.slug} credit />
+          ))}
+        </div>
       </section>
-      <footer class="footer">{c.req.header("host")}</footer>
-      <Poll path="/" ids={shows.map((s) => `np-${s.slug}`)} />
+      <History plays={recent.slice(1)} />
+      <Poll path="/" ids={["on-air", "np", "next", "schedule", "history"]} />
     </main>,
   );
 });
 
 app.get("/about", (c) => c.redirect("/manifesto", 301));
 
-app.get("/manifesto", async (c) => {
-  const shows = await getShows();
+app.get("/manifesto", (c) => {
   const host = c.req.header("host") ?? "";
   return c.render(
     <main class="page page-manifesto">
@@ -253,8 +326,8 @@ app.get("/manifesto", async (c) => {
           What it is
         </h2>
         <p>
-          A few <a href="/">channels</a>, each programmed by a person, playing around the clock: music for
-          work, driving, cooking, the background of a day. No ads. No account. No tracking.
+          One station playing around the clock, a few <a href="/">shows</a> a day, each programmed by a
+          person: music for work, driving, cooking, the background of a day. No ads. No account. No tracking.
         </p>
         <p>It isn't trying to be a better Spotify. It's trying to be what Spotify's business can't be.</p>
       </section>
@@ -297,16 +370,14 @@ app.get("/manifesto", async (c) => {
         <h2 id="manifesto-listen" class="label">
           Listening
         </h2>
-        <p>Press play on any station, or open its stream URL in a radio app or VLC.</p>
+        <p>Press play, or open the stream URL in a radio app or VLC.</p>
         <dl class="streams">
-          {shows.map((s) => (
-            <div>
-              <dt class="label">{s.title}</dt>
-              <dd>
-                <a class="url" href={`/${s.slug}/stream`} hx-boost="false">{`${host}/${s.slug}/stream`}</a>
-              </dd>
-            </div>
-          ))}
+          <div>
+            <dt class="label">Stream</dt>
+            <dd>
+              <a class="url" href="/stream" hx-boost="false">{`${host}/stream`}</a>
+            </dd>
+          </div>
           <div>
             <dt class="label">Format</dt>
             <dd>{FORMAT}</dd>
@@ -339,30 +410,40 @@ app.get("/manifesto", async (c) => {
 
 app.get(`/:slug{${SLUG}}`, async (c) => {
   const slug = c.req.param("slug");
-  const [show, [current, ...recent]] = await Promise.all([getShow(slug), recentPlays(slug, 11)]);
+  const [show, shows, recent] = await Promise.all([getShow(slug), getShows(), recentPlays(11, slug)]);
   if (!show) return c.notFound();
-  const host = c.req.header("host") ?? "";
-  const stream = `/${show.slug}/stream`;
+  const { show: on, play } = await onAir(shows);
+  const isOn = on?.slug === show.slug;
+  const next = nextSlot(show, new Date());
   return c.render(
     <main class="page page-station">
-      <SiteHeader current="stations" />
+      <SiteHeader />
       <header class="title-block">
         <h1 class="display">{show.title}</h1>
         <Markdown class="subtitle" html={show.description} />
         <DjCredit djs={show.djs} class="title-credit" />
+        {show.hours && (
+          <p class="label">
+            Daily <Hours show={show} now={new Date()} />
+          </p>
+        )}
       </header>
-      <section class="np-block" aria-label="Now playing">
-        <PlayButton show={show} large />
-        <NowPlaying show={show} play={current} />
-      </section>
-      <section class="stream" aria-label="Stream URL">
-        <span class="label stream-label">Stream</span>
-        <a class="url" href={stream} hx-boost="false">{`${host}${stream}`}</a>
-        <button type="button" class="copy" data-copy={`https://${host}${stream}`}>
-          Copy
-        </button>
-      </section>
-      <History plays={recent} />
+      <div id="np">
+        {isOn ? (
+          <NowPlaying play={play} />
+        ) : (
+          <p class="next">
+            {next ? (
+              <>
+                Off air. Next on at <Time at={next.start} />.
+              </>
+            ) : (
+              "Not on the schedule."
+            )}
+          </p>
+        )}
+      </div>
+      <History plays={isOn ? recent.slice(1) : recent} />
       <Poll path={`/${show.slug}`} ids={["np", "history"]} />
     </main>,
     { title: show.title },
@@ -370,8 +451,10 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
 });
 
 app.get(`/djs/:dj{${SLUG}}`, async (c) => {
-  const [dj, latest] = await Promise.all([getDj(c.req.param("dj")), latestPlays()]);
+  const [dj, shows] = await Promise.all([getDj(c.req.param("dj")), getShows()]);
   if (!dj) return c.notFound();
+  const { show: on } = await onAir(shows);
+  const now = new Date();
   return c.render(
     <main class="page page-dj">
       <SiteHeader />
@@ -388,9 +471,9 @@ app.get(`/djs/:dj{${SLUG}}`, async (c) => {
         <h2 id="dj-shows" class="label">
           Shows
         </h2>
-        <div class="stations">
+        <div id="dj-shows-list" class="stations">
           {dj.shows.map((s) => (
-            <StationRow show={s} play={latest.get(s.slug)} />
+            <ShowRow show={s} now={now} onAir={s.slug === on?.slug} />
           ))}
         </div>
       </section>
@@ -414,7 +497,7 @@ app.get(`/djs/:dj{${SLUG}}`, async (c) => {
         </section>
       )}
       <footer class="footer footer-rule">{c.req.header("host")}</footer>
-      <Poll path={`/djs/${dj.slug}`} ids={dj.shows.map((s) => `np-${s.slug}`)} />
+      <Poll path={`/djs/${dj.slug}`} ids={["dj-shows-list"]} />
     </main>,
     { title: dj.name },
   );
@@ -427,11 +510,11 @@ app.get(`/djs/:dj{${SLUG}}/photo`, async (c) => {
   return (photo && (await serveStatic({ path: photo })(c, async () => {}))) || c.notFound();
 });
 
-// Every station's current track, by slug: client.ts polls it for the player
-// bar, the lock screen and when to refresh the page.
+// The track on air and its show: client.ts polls it for the player bar, the
+// lock screen and when to refresh the page.
 app.get("/now.json", async (c) => {
-  const [shows, latest] = await Promise.all([getShows(), latestPlays()]);
-  return c.json(Object.fromEntries(shows.map((s) => [s.slug, nowTrack(latest.get(s.slug))])));
+  const { show, play } = await onAir(await getShows());
+  return c.json(nowTrack(play, show?.title ?? SITE_TITLE));
 });
 
 // Per-track covers extracted by scripts/import.sh → covers/<show>/<stem>.jpg

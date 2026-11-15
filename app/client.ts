@@ -1,6 +1,6 @@
 // Browser code for the site, bundled by esbuild into /assets/app.js (+ app.css).
 // One audio element for the whole site; links swap only <main> (hx-boost), so
-// a station keeps playing while you browse.
+// the station keeps playing while you browse.
 // Inter and JetBrains Mono, self-hosted (bundled into app.css + font files).
 import "@fontsource/inter/400.css";
 import "@fontsource/inter/500.css";
@@ -13,10 +13,10 @@ import "./style.css";
 import htmx from "htmx.org";
 import { mountBar, setBar } from "./bar.tsx";
 
-// The browser plays each show's MP3 stream itself, in every browser: switching
-// sets the element's URL and calls play() in the tap, as iOS requires. (A
-// player that decoded the stream into WebAudio left AirPlay speakers silent
-// after a switch.) The track comes from /now.json.
+// The browser plays the station's one MP3 stream itself, in every browser: a
+// tap sets the element's URL and calls play() in the tap, as iOS requires. (A
+// player that decoded the stream into WebAudio left AirPlay speakers silent.)
+// The track and show on air come from /now.json.
 const audio = new Audio();
 // AirPlay (a WiiM, say, picked in Control Center) gets the page's audio as the
 // phone's output, like any app's, rather than Safari handing the element
@@ -25,18 +25,15 @@ audio.disableRemotePlayback = true;
 audio.setAttribute("x-webkit-airplay", "deny");
 (window as unknown as { audio: HTMLAudioElement }).audio = audio; // for the e2e tests
 const session = navigator.mediaSession;
-type Show = { slug: string; title: string };
-// The station shown as playing: set on click, cleared when it stops.
-let active: Show | undefined;
-// The station in the player bar: the last one played, else the site's first
-// show (#player's data; app.js is deferred, so the page is there).
-const first = document.getElementById("player")!.dataset;
-let shown: Show | undefined = first.slug ? { slug: first.slug, title: first.title! } : undefined;
-// Every station's current track, by slug, from /now.json (and that JSON).
-type Track = { track: string; artist: string; cover: string };
-let tracks: Record<string, Track> = {};
-let tracksJson = "";
-// The track last put on the lock screen (slug, track, artist).
+// The station's name (#player's data; app.js is deferred, so the page is there).
+const station = document.getElementById("player")!.dataset.title!;
+// Whether the stream is playing: set on a tap, cleared when it stops.
+let playing = false;
+// The track on air and its show, from /now.json (and that JSON).
+type Now = { show: string; title: string; track: string; artist: string; cover: string };
+let now: Now = { show: "", title: "", track: "", artist: "", cover: "" };
+let nowJson = "";
+// The track last put on the lock screen.
 let lockKey = "";
 // When a dropped stream stops being retried (0: not retrying).
 let retryUntil = 0;
@@ -51,66 +48,59 @@ function localTimes() {
 // Show the play state everywhere: play buttons, "Live" labels, the player bar (app/bar.tsx).
 function sync() {
   document.querySelectorAll<HTMLButtonElement>("button[data-play]").forEach((b) => {
-    const on = b.dataset.play === active?.slug;
-    b.classList.toggle("playing", on);
-    b.setAttribute("aria-label", `${on ? "Pause" : "Play"} ${b.dataset.title}`);
+    b.classList.toggle("playing", playing);
+    b.setAttribute("aria-label", `${playing ? "Pause" : "Play"} ${station}`);
   });
   document.querySelectorAll<HTMLElement>("[data-status]").forEach((el) => {
-    el.textContent = el.dataset.status === active?.slug ? "Listening · Live" : "Live";
+    el.textContent = playing ? "Listening · Live" : "Live";
   });
-  document.body.classList.toggle("playing", !!active);
-  const none = { track: "", artist: "", cover: "" };
-  setBar(shown && { title: shown.title, ...(tracks[shown.slug] ?? none), playing: !!active });
-  // The lock screen, when the playing station's track changes.
-  const now = active && tracks[active.slug];
-  const key = `${active?.slug}\n${now?.track}\n${now?.artist}`;
-  if (!active || !now || key === lockKey) return;
+  document.body.classList.toggle("playing", playing);
+  setBar({ ...now, station, title: now.title || station, playing });
+  // The lock screen, when the track on air changes.
+  const key = `${now.show}\n${now.track}\n${now.artist}`;
+  if (!playing || !now.track || key === lockKey) return;
   lockKey = key;
   session.metadata = new MediaMetadata({
     title: now.track,
     artist: now.artist,
-    album: active.title,
+    album: now.title,
     artwork: now.cover ? [{ src: now.cover, type: "image/jpeg" }] : [],
   });
 }
 
-// The one poll, every 15 s: every station's current track, for the player bar
-// and the lock screen. A page showing a station whose track changed refreshes
-// itself (ui.tsx Poll).
+// The one poll, every 15 s: the track on air, for the player bar and the
+// lock screen. When it changes, a page showing it refreshes itself (ui.tsx Poll).
 async function poll() {
   const json = await fetch("/now.json")
     .then((r) => (r.ok ? r.text() : undefined))
     .catch(() => undefined);
-  if (!json || json === tracksJson) return;
-  const before = tracksJson ? tracks : undefined;
-  tracksJson = json;
-  tracks = JSON.parse(json) as Record<string, Track>;
+  if (!json || json === nowJson) return;
+  const first = !nowJson;
+  nowJson = json;
+  now = JSON.parse(json) as Now;
   sync();
-  const changed = (slug: string) => JSON.stringify(tracks[slug]) !== JSON.stringify(before?.[slug]);
-  const shownHere = [...document.querySelectorAll<HTMLElement>("[data-np]")].map((el) => el.dataset.np!);
-  if (before && document.getElementById("poll") && shownHere.some(changed)) htmx.trigger("#poll", "refresh");
+  if (!first && document.getElementById("poll")) htmx.trigger("#poll", "refresh");
 }
 setInterval(() => void poll(), 15_000);
 
-function playStream(slug: string) {
-  audio.src = `/${slug}/stream`;
+function playStream() {
+  audio.src = "/stream";
   audio.play().catch((e: DOMException) => {
-    // AbortError: a newer src (a switch, a retry) replaced this one.
-    if (e.name !== "AbortError" && active?.slug === slug && !retryUntil) stop();
+    // AbortError: a newer src (a retry) replaced this one.
+    if (e.name !== "AbortError" && playing && !retryUntil) stop();
   });
 }
 
-function start(slug: string, title: string) {
-  active = { slug, title };
-  shown = active;
+function start() {
+  playing = true;
   sync();
   retryUntil = 0;
   // Synchronously, in the tap: iOS allows play() only there.
-  playStream(slug);
+  playStream();
 }
 
 function stop() {
-  active = undefined;
+  playing = false;
   session.playbackState = "paused";
   sync();
   audio.pause();
@@ -119,38 +109,33 @@ function stop() {
   audio.load();
 }
 
-function toggle(slug: string, title: string) {
-  if (active?.slug === slug) stop();
-  else start(slug, title);
-}
+const toggle = () => (playing ? stop() : start());
 
 audio.addEventListener("playing", () => {
   retryUntil = 0;
-  if (active) session.playbackState = "playing";
+  if (playing) session.playbackState = "playing";
 });
 // The stream dropped (a server restart, a network change): reconnect for up
 // to two minutes. iOS allows play() on an element a tap has started.
 function dropped() {
-  const slug = active?.slug;
-  if (!slug) return;
+  if (!playing) return;
   retryUntil ||= Date.now() + 120_000;
   if (Date.now() > retryUntil) return stop();
-  setTimeout(() => active?.slug === slug && retryUntil && playStream(slug), 3000);
+  setTimeout(() => playing && retryUntil && playStream(), 3000);
 }
 audio.addEventListener("error", dropped);
 audio.addEventListener("ended", dropped);
-// Paused by the system (a call, Siri, unplugged headphones), not by a switch,
-// which plays again at once.
-audio.addEventListener("pause", () => setTimeout(() => active && audio.paused && !retryUntil && stop()));
+// Paused by the system (a call, Siri, unplugged headphones), not by a tap.
+audio.addEventListener("pause", () => setTimeout(() => playing && audio.paused && !retryUntil && stop()));
 
-session.setActionHandler("play", () => shown && start(shown.slug, shown.title));
+session.setActionHandler("play", start);
 session.setActionHandler("pause", stop);
 session.setActionHandler("stop", stop);
 
 document.addEventListener("click", (e) => {
   const button = (e.target as Element).closest<HTMLButtonElement>("button[data-play], button[data-copy]");
   if (!button) return;
-  if (button.dataset.play) return toggle(button.dataset.play, button.dataset.title!);
+  if (button.dataset.play !== undefined) return toggle();
   const url = button.dataset.copy!;
   navigator.clipboard.writeText(url).then(
     () => {
@@ -173,7 +158,7 @@ document.addEventListener("htmx:beforeRequest", (e) => {
   poll.addEventListener("htmx:beforeOnLoad", (l) => poll.isConnected || l.preventDefault(), { once: true });
 });
 
-mountBar(document.getElementById("player")!, () => shown && toggle(shown.slug, shown.title));
+mountBar(document.getElementById("player")!, toggle);
 
 function settle() {
   localTimes();

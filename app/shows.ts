@@ -14,6 +14,11 @@
 //
 // A show with one DJ lists just them (`djs: [Ana Ruiz]` on one line).
 //
+// Its hours on the station's one stream: `hours: 6-17` (whole hours, 24-hour
+// clock, local time (TZ), the end not included; 22-6 runs past midnight, 0-24
+// all day). radio.liq reads them the same way; app/schedule.ts checks that the
+// shows cover every hour exactly once.
+//
 // The slug is the name lowercased, without accents, non-alphanumerics as "-"
 // ("Zoë Ñandú" → zoe-nandu); a DJ with no usable slug is left out, as is a
 // repeat of a DJ already on the show. A DJ on several shows is one page; their
@@ -28,13 +33,22 @@ const SHOWS = resolve(process.env.SHOWS_DIR ?? "/shows");
 export const SLUG = "[a-z0-9-]+";
 const SHOW_FILE = new RegExp(`^${SLUG}\\.md$`);
 // Pages with their own routes; a show with one of these slugs isn't listed.
-const RESERVED = new Set(["about", "assets", "covers", "djs", "login", "manifesto", "reports"]);
+const RESERVED = new Set(["about", "assets", "covers", "djs", "login", "manifesto", "reports", "stream"]);
 // DJ photos: image files (served by serveStatic, which types them by extension).
 const PHOTO_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif"]);
 
 export type DjRef = { slug: string; name: string };
 // A show's DJs keep the details written for them there, for getDj.
-export type Show = { slug: string; title: string; description: string; djs: DjEntry[] };
+// Hours: [start, end) on the 24-hour clock (see above).
+export type Hours = [number, number];
+export type Show = {
+  slug: string;
+  title: string;
+  description: string;
+  djs: DjEntry[];
+  hours?: Hours;
+  badHours?: string; // the `hours:` written, when it isn't valid
+};
 export type Dj = DjRef & {
   tagline?: string;
   bio?: string; // HTML
@@ -86,6 +100,15 @@ function djEntry(v: unknown): DjEntry | undefined {
   };
 }
 
+// `hours:` as Hours, or undefined if it isn't "<start>-<end>" with
+// 0 <= start < 24, 0 < end <= 24 and start != end.
+export function parseHours(v: unknown): Hours | undefined {
+  const m = /^\s*(\d{1,2})\s*-\s*(\d{1,2})\s*$/.exec(typeof v === "string" ? v : "");
+  if (!m) return undefined;
+  const [start, end] = [Number(m[1]), Number(m[2])];
+  return start < 24 && end <= 24 && start !== end ? [start, end] : undefined;
+}
+
 // Parsed shows, re-read only when a file changes (every page renders the show
 // list, and polls re-render pages every 15 s). The inode is in the key since
 // rsync (deploy.sh) replaces a file, keeping the source's mtime.
@@ -125,11 +148,14 @@ async function parseShow(slug: string, text: string): Promise<Show> {
     .map(djEntry)
     .filter((d) => d !== undefined)
     .filter((d, i, all) => all.findIndex((e) => e.slug === d.slug) === i);
+  const hours = parseHours(meta["hours"]);
   return {
     slug,
     title: str(meta["title"]) ?? slug,
     description: await marked.parse(body),
     djs: entries,
+    hours,
+    badHours: hours || meta["hours"] === undefined ? undefined : String(meta["hours"]),
   };
 }
 

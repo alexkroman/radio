@@ -20,7 +20,8 @@
   },
   "knip": {
     "entry": [
-      "test/listen.ts"
+      "test/listen.ts",
+      "app/check-schedule.ts"
     ]
   },
   "devDependencies": {

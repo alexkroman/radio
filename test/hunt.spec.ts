@@ -1,19 +1,23 @@
 // Bug hunt: in-stream metadata, escaping, layout, listener counting, load,
 // and the login throttle. Fixtures: shows/{odd,long}.
 import { expect, test } from "@playwright/test";
-import { icyTitle, listen, LOGGED_OUT, loggedPlays, performances, streamHead } from "./helpers.ts";
+import { icyTitle, listen, LOGGED_OUT, loggedPlays, onAir, performances, streamHead } from "./helpers.ts";
 
 const ODD_ARTIST = 'Q "The" Artist';
 const ODD_TITLE = "Back\\slash \"Quotes\" & 'Ticks'";
 
 test("in-stream (ICY) metadata is the current track, in UTF-8", async () => {
-  expect(await icyTitle("/edge/stream")).toBe("Zoë Ñandú - Café | Olé <b>");
-  expect(await icyTitle("/odd/stream")).toBe(`${ODD_ARTIST} - ${ODD_TITLE}`);
+  // The crossfade into a show's first track takes a few seconds to reach the stream.
+  await onAir("edge");
+  await expect.poll(() => icyTitle("/stream")).toBe("Zoë Ñandú - Café | Olé <b>");
+  await onAir("odd");
+  await expect.poll(() => icyTitle("/stream")).toBe(`${ODD_ARTIST} - ${ODD_TITLE}`);
 });
 
 test("the player picks up the playing track for the lock screen", async ({ page }) => {
+  await onAir("edge");
   await page.goto("/edge");
-  await page.getByRole("main").getByRole("button", { name: "Play Edge Cases" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Play Mazes Radio" }).click();
   await expect
     .poll(() =>
       page.evaluate(
@@ -28,6 +32,7 @@ test("the player picks up the playing track for the lock screen", async ({ page 
 });
 
 test("quotes and backslashes survive the log, the page and the report", async ({ page, request }) => {
+  await onAir("odd");
   await expect
     .poll(async () => (await loggedPlays()).find((p) => p.show === "odd"))
     .toMatchObject({ artist: ODD_ARTIST, title: ODD_TITLE });
@@ -42,6 +47,7 @@ test("quotes and backslashes survive the log, the page and the report", async ({
 test.describe(() => {
   test.use({ viewport: { width: 320, height: 640 } });
   test("pages fit a 320 px wide phone, even with very long titles", async ({ page }) => {
+    await onAir("long");
     for (const path of ["/", "/long", "/edge", "/reports"]) {
       await page.goto(path);
       if (path === "/long")
@@ -63,7 +69,8 @@ test("history is newest first with valid times", async ({ page }) => {
 });
 
 test("listener counts return to zero after listeners leave", async ({ request }) => {
-  const stops = [listen("/odd/stream"), listen("/odd/stream")];
+  await onAir("odd");
+  const stops = [listen("/stream"), listen("/stream")];
   await expect
     .poll(async () => (await loggedPlays()).filter((p) => p.show === "odd").at(-1)?.listeners, {
       timeout: 60_000,
@@ -71,7 +78,7 @@ test("listener counts return to zero after listeners leave", async ({ request })
     .toBe(2);
   stops.forEach((stop) => stop());
   // A HEAD request isn't a listener and must not hang.
-  await request.head("/odd/stream", { timeout: 10_000 });
+  await request.head("/stream", { timeout: 10_000 });
   const seen = (await loggedPlays()).length;
   const next = async () => (await loggedPlays()).slice(seen).find((p) => p.show === "odd");
   await expect.poll(next, { timeout: 60_000 }).toBeDefined();
@@ -79,7 +86,7 @@ test("listener counts return to zero after listeners leave", async ({ request })
 });
 
 test("50 simultaneous listeners all get audio", async () => {
-  const results = await Promise.all(Array.from({ length: 50 }, () => streamHead("/default/stream")));
+  const results = await Promise.all(Array.from({ length: 50 }, () => streamHead("/stream")));
   expect(results.filter((r) => r.status === 200 && r.type === "audio/mpeg")).toHaveLength(50);
 });
 

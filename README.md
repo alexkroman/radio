@@ -2,9 +2,9 @@
 
 A small internet radio station: stock open-source services plus one small TypeScript app.
 
-- **Liquidsoap** plays each show as its own 24/7 stream, on shuffle with automatic cue points, loudness levelling and crossfades, and appends every play (tags and listener count) to a monthly log, `plays/YYYY-MM.jsonl`.
-- **Icecast** serves the streams, with track titles (UTF-8) in the stream for players like VLC.
-- **`app/`** ([Hono](https://hono.dev)) serves the show list, the player pages and the SoundExchange reports (from the play log). Its browser code (htmx, fonts) is bundled from npm, so nothing loads from a CDN, and plays each stream in a plain `<audio>` element.
+- **Liquidsoap** plays one 24/7 stream, each show at its hours of the day, on shuffle with automatic cue points, loudness levelling and crossfades, and appends every play (tags and listener count) to a monthly log, `plays/YYYY-MM.jsonl`.
+- **Icecast** serves the stream, with track titles (UTF-8) in the stream for players like VLC.
+- **`app/`** ([Hono](https://hono.dev)) serves what's on air, the schedule, the show pages and the SoundExchange reports (from the play log). Its browser code (htmx, fonts) is bundled from npm, so nothing loads from a CDN, and plays the stream in a plain `<audio>` element.
 - **Caddy** provides HTTPS and is the only public entry point.
 - **Docker** restarts any service that crashes.
 
@@ -13,7 +13,7 @@ A small internet radio station: stock open-source services plus one small TypeSc
 Requires Docker.
 
 ```sh
-cp .env.example .env              # then replace every change-me value, e.g. with: openssl rand -hex 16
+cp .env.example .env              # then replace every change-me value, e.g. with: openssl rand -hex 16, and set TZ
 mkdir -p music/<slug>             # one directory per show (e.g. music/myshow)
 cp ~/some/music/*.mp3 music/<slug>/
 # shows/<slug>.md defines each show (see Shows below)
@@ -35,19 +35,28 @@ Open <https://localhost/>. On localhost your browser warns about the certificate
 
 Add or remove files in `music/<show>/` any time; they're picked up without a restart. Anything ffmpeg can decode works.
 
-A track that goes silent for 10 seconds (a hidden track after minutes of silence, a file that decodes to nothing) is skipped. A show with nothing to play streams silence, so listeners stay connected.
+A track that goes silent for 10 seconds (a hidden track after minutes of silence, a file that decodes to nothing) is skipped. A show with nothing to play streams silence while it's on, so listeners stay connected.
 
 ## Shows
 
-Each `shows/<slug>.md` is a show: its own 24/7 stream at `/<slug>/stream`, playing `music/<slug>/` on shuffle, with a player page at `/<slug>`. Slugs are lowercase letters, digits and hyphens. The front matter sets the title; the body is the description shown on the page:
+The station is one 24/7 stream at `/stream`. Each `shows/<slug>.md` is a show: it plays `music/<slug>/` on shuffle during its hours, and has a page at `/<slug>`. Slugs are lowercase letters, digits and hyphens. The front matter sets the title and hours; the body is the description shown on the page:
 
 ```md
 ---
 title: My Show
+hours: 6-17
 ---
 
-A description shown on the player page.
+A description shown on the show's page.
 ```
+
+### Schedule
+
+`hours: <start>-<end>` is when a show is on air every day: whole hours on a 24-hour clock in the station's time zone (`TZ` in `.env`), the end not included. `22-6` runs past midnight, `0-24` is all day. When a show's hours start, the track playing finishes first, so a show can start a few minutes late. A show that's off air picks up where it left off next time.
+
+Together the shows must cover all 24 hours, each hour exactly once. `node app/check-schedule.ts` says which hours have no show or more than one, and which shows have no hours or bad ones. pre-commit (and so CI) runs it when `shows/` changes, and `scripts/deploy.sh` won't deploy until it passes. If a bad schedule reaches the server anyway, Liquidsoap logs an error for each problem and keeps going: an hour with no show plays silence, and an hour with two plays the first by slug.
+
+Hours edits apply within a minute, without a restart.
 
 ### DJs
 
@@ -79,19 +88,21 @@ djs: [Ana Ruiz]
 ---
 ```
 
-The show files are in the repo. Adding or removing a show needs an Icecast reload and a Liquidsoap restart, which `scripts/reconcile.sh` does (a deploy runs it; no listener is dropped); editing a title or description shows up immediately.
+The show files are in the repo. Adding or removing a show needs a Liquidsoap restart, which `scripts/reconcile.sh` does (a deploy runs it; no listener is dropped); editing a title, description or hours shows up without one.
 
 ## Where things are
 
-| URL                               | What's there                          |
-| --------------------------------- | ------------------------------------- |
-| `https://localhost/`              | List of shows                         |
-| `https://localhost/<slug>`        | A show's player, now playing, history |
-| `https://localhost/<slug>/stream` | A show's stream for apps and VLC      |
-| `https://localhost/djs/<dj>`      | A DJ's profile and shows              |
-| `https://localhost/reports`       | Monthly SoundExchange reports         |
+| URL                          | What's there                                  |
+| ---------------------------- | --------------------------------------------- |
+| `https://localhost/`         | What's on air, the player, up next, schedule  |
+| `https://localhost/<slug>`   | A show's hours, now playing (on air), history |
+| `https://localhost/stream`   | The stream for apps and VLC                   |
+| `https://localhost/djs/<dj>` | A DJ's profile and shows                      |
+| `https://localhost/reports`  | Monthly SoundExchange reports                 |
 
-Set `SITE_PASSWORD` in `.env` to put the show pages behind a login form; the streams stay public so apps can play them. After 10 wrong passwords from one address, logins are refused for 15 minutes. Nothing else is public.
+The old per-show stream URLs (`/<slug>/stream`) redirect to `/stream`.
+
+Set `SITE_PASSWORD` in `.env` to put the show pages behind a login form; the stream stays public so apps can play it. After 10 wrong passwords from one address, logins are refused for 15 minutes. Nothing else is public.
 
 ## Deploy to OVHcloud (Hillsboro)
 
@@ -104,7 +115,7 @@ scripts/deploy.sh                     # run again after any change to redeploy
 scripts/deploy.sh media               # after scripts/import.sh or editing shows: copy just music/, covers/, shows/
 ```
 
-Both mirror your `music/`, `covers/` and `shows/` to the server, so files you delete locally go from the server too, and reload Icecast and restart Liquidsoap when a show was added or removed, without dropping listeners. Set `IP=<server address>` to run it without the OpenStack CLI or `openrc.sh`.
+Both check the schedule first, mirror your `music/`, `covers/` and `shows/` to the server, so files you delete locally go from the server too, and restart Liquidsoap when a show was added or removed, without dropping listeners. Set `IP=<server address>` to run it without the OpenStack CLI or `openrc.sh`.
 
 Every run also copies the server's play log to `backup/plays/` on your computer (it's the only record for SoundExchange reports), so deploy or sync now and then. The server installs security updates by itself and, when one needs it, reboots at 11:00 UTC (3–4 am Pacific); Docker brings the station back up.
 
@@ -123,7 +134,7 @@ npm run build       # esbuild → dist/ (the Docker image does this too)
 
 ## End-to-end tests
 
-`npm run e2e` builds the images, starts the real stack (Caddy, Icecast, Liquidsoap, the app) on the fixture shows and music in `test/fixtures/`, runs the Playwright suites in `test/` from a container inside Caddy's network, and tears everything down. It needs only Docker, uses its own compose project (`radio-e2e`) and throwaway volumes, publishes no ports, and doesn't touch `logs/`, `covers/`, `plays/` or `music/`. Pass Playwright arguments through, e.g. `npm run e2e -- -g "report"`.
+`npm run e2e` builds the images, starts the real stack (Caddy, Icecast, Liquidsoap, the app) on the fixture shows and music in `test/fixtures/` (the tests put the show they need on air through a hook only the test stack enables), runs the Playwright suites in `test/` from a container inside Caddy's network, and tears everything down. It needs only Docker, uses its own compose project (`radio-e2e`) and throwaway volumes, publishes no ports, and doesn't touch `logs/`, `covers/`, `plays/` or `music/`. Pass Playwright arguments through, e.g. `npm run e2e -- -g "report"`.
 
 ## Checks
 

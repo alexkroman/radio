@@ -1,5 +1,6 @@
 ---
 title: Drift
+hours: 17-22
 djs:
   - name: Keelin
     bio: Lead singer of Abronia.

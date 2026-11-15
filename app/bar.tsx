@@ -2,13 +2,17 @@
 // The fixed player bar, rendered in the browser with hono/jsx/dom
 // into #player (outside the swapped page, so it and the audio survive
 // navigation). app/client.ts sets what it shows with setBar(): the show and
-// track on air; it always shows, paused until played.
+// track on air, or an archive block (no track); it always shows, paused until
+// played. It has no seek bar or download: the stream and the blocks play from
+// where they are, and blocks from the beginning.
 import { render, useLayoutEffect, useRef, useState } from "hono/jsx/dom";
 
-// station: the site's name (what the button plays); title: the show on air.
+// station: what the button plays (the site's name, or an archive block's
+// title); title: the show on air, or the block; live: not an archive block.
 export type BarState = {
   station: string;
   title: string;
+  live: boolean;
   track: string;
   artist: string;
   cover: string;
@@ -63,7 +67,7 @@ function Bar({ onToggle }: { onToggle: () => void }) {
         <span id="bar-track">{parts.join(" · ")}</span>
         <span class="bar-status">
           {s.playing && <span class="dot" aria-hidden="true" />}
-          <span>{`${s.title} · Live`}</span>
+          <span>{`${s.title} · ${s.live ? "Live" : "Archive"}`}</span>
         </span>
       </div>
       <button

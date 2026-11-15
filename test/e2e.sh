@@ -22,7 +22,7 @@ docker buildx bake --load ${bake_flags[@]+"${bake_flags[@]}"} "${files[@]}" app 
 # Start the stack from those images, then the tests. Plain `compose run` would
 # rebuild the app (pull_policy: build) without E2E_BAKE_FLAGS, which fails in
 # cloud sessions, and `run` has no --no-build.
-dc up -d --no-build caddy liquidsoap
+dc up -d --no-build caddy liquidsoap archive-prune
 dc run --rm --no-deps e2e npx playwright test "$@"
 
 # Deploys disturb no listener. With a listener playing the stream through
@@ -95,7 +95,7 @@ restarted() { { diff <(printf '%s\n' "$1") <(started) || true; } | sed -n 's/^> 
 deploy() {
   local before
   before=$(returns)
-  dc up -d --no-build --remove-orphans caddy liquidsoap 2>/dev/null
+  dc up -d --no-build --remove-orphans caddy liquidsoap archive-prune 2>/dev/null
   COMPOSE="docker compose -p radio-e2e --env-file test/test.env ${files[*]}" sh scripts/reconcile.sh
   if [ "${1:-}" = restart ]; then
     wait_for returned "$before" ||
@@ -117,6 +117,31 @@ deploy_change() {
 }
 # Liquidsoap's log has a line matching $1.
 logged() { dc logs liquidsoap 2>&1 | grep -q "$1"; }
+# The archive (radio.liq): the block being recorded (its file name), a file's
+# size, and whether a finished block exists.
+recording() { dc exec -T liquidsoap ls /archive/recording | head -n 1; }
+size() { dc exec -T liquidsoap sh -c "wc -c <\"/archive/$1\"" 2>/dev/null || echo 0; }
+grows() { [ "$(size "recording/$1")" -gt "$2" ]; }
+finished() { dc exec -T liquidsoap test -s "/archive/blocks/$1"; }
+recording_is() { [ "$(recording)" = "$1" ]; }
+recording_not() { [ -n "$(recording)" ] && [ "$(recording)" != "$1" ]; }
+
+step "archive plays are counted per block and day from Icecast's access log, apart from the stream"
+plays=$(dc exec -T icecast cat /var/log/icecast/access.log | sh scripts/archive-plays.sh -)
+printf '%s\n' "$plays" | sed 's/^/  /'
+printf '%s\n' "$plays" | grep -qE "^[0-9]{4}-[0-9]{2}-[0-9]{2}	night-2026-11-14	[1-9][0-9]*	" ||
+  fail "archive-plays.sh counted no plays of the archive block"
+! printf '%s\n' "$plays" | grep -q stream || fail "archive-plays.sh counted the live stream"
+dc exec -T icecast grep -q '"GET /stream HTTP' /var/log/icecast/access.log ||
+  fail "the access log has no live stream requests to tell apart"
+
+step "the archive records the block on air, into a growing file named for its show and date"
+wait_for test -n "$(recording)" || fail "nothing is being recorded"
+block=$(recording)
+echo "  recording $block"
+printf '%s\n' "$block" | grep -qE '^[a-z0-9-]+-[0-9]{4}-[0-9]{2}-[0-9]{2}\.mp3$' || fail "recording a badly named $block"
+before=$(size "recording/$block")
+wait_for grows "$block" "$before" || fail "$block isn't growing"
 
 listen
 expect 1 "connecting"
@@ -134,13 +159,43 @@ step "music added and removed: nothing restarts"
 deploy_change "" "a music change" \
   "edit_files 'cp /music/night/*.mp3 /music/default/ && rm \"/music/default/Alpha Artist- First Light.mp3\"'"
 
+step "a block boundary: the recording closes its block and starts the next, without a restart"
+# Swap the hours of the show recorded now and another, so another one's
+# block starts now (Liquidsoap re-reads the hours within a minute).
+show=${block%-*-*-*.mp3}
+other=default
+[ "$show" != default ] || other=edge
+deploy_change "" "a new block" "edit_files '
+  a=\$(grep \"^hours:\" /shows/$show.md) b=\$(grep \"^hours:\" /shows/$other.md)
+  sed -i \"s/^hours:.*/\$b/\" /shows/$show.md && sed -i \"s/^hours:.*/\$a/\" /shows/$other.md'"
+WAIT=90 wait_for finished "$block" || fail "$block wasn't moved to blocks/ when its block ended"
+wait_for recording_not "$block" || fail "no new block is being recorded after $block"
+echo "  finished $block ($(size "blocks/$block") bytes); now recording $(recording)"
+ended=$block
+block=$(recording)
+case $block in "$other"-*) ;; *) fail "recording $block, not $other's block" ;; esac
+
+step "retention: blocks over 14 days old go, and all but ARCHIVE_KEEP (1) of a show"
+# shellcheck disable=SC2016 # expands in the container
+edit_files 'cd /archive/blocks && for d in 2026-10-01 2026-11-10 2026-11-12; do : >"zz-$d.mp3"; done &&
+  touch -d "$(date -d @$(($(date +%s) - 15 * 86400)) "+%Y-%m-%d %H:%M:%S")" zz-2026-10-01.mp3'
+dc run --rm --no-deps -T archive-prune sh /prune-archive.sh | sed 's/^/  /'
+[ "$(dc exec -T liquidsoap sh -c 'ls /archive/blocks | grep ^zz-')" = zz-2026-11-12.mp3 ] ||
+  fail "pruning left $(dc exec -T liquidsoap sh -c 'ls /archive/blocks | grep ^zz- | xargs')"
+finished "$ended" || fail "pruning took $ended, its show's newest block"
+
 step "hours changed: nothing restarts; Liquidsoap re-reads them, and a gap is an error in its log"
-deploy_change "" "an hours change" "edit_files 'sed -i \"s/^hours: 0-3$/hours: 0-2/\" /shows/default.md'"
+deploy_change "" "an hours change" "edit_files 'sed -i \"s/^hours: 0-3$/hours: 0-2/\" /shows/*.md'"
 WAIT=90 wait_for logged "2:00: no show on air" || fail "Liquidsoap didn't log the gap the new hours left"
 
-step "a show added: Liquidsoap restarts"
+block=$(recording)
+before=$(size "recording/$block")
+step "a show added: Liquidsoap restarts, and the recording carries on in the same file"
 deploy_change liquidsoap "a new show" \
   "edit_files 'printf -- \"---\\ntitle: Added\\nhours: 2-3\\n---\\n\" >/shows/added.md && chmod a+r /shows/added.md'" restart
+
+wait_for recording_is "$block" || fail "after the restart, recording $(recording), not $block"
+wait_for grows "$block" "$before" || fail "after the restart, $block didn't grow from $before bytes"
 
 step "a show removed: Liquidsoap restarts"
 deploy_change liquidsoap "a removed show" "edit_files 'rm /shows/night.md'" restart

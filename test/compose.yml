@@ -1,5 +1,5 @@
 # End-to-end overlay for compose.yml (run with test/e2e.sh): the real stack on
-# fixture shows/music, with shows/music/logs/covers/plays in throwaway volumes
+# fixture shows/music, with shows/music/logs/covers/plays/archive in throwaway volumes
 # (shows and music so e2e.sh can change them, as a deploy does), nothing
 # published to the host, and a Playwright container driving it.
 services:
@@ -15,25 +15,31 @@ services:
       - |
         [ -e /music/.seeded ] && exit
         cp -r /fixture-shows/. /shows/ && cp -r /fixture-music/. /music/ && cp -r /fixture-covers/. /covers/
-        chmod -R a+rX /shows /music
+        # A finished archive block (20 s, no tags) for the archive tests.
+        mkdir -p /archive/blocks && cp /fixture-archive/night-2026-11-14.mp3 /archive/blocks/
+        chmod -R a+rX /shows /music /archive
         touch /music/.seeded
     volumes:
       - e2e-shows:/shows
       - e2e-music:/music
       - e2e-covers:/covers
+      - e2e-archive:/archive
       - ./test/fixtures/shows:/fixture-shows:ro
       - ./test/fixtures/music:/fixture-music:ro
       - ./test/fixtures/covers:/fixture-covers:ro
+      - ./test/fixtures/archive:/fixture-archive:ro
   init:
     volumes:
       - e2e-logs:/logs
       - e2e-covers:/covers
       - e2e-plays:/plays
+      - e2e-archive:/archive
     depends_on:
       seed: { condition: service_completed_successfully }
   icecast:
     volumes:
       - e2e-logs:/var/log/icecast
+      - e2e-archive:/archive:ro
   liquidsoap:
     # The tests put the show they need on air (radio.liq onair; test/helpers.ts).
     environment:
@@ -43,11 +49,16 @@ services:
       - e2e-music:/music:ro
       - e2e-covers:/covers:ro
       - e2e-plays:/plays
+      - e2e-archive:/archive
   app:
     volumes:
       - e2e-shows:/shows:ro
       - e2e-covers:/covers:ro
       - e2e-plays:/plays:ro
+      - e2e-archive:/archive:ro
+  archive-prune:
+    volumes:
+      - e2e-archive:/archive
   caddy:
     ports: !reset []
     volumes:
@@ -74,3 +85,4 @@ volumes:
   e2e-logs: {}
   e2e-covers: {}
   e2e-plays: {}
+  e2e-archive: {}

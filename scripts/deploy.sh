@@ -64,7 +64,7 @@ rs music covers shows "$HOST:radio/"
 # Then bring Icecast, Liquidsoap and Caddy up to date (scripts/reconcile.sh),
 # which drops no listener.
 $SSH "$HOST" 'chmod 600 radio/.env && cd radio &&
-  mkdir -p music plays logs covers &&
+  mkdir -p music plays logs covers archive &&
   BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose up -d --build --remove-orphans &&
   sh scripts/reconcile.sh'
 
@@ -72,4 +72,8 @@ $SSH "$HOST" 'chmod 600 radio/.env && cd radio &&
 # backup/plays/. Never deletes, and never touches the local plays/.
 mkdir -p backup/plays
 rsync -rt -e "$SSH" "$HOST:radio/plays/" backup/plays/
+# Likewise Icecast's access logs, where archive plays are counted
+# (scripts/archive-plays.sh backup/logs/access.log*).
+mkdir -p backup/logs
+rsync -rt -e "$SSH" --include='access.log*' --exclude='*' "$HOST:radio/logs/" backup/logs/
 echo "Deployed to $IP"

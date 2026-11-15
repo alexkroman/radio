@@ -1,8 +1,9 @@
 // The web app behind Caddy: what's on air and the schedule (/), each show's
 // page (/<slug>), the track on air (/now.json), DJ pages (/djs/<dj>),
-// /manifesto, and the SoundExchange reports (/reports). Shows are
+// /about, and the SoundExchange reports (/reports). Shows are
 // shows/<slug>.md (app/shows.ts), with their DJs and hours in the front matter;
 // Liquidsoap plays them on their hours on the one stream, /stream (via Caddy).
+import { archive, day, duration } from "./archive.ts";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -268,17 +269,56 @@ app.get("/", async (c) => {
   );
 });
 
-app.get("/about", (c) => c.redirect("/manifesto", 301));
+// Each show's recorded blocks, newest first, played (from the beginning, no
+// seeking) in the site's player. No track names: a block is its show, date
+// and length.
+app.get("/archive", async (c) => {
+  const [shows, blocks] = await Promise.all([getShows(), archive()]);
+  const listed = scheduled(shows).filter((s) => blocks.has(s.slug));
+  return c.render(
+    <main class="page page-station page-archive">
+      <SiteHeader current="archive" />
+      <header class="title-block">
+        <h1 class="display">Archive</h1>
+        <p class="subtitle">Recent shows, as broadcast, for up to two weeks. Each plays from the start.</p>
+      </header>
+      {listed.length === 0 ? (
+        <p class="muted">Nothing recorded yet.</p>
+      ) : (
+        listed.map((show) => (
+          <section class="archive-show" aria-labelledby={`archive-${show.slug}`}>
+            <h2 id={`archive-${show.slug}`} class="label">
+              {show.title}
+            </h2>
+            <ol class="archive-blocks">
+              {blocks.get(show.slug)!.map((b) => (
+                <li class="archive-block">
+                  <PlayButton src={b.url} title={`${show.title}, ${day(b.date)}`} />
+                  <span class="archive-title">
+                    <a href={`/${show.slug}`}>{show.title}</a>
+                  </span>
+                  <span class="archive-date">{day(b.date)}</span>
+                  <span class="archive-length">{duration(b.seconds)}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
+        ))
+      )}
+    </main>,
+    { title: "Archive" },
+  );
+});
 
-app.get("/manifesto", (c) => {
+app.get("/about", (c) => {
   const host = c.req.header("host") ?? "";
   return c.render(
-    <main class="page page-manifesto">
-      <SiteHeader current="manifesto" />
-      <h1 class="display">Manifesto</h1>
+    <main class="page page-about">
+      <SiteHeader current="about" />
+      <h1 class="display">About</h1>
       <p class="lead">Public radio for the streaming era: a nonprofit alternative to Spotify.</p>
-      <section class="prose" aria-labelledby="manifesto-why">
-        <h2 id="manifesto-why" class="label">
+      <section class="prose" aria-labelledby="about-why">
+        <h2 id="about-why" class="label">
           Why
         </h2>
         <p>
@@ -302,8 +342,8 @@ app.get("/manifesto", (c) => {
           that doesn't watch them back. The law already allows it. It just needs building.
         </p>
       </section>
-      <section class="prose" aria-labelledby="manifesto-how">
-        <h2 id="manifesto-how" class="label">
+      <section class="prose" aria-labelledby="about-how">
+        <h2 id="about-how" class="label">
           How
         </h2>
         <p>
@@ -321,8 +361,8 @@ app.get("/manifesto", (c) => {
         </ul>
         <p>So the station doesn't need a big audience to survive.</p>
       </section>
-      <section class="prose" aria-labelledby="manifesto-what">
-        <h2 id="manifesto-what" class="label">
+      <section class="prose" aria-labelledby="about-what">
+        <h2 id="about-what" class="label">
           What it is
         </h2>
         <p>
@@ -331,8 +371,8 @@ app.get("/manifesto", (c) => {
         </p>
         <p>It isn't trying to be a better Spotify. It's trying to be what Spotify's business can't be.</p>
       </section>
-      <section class="prose" aria-labelledby="manifesto-money">
-        <h2 id="manifesto-money" class="label">
+      <section class="prose" aria-labelledby="about-money">
+        <h2 id="about-money" class="label">
           Where the money goes
         </h2>
         <p>
@@ -346,8 +386,8 @@ app.get("/manifesto", (c) => {
           <a href="/reports">reports</a> show every play.
         </p>
       </section>
-      <section class="prose" aria-labelledby="manifesto-not">
-        <h2 id="manifesto-not" class="label">
+      <section class="prose" aria-labelledby="about-not">
+        <h2 id="about-not" class="label">
           What we don't do
         </h2>
         <ul>
@@ -366,8 +406,8 @@ app.get("/manifesto", (c) => {
           </li>
         </ul>
       </section>
-      <section class="prose" aria-labelledby="manifesto-listen">
-        <h2 id="manifesto-listen" class="label">
+      <section class="prose" aria-labelledby="about-listen">
+        <h2 id="about-listen" class="label">
           Listening
         </h2>
         <p>Press play, or open the stream URL in a radio app or VLC.</p>
@@ -384,8 +424,8 @@ app.get("/manifesto", (c) => {
           </div>
         </dl>
       </section>
-      <section class="prose" aria-labelledby="manifesto-yours">
-        <h2 id="manifesto-yours" class="label">
+      <section class="prose" aria-labelledby="about-yours">
+        <h2 id="about-yours" class="label">
           Start your own
         </h2>
         <p>
@@ -393,8 +433,8 @@ app.get("/manifesto", (c) => {
           music, write a page for each channel and switch it on. It's all on <a href={GITHUB_URL}>GitHub</a>.
         </p>
       </section>
-      <section class="prose" aria-labelledby="manifesto-contact">
-        <h2 id="manifesto-contact" class="label">
+      <section class="prose" aria-labelledby="about-contact">
+        <h2 id="about-contact" class="label">
           Contact
         </h2>
         <p>
@@ -404,7 +444,7 @@ app.get("/manifesto", (c) => {
       </section>
       <footer class="footer footer-rule">{host}</footer>
     </main>,
-    { title: "Manifesto" },
+    { title: "About" },
   );
 });
 

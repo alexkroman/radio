@@ -25,12 +25,6 @@ test("the station is one MP3 stream", async () => {
   }).toPass({ timeout: 60_000 });
 });
 
-test("a show's old stream URL redirects to the stream", async ({ request }) => {
-  const res = await request.get("/night/stream", { maxRedirects: 0 });
-  expect(res.status()).toBe(301);
-  expect(res.headers()["location"]).toBe("/stream");
-});
-
 test("home page has what's on, what's next and the schedule", async ({ page }) => {
   await onAir("night");
   await page.goto("/");
@@ -103,9 +97,9 @@ test("a DJ page has their profile, shows and links", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Elsewhere" })).toHaveCount(0);
 });
 
-test("manifesto has the stream", async ({ page }) => {
-  await page.goto("/manifesto");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Manifesto");
+test("the About page has the stream", async ({ page }) => {
+  await page.goto("/about");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("About");
   await expect(page.getByRole("link", { name: /\/stream$/ })).toHaveAttribute("href", "/stream");
   await expect(page.locator(".streams")).toContainText("MP3 · 256 kbps");
 });
@@ -212,7 +206,7 @@ test("security headers are set and the server banner is stripped", async ({ requ
 });
 
 test("SoundExchange report counts plays from every show with file tags", async ({ page, request }) => {
-  await page.goto("/manifesto");
+  await page.goto("/about");
   await page.getByRole("link", { name: "reports", exact: true }).click();
   await expect(page.locator(`a[href="/reports/${month}"]`)).toBeVisible();
   await expect(async () => {
@@ -247,9 +241,9 @@ test("player plays the stream using only self-hosted assets", async ({ page }) =
   await expect(page.locator("#np img")).toBeVisible();
 
   // Browsing keeps it playing, and every play button shows it.
-  await page.getByRole("link", { name: "Manifesto", exact: true }).click();
-  await expect(page).toHaveURL(/\/manifesto$/);
-  await expect(page).toHaveTitle(/^Manifesto/);
+  await page.getByRole("link", { name: "About", exact: true }).click();
+  await expect(page).toHaveURL(/\/about$/);
+  await expect(page).toHaveTitle(/^About/);
   await page.getByRole("link", { name: "Schedule", exact: true }).click();
   await expect(main.getByRole("button", { name: "Pause Mazes Radio" })).toBeVisible();
   expect(await state()).toBe("playing");
@@ -290,8 +284,8 @@ test("play plays the stream in the tap, on the phone's own output", async ({ pag
   const { track } = await (await page.request.get("/now.json")).json();
   await expect.poll(() => page.evaluate(() => navigator.mediaSession.metadata?.title)).toBe(track);
   expect(await page.evaluate(() => navigator.mediaSession.metadata?.album)).toBe("Fixture Night");
-  await page.getByRole("link", { name: "Manifesto" }).first().click();
-  await expect(page).toHaveURL(/\/manifesto$/);
+  await page.getByRole("link", { name: "About" }).first().click();
+  await expect(page).toHaveURL(/\/about$/);
   await expect(page.locator("#bar-track")).toContainText(track);
   // Pausing drops the connection.
   await page.locator("#player").getByRole("button", { name: "Pause Mazes Radio" }).click();
@@ -362,8 +356,8 @@ for (const [name, viewport] of [
       await page.getByRole("main").getByRole("button", { name: "Play Mazes Radio" }).click();
       await expect(bar.getByRole("button", { name: "Pause Mazes Radio" })).toBeVisible();
       // It (and the stream) stays through navigation.
-      await page.getByRole("link", { name: "Manifesto" }).click();
-      await expect(page).toHaveURL(/\/manifesto$/);
+      await page.getByRole("link", { name: "About" }).click();
+      await expect(page).toHaveURL(/\/about$/);
       await expect(bar).toContainText("Fixture Night · Live");
       await bar.getByRole("button", { name: "Pause Mazes Radio" }).click();
       // It stays, paused, and plays again.

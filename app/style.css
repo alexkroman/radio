@@ -85,7 +85,7 @@ button {
   gap: 56px;
 }
 
-.page-manifesto {
+.page-about {
   --width: var(--width-prose);
 }
 
@@ -443,6 +443,42 @@ img.cover {
   gap: 16px;
 }
 
+/* ── Archive ── */
+.archive-show {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.archive-blocks {
+  list-style: none;
+  padding: 0;
+  border-top: 1px solid var(--color-ink);
+}
+
+.archive-block {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.archive-title {
+  flex: 1 1 140px;
+  min-width: 0;
+  font: var(--type-station-name);
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+.archive-date,
+.archive-length {
+  font: var(--type-time);
+  color: var(--color-muted);
+}
+
 .stream {
   display: flex;
   flex-wrap: wrap;
@@ -545,7 +581,7 @@ img.cover {
   gap: 16px;
 }
 
-/* ── Manifesto ── */
+/* ── About ── */
 .lead {
   font: var(--type-lead);
   letter-spacing: -0.01em;

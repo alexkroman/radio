@@ -41,14 +41,16 @@ services:
       - -c
       - |
         set -e
-        chown -R 10001:10001 /data /logs /covers /plays
-        chmod -R u+rwX,g+rwX /logs /covers /plays /data
-        chmod g+s /logs /covers /plays
+        mkdir -p /archive/recording /archive/blocks
+        chown -R 10001:10001 /data /logs /covers /plays /archive
+        chmod -R u+rwX,g+rwX /logs /covers /plays /data /archive
+        chmod g+s /logs /covers /plays /archive /archive/recording /archive/blocks
     volumes:
       - caddy:/data
       - ./logs:/logs
       - ./covers:/covers
       - ./plays:/plays
+      - ./archive:/archive
     restart: "no"
 
   # Serves the stream (mount /stream), with UTF-8 track metadata, extra
@@ -62,6 +64,8 @@ services:
     image: libretime/icecast:2.5.0
     command: ["sh", "-c", "sh /icecast/config.sh && exec icecast -c /tmp/icecast.xml"]
     environment:
+      # access.log's times, so scripts/archive-plays.sh counts local days.
+      TZ: ${TZ:-America/Los_Angeles}
       DOMAIN: ${DOMAIN:-localhost}
       ICECAST_SOURCE_PASSWORD: &password ${PASSWORD:?Set PASSWORD in .env}
       ICECAST_ADMIN_PASSWORD: *password
@@ -83,12 +87,14 @@ services:
     volumes:
       - ./logs:/var/log/icecast
       - ./icecast:/icecast:ro
+      # Finished archive blocks, served at /archive/<file> (icecast/config.sh).
+      - ./archive:/archive:ro
     depends_on:
       init: { condition: service_completed_successfully }
 
   # The 24/7 stream, playing the shows on their schedule (radio.liq), sent to
-  # Icecast; writes the play log (plays/YYYY-MM.jsonl). TZ is the schedule's
-  # time zone: set it in .env (e.g. America/Los_Angeles).
+  # Icecast; writes the play log (plays/YYYY-MM.jsonl) and records each show
+  # block to archive/. TZ is the schedule's time zone (.env).
   liquidsoap:
     <<: [*hardening, *logging]
     group_add: ["10001"]
@@ -96,7 +102,7 @@ services:
     image: savonet/liquidsoap:v2.4.6
     command: ["/radio.liq"]
     environment:
-      TZ: ${TZ:-UTC}
+      TZ: ${TZ:-America/Los_Angeles}
       PASSWORD: *password
     volumes:
       - ./radio.liq:/radio.liq:ro
@@ -104,6 +110,7 @@ services:
       - ./music:/music:ro
       - ./covers:/covers:ro
       - ./plays:/plays
+      - ./archive:/archive
     depends_on:
       init: { condition: service_completed_successfully }
       icecast: { condition: service_started }
@@ -120,7 +127,8 @@ services:
     # a SIGKILL; with an init process it exits at once.
     init: true
     environment:
-      TZ: ${TZ:-UTC}
+      TZ: ${TZ:-America/Los_Angeles}
+      ARCHIVE_KEEP: ${ARCHIVE_KEEP:-1}
       SITE_TITLE: ${SITE_TITLE:-}
       CONTACT_EMAIL: ${CONTACT_EMAIL:-}
       SITE_PASSWORD: ${SITE_PASSWORD:-}
@@ -128,6 +136,25 @@ services:
       - ./shows:/shows:ro
       - ./covers:/covers:ro
       - ./plays:/plays:ro
+      - ./archive:/archive:ro
+    depends_on:
+      init: { condition: service_completed_successfully }
+
+  # Deletes archive blocks older than 14 days, and all but the newest
+  # ARCHIVE_KEEP of each show (scripts/prune-archive.sh): at start, then every
+  # hour (nightly included), so a finished block's predecessor goes within the
+  # hour and the archive stays at ARCHIVE_KEEP blocks a show.
+  archive-prune:
+    <<: [*hardening, *logging]
+    user: "10001:10001"
+    restart: unless-stopped
+    image: busybox:1.38.0
+    command: ["sh", "-c", "while :; do sh /prune-archive.sh; sleep 3600; done"]
+    environment:
+      ARCHIVE_KEEP: ${ARCHIVE_KEEP:-1}
+    volumes:
+      - ./scripts/prune-archive.sh:/prune-archive.sh:ro
+      - ./archive:/archive
     depends_on:
       init: { condition: service_completed_successfully }
 

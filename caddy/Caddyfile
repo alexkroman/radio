@@ -35,10 +35,15 @@
 		method GET HEAD
 		path /stream
 	}
-	# Each show had its own stream at /<slug>/stream before the one scheduled
-	# stream: send players still using one there.
-	@oldstream path_regexp ^/[a-z0-9-]+/stream$
-	redir @oldstream /stream 301
+	# Public: an archive block, /archive/<show>-<YYYY-MM-DD>.mp3, a file
+	# Icecast serves (icecast/config.sh). GET only, and played only from the
+	# beginning: Range is dropped on the way in, and the length and
+	# Accept-Ranges on the way out, so players see a stream they can't seek.
+	# (/archive itself is the app's page.)
+	@archive {
+		method GET
+		path_regexp ^/archive/[a-z0-9-]+-[0-9]{4}-[0-9]{2}-[0-9]{2}\.mp3$
+	}
 
 	header {
 		# Force HTTPS for a year.
@@ -57,6 +62,16 @@
 		reverse_proxy icecast:8000 {
 			header_down -Server
 			header_up -Range
+			flush_interval -1
+		}
+	}
+	handle @archive {
+		reverse_proxy icecast:8000 {
+			header_up -Range
+			header_up -If-Range
+			header_down -Server
+			header_down -Accept-Ranges
+			header_down -Content-Length
 			flush_interval -1
 		}
 	}

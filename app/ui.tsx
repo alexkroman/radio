@@ -33,7 +33,7 @@ export const Lockup = () => (
 );
 
 // `home`: the home page, where the lockup is the page's <h1>.
-export const SiteHeader = ({ current, home }: { current?: "home" | "manifesto"; home?: boolean }) => (
+export const SiteHeader = ({ current, home }: { current?: "home" | "archive" | "about"; home?: boolean }) => (
   <header class="site-header">
     {home ? (
       <h1>
@@ -46,8 +46,11 @@ export const SiteHeader = ({ current, home }: { current?: "home" | "manifesto"; 
       <a href="/" aria-current={current === "home" ? "page" : undefined}>
         Schedule
       </a>
-      <a href="/manifesto" aria-current={current === "manifesto" ? "page" : undefined}>
-        Manifesto
+      <a href="/archive" aria-current={current === "archive" ? "page" : undefined}>
+        Archive
+      </a>
+      <a href="/about" aria-current={current === "about" ? "page" : undefined}>
+        About
       </a>
     </nav>
   </header>
@@ -66,15 +69,24 @@ const PauseIcon = ({ size }: { size: number }) => (
   </svg>
 );
 
-// Plays the stream (whatever is on air). The client (app/client.ts) finds
-// these by data-play and shows the pause state on every one while it plays.
-export const PlayButton = ({ large }: { large?: boolean }) => (
+// Plays the stream (whatever is on air), or an archive block (src, with its
+// title). The client (app/client.ts) finds these by data-play and shows the
+// pause state on every one for what's playing.
+export const PlayButton = ({
+  large,
+  src = "/stream",
+  title = SITE_TITLE,
+}: {
+  large?: boolean;
+  src?: string;
+  title?: string;
+}) => (
   <button
     type="button"
     class={large ? "play play-lg" : "play"}
-    data-play
-    data-title={SITE_TITLE}
-    aria-label={`Play ${SITE_TITLE}`}
+    data-play={src}
+    data-title={title}
+    aria-label={`Play ${title}`}
   >
     <PlayIcon size={large ? 20 : 14} d={large ? "M4.5 2.5v9l7.5-4.5z" : "M4 2.5v9l7.5-4.5z"} />
     <PauseIcon size={large ? 20 : 14} />

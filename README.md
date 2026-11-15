@@ -2,8 +2,8 @@
 
 A small internet radio station: stock open-source services plus one small TypeScript app.
 
-- **Liquidsoap** plays one 24/7 stream, each show at its hours of the day, on shuffle with automatic cue points, loudness levelling and crossfades, and appends every play (tags and listener count) to a monthly log, `plays/YYYY-MM.jsonl`.
-- **Icecast** serves the stream, with track titles (UTF-8) in the stream for players like VLC.
+- **Liquidsoap** plays one 24/7 stream, each show at its hours of the day, on shuffle with automatic cue points, loudness levelling and crossfades, appends every play (tags and listener count) to a monthly log, `plays/YYYY-MM.jsonl`, and records each show block to `archive/`.
+- **Icecast** serves the stream, with track titles (UTF-8) in the stream for players like VLC, and the archive's recorded blocks.
 - **`app/`** ([Hono](https://hono.dev)) serves what's on air, the schedule, the show pages and the SoundExchange reports (from the play log). Its browser code (htmx, fonts) is bundled from npm, so nothing loads from a CDN, and plays the stream in a plain `<audio>` element.
 - **Caddy** provides HTTPS and is the only public entry point.
 - **Docker** restarts any service that crashes.
@@ -90,6 +90,21 @@ djs: [Ana Ruiz]
 
 The show files are in the repo. Adding or removing a show needs a Liquidsoap restart, which `scripts/reconcile.sh` does (a deploy runs it; no listener is dropped); editing a title, description or hours shows up without one.
 
+## Archive
+
+Liquidsoap records the program as broadcast (the final mix, after the limiter) to one 128 kbps MP3 per show block: `archive/recording/<show>-<YYYY-MM-DD>.mp3` while it records, the date being the day the block started, then `archive/blocks/` when the block ends. Blocks follow the clock, not the songs: Drift's is 17:00–22:00 to the second. A Liquidsoap restart mid-block carries on in the same file, and an error writing it (a full disk) is retried every 10 s without touching the stream.
+
+`/archive` lists each show's blocks, newest first, with date and length, and plays them in the site's player: from the beginning, with no seeking, no download and no track names. Icecast serves the files at `/archive/<show>-<date>.mp3` (Caddy passes only GET there, drops `Range`, and hides the length, so players can't seek), each play its own connection.
+
+Retention: the `archive-prune` service runs `scripts/prune-archive.sh` at start and every hour (so nightly too). It deletes blocks finished over 14 days ago, then all but the newest `ARCHIVE_KEEP` (`.env`, default 1) of each show. An hour is ~58 MB, so the default keeps ~1.4 GB of finished blocks, plus up to ~0.6 GB for the block being recorded.
+
+Plays: each request for a block is a line in Icecast's `logs/access.log` (kept when rotated, as `access.log.<date>`; deploys back them up to `backup/logs/`), apart from `/stream`'s. `scripts/archive-plays.sh` prints plays and hours connected per block per day:
+
+```sh
+scripts/archive-plays.sh                    # logs/access.log* on the server
+scripts/archive-plays.sh backup/logs/access.log*
+```
+
 ## Where things are
 
 | URL                          | What's there                                  |
@@ -97,10 +112,9 @@ The show files are in the repo. Adding or removing a show needs a Liquidsoap res
 | `https://localhost/`         | What's on air, the player, up next, schedule  |
 | `https://localhost/<slug>`   | A show's hours, now playing (on air), history |
 | `https://localhost/stream`   | The stream for apps and VLC                   |
+| `https://localhost/archive`  | Recorded show blocks, newest first            |
 | `https://localhost/djs/<dj>` | A DJ's profile and shows                      |
 | `https://localhost/reports`  | Monthly SoundExchange reports                 |
-
-The old per-show stream URLs (`/<slug>/stream`) redirect to `/stream`.
 
 Set `SITE_PASSWORD` in `.env` to put the show pages behind a login form; the stream stays public so apps can play it. After 10 wrong passwords from one address, logins are refused for 15 minutes. Nothing else is public.
 

@@ -24,13 +24,23 @@ web=/tmp/web
 mkdir -p "$web"
 cp -R /usr/share/icecast/web/. "$web/"
 cp "$here/silence.mp3" "$web/fallback.mp3"
+# The archive's finished blocks (radio.liq records them to /archive/recording
+# and moves each to /archive/blocks when it ends), served as files at
+# /archive/<show>-<date>.mp3: each request is its own connection, logged in
+# access.log (scripts/archive-plays.sh counts them). Caddy passes only
+# GET /archive/<show>-<YYYY-MM-DD>.mp3, without Range, so every play starts at
+# the beginning. The recording in progress isn't reachable.
+ln -sfn /archive/blocks "$web/archive"
 mounts='<mount type="normal"><mount-name>/stream</mount-name><fallback-mount>/fallback.mp3</fallback-mount><fallback-override>all</fallback-override></mount>'
+# Access logs: kept when rotated (logarchive: access.log.<date> at 10 MB,
+# instead of one access.log.old), as archive plays are counted from them.
 # Seed Icecast's random numbers from /dev/urandom and /proc; without it, it
 # warns at every start and uses libigloo's defaults.
 prng='<prng-seed type="profile">linux</prng-seed>'
 sed \
   -e "s|<hostname>localhost</hostname>|<hostname>$DOMAIN</hostname>|" \
   -e 's|<errorlog>-</errorlog>|<errorlog>error.log</errorlog>|' \
+  -e 's|<!-- <logarchive>true</logarchive> -->|<logarchive>true</logarchive>|' \
   -e "s|<webroot>[^<]*</webroot>|<webroot>$web</webroot>|" \
   -e "s|</security>|$prng</security>|" \
   -e "s|</icecast>|<mount type=\"default\"><charset>UTF-8</charset></mount>$mounts</icecast>|" \
@@ -38,7 +48,7 @@ sed \
   -e 's|<queue-size>[0-9]*</queue-size>|<queue-size>1048576</queue-size>|' \
   /etc/icecast.xml >/tmp/icecast.xml.new
 chmod 600 /tmp/icecast.xml.new
-for want in '<charset>UTF-8' "$prng" '<burst-size>327680<' '<queue-size>1048576<' "<webroot>$web<"; do
+for want in '<charset>UTF-8' '<logarchive>true<' "$prng" '<burst-size>327680<' '<queue-size>1048576<' "<webroot>$web<"; do
   grep -qF "$want" /tmp/icecast.xml.new || {
     echo "config.sh: $want missing from the generated config" >&2
     exit 1

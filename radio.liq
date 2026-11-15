@@ -327,5 +327,89 @@ output.icecast(
   radio
 )
 
+# The archive: the program as broadcast (`radio`, the final bus, so anything
+# mixed into it is recorded too) in one MP3 file per show block, by the
+# clock: a block runs from its show's start hour to its end hour, so a 17-22
+# block is five hours to the second (the on-air switch above waits for a
+# track to end; the recording doesn't). The file is
+# /archive/recording/<show>-<YYYY-MM-DD>.mp3 (the date the block started)
+# while it's recorded, and moves to /archive/blocks/ when the block ends:
+# Icecast serves that folder, the app lists it (/archive), and
+# scripts/prune-archive.sh deletes old blocks. A restart mid-block appends
+# to the same file. The recording is its own output: an error writing it
+# (a full disk) retries every 10 s and never touches the stream.
+
+# "YYYY-MM-DD" for a local date.
+def ymd(t) =
+  pad = fun (n) -> n < 10 ? "0#{n}" : "#{n}"
+  "#{t.year}-#{pad(t.month)}-#{pad(t.day)}"
+end
+
+# The block on now, by the clock: "<show>-<YYYY-MM-DD>", the date it started
+# ("off-air-..." for an hour no show has).
+def block_now() =
+  now = time.local()
+  on = list.find(default=("off-air", (0, 0)), fun (s) -> within(now.hour, snd(s)), schedule())
+  let (slug, (start, stop)) = on
+
+  # Past midnight in a block that started the evening before (22-6 at 2:00):
+  # its date is yesterday's. Twelve hours back is yesterday, DST or not.
+  started_yesterday = start > stop and now.hour < stop
+  "#{slug}-#{ymd(started_yesterday ? time.local(time() - 43200.) : now)}"
+end
+
+archive_recording = "/archive/recording"
+archive_blocks = "/archive/blocks"
+
+# Move a finished block's file from recording/ to blocks/.
+def finish_block(f) =
+  log.important(
+    "Archive: #{path.basename(f)} finished"
+  )
+  try
+    file.move(force=true, f, "#{archive_blocks}/#{path.basename(f)}")
+  catch e do
+    log.severe(
+      "Archive: couldn't move #{f} to #{archive_blocks}: #{e}"
+    )
+  end
+end
+
+# Blocks that ended while this wasn't running.
+list.iter(
+  fun (f) -> if path.basename(f) != "#{block_now()}.mp3" then finish_block(f) end,
+  file.ls(absolute=true, pattern="*.mp3", archive_recording)
+)
+
+recording = ref(block_now())
+output.file(
+  id="archive",
+  # 128 kbps: ~58 MB an hour.
+  %mp3(bitrate = 128),
+  # The same block after a restart: carry on in its file.
+  append=true,
+  # A new file when the block changes (checked every frame).
+  reopen_when=fun () -> block_now() != recording(),
+  reopen_delay=5.,
+  # Each file closes when its block ends, or when this stops (a restart): only
+  # an ended block is finished.
+  on_close=fun (f) -> if path.basename(f) != "#{block_now()}.mp3" then finish_block(f) end,
+  reopen_on_error=fun (e) ->
+    begin
+      log.severe(
+        "Archive: recording failed, retrying in 10 s: #{e}"
+      )
+      10.
+    end,
+  {
+    begin
+      recording := block_now()
+      "#{archive_recording}/#{recording()}.mp3"
+    end
+  },
+  # No track titles in the files: blocks are listed and played without them.
+  source.drop.metadata(radio)
+)
+
 # The shows this process plays, for scripts/reconcile.sh to compare with /shows.
 file.write(data=string.concat(separator="\n", shows), "/tmp/shows")

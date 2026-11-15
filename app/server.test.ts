@@ -1,6 +1,6 @@
 // The app in-process (app.request), on test/fixtures/shows and a play log
 // written here; env from vitest.config.ts.
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, describe, expect, test } from "vitest";
@@ -47,6 +47,21 @@ beforeAll(async () => {
   process.env.PLAYS_DIR = dir;
   month = (await import("./plays.ts")).monthOf(new Date());
   await writeFile(join(dir, `${month}.jsonl`), PLAYS.map((p) => JSON.stringify(p)).join("\n") + "\n");
+  // Archive blocks: 20 s at 128 kbps is 320,000 bytes.
+  const archive = await mkdtemp(join(tmpdir(), "archive-"));
+  process.env.ARCHIVE_DIR = archive;
+  await mkdir(join(archive, "blocks"));
+  await mkdir(join(archive, "recording"));
+  const block = (name: string, bytes: number) => writeFile(join(archive, name), Buffer.alloc(bytes));
+  await block("blocks/night-2026-11-14.mp3", 320_000);
+  await block("blocks/night-2026-11-13.mp3", 5 * 3600 * 16_000); // older: ARCHIVE_KEEP is 1
+  await block("blocks/default-2026-11-14.mp3", 16_000 * 3600 * 3 + 16_000 * 120);
+  await block("blocks/edge-2026-10-01.mp3", 1000); // finished over 14 days ago
+  const old = new Date(Date.now() - 15 * 24 * 3600 * 1000);
+  await utimes(join(archive, "blocks/edge-2026-10-01.mp3"), old, old);
+  await block("blocks/nope-2026-11-14.mp3", 1000); // not a show
+  await block("blocks/notes.txt", 10);
+  await block("recording/odd-2026-11-15.mp3", 1000); // still recording
   ({ app } = await import("./server.tsx"));
   const res = await login({ password: "unit-site", next: "/" });
   cookie = res.headers.get("set-cookie")!.split(";")[0]!;
@@ -190,21 +205,46 @@ describe("pages", () => {
   });
 });
 
-describe("manifesto", () => {
-  test("is linked from the site, and the old /about redirects to it", async () => {
-    expect(await (await page("/")).text()).toContain('href="/manifesto"');
-    expect((await page("/manifesto")).status).toBe(200);
-    expect(await (await page("/manifesto")).text()).toContain('href="https://github.com/alexkroman/radio"');
-    const old = await page("/about");
-    expect(old.status).toBe(301);
-    expect(old.headers.get("location")).toBe("/manifesto");
+describe("archive", () => {
+  test("lists each show's newest block, with its date and length, in schedule order", async () => {
+    const res = await page("/archive");
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    const rows = [...html.matchAll(/data-play="([^"]+)" data-title="([^"]+)"/g)].map((m) => [m[1], m[2]]);
+    expect(rows).toEqual([
+      ["/archive/default-2026-11-14.mp3", "Fixture Default, Sat, Nov 14"],
+      ["/archive/night-2026-11-14.mp3", "Fixture Night, Sat, Nov 14"],
+    ]);
+    expect(html).toContain("3 h 2 min");
+    expect(html).toContain("20 s");
+    expect(html).toContain('aria-current="page">Archive');
+  });
+
+  test("offers no downloads and names no tracks", async () => {
+    const html = await (await page("/archive")).text();
+    expect(html).not.toMatch(/href="[^"]*\.mp3"/);
+    expect(html).not.toContain("download");
+    expect(html).not.toContain("<audio");
+    for (const track of ["Midnight", "Second Wind", "First Light"]) expect(html).not.toContain(track);
+  });
+
+  test("needs the site password, like every page", async () => {
+    expect((await req("/archive")).status).toBe(401);
+  });
+});
+
+describe("about", () => {
+  test("is linked from the site", async () => {
+    expect(await (await page("/")).text()).toContain('href="/about"');
+    expect((await page("/about")).status).toBe(200);
+    expect(await (await page("/about")).text()).toContain('href="https://github.com/alexkroman/radio"');
   });
 });
 
 describe("reports", () => {
-  test("are linked from the manifesto, not the nav, and list this month", async () => {
+  test("are linked from the About page, not the nav, and list this month", async () => {
     expect(await (await page("/")).text()).not.toContain('href="/reports"');
-    expect(await (await page("/manifesto")).text()).toContain('href="/reports"');
+    expect(await (await page("/about")).text()).toContain('href="/reports"');
     const res = await page("/reports");
     expect(res.status).toBe(200);
     expect(await res.text()).toContain(`href="/reports/${month}"`);

@@ -237,8 +237,9 @@ end
 # The archive: the program as broadcast (`radio`, the final bus, so anything
 # mixed into it is recorded too), one MP3 per show block, the same 256 kbps
 # as the stream. A block is its show's hours by the clock plus ARCHIVE_TAIL
-# seconds (default 60) of what follows, so a 17-22 block is a little over
-# five hours, and a short gap (a restart) doesn't take it under. The file is
+# seconds (default 60) of what follows: a 17-23 block runs to 23:01. A
+# block under five hours isn't archived, so give shows more than that (the
+# shortest, Drift, has six) for restarts and outages to fit in. The file is
 # /archive/recording/<show>-<YYYY-MM-DD>.mp3 (the date the block started)
 # while it's recorded; when it ends it moves to /archive/blocks/, which
 # Icecast serves and the app lists (/archive), if it's at least

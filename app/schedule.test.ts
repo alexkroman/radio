@@ -14,7 +14,7 @@ const show = (slug: string, hours: unknown): Show => {
     badHours: parsed || hours === undefined ? undefined : String(hours),
   };
 };
-// The station's own schedule.
+// A schedule like the station's.
 const SHOWS = [show("drift", "17-22"), show("frequency", "6-17"), show("gloaming", "22-6")];
 const at = (h: number, m = 0) => new Date(2026, 10, 15, h, m);
 

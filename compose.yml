@@ -120,7 +120,7 @@ services:
     init: true
     environment:
       TZ: ${TZ:-UTC}
-      SITE_TITLE: ${SITE_TITLE:-Mazes Radio}
+      SITE_TITLE: ${SITE_TITLE:-}
       CONTACT_EMAIL: ${CONTACT_EMAIL:-}
       SITE_PASSWORD: ${SITE_PASSWORD:-}
     volumes:

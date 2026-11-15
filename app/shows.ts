@@ -19,7 +19,7 @@
 // repeat of a DJ already on the show. A DJ on several shows is one page; their
 // details can be written on any of those shows (the first show, by slug, that
 // sets a field wins).
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import { marked } from "marked";
 import { parse as parseYaml } from "yaml";
@@ -61,7 +61,7 @@ function djEntry(v: unknown): DjEntry | undefined {
   const o = (typeof v === "object" && v !== null ? v : { name: v }) as Record<string, unknown>;
   const name = str(o["name"]);
   if (!name) return undefined;
-  const slug = str(o["slug"]) ?? slugify(name);
+  const slug = slugify(name);
   if (!new RegExp(`^${SLUG}$`).test(slug)) return undefined;
   const photoFile = str(o["photo"]);
   const photo = photoFile && resolve(SHOWS, photoFile);
@@ -86,10 +86,31 @@ function djEntry(v: unknown): DjEntry | undefined {
   };
 }
 
+// Parsed shows, re-read only when a file changes (every page renders the show
+// list, and polls re-render pages every 15 s). The inode is in the key since
+// rsync (deploy.sh) replaces a file, keeping the source's mtime.
+const cache = new Map<string, { key: string; show: Promise<Show> }>();
+
 export async function getShow(slug: string): Promise<Show | undefined> {
   if (RESERVED.has(slug)) return undefined;
-  const text = await readFile(`${SHOWS}/${slug}.md`, "utf8").catch(() => undefined);
-  if (text === undefined) return undefined;
+  const file = `${SHOWS}/${slug}.md`;
+  const st = await stat(file).catch(() => undefined);
+  if (!st?.isFile()) {
+    cache.delete(slug);
+    return undefined;
+  }
+  const key = `${st.ino}:${st.mtimeMs}:${st.size}`;
+  let hit = cache.get(slug);
+  if (hit?.key !== key) {
+    const entry = { key, show: readFile(file, "utf8").then((text) => parseShow(slug, text)) };
+    cache.set(slug, entry);
+    entry.show.catch(() => cache.get(slug) === entry && cache.delete(slug));
+    hit = entry;
+  }
+  return hit.show.catch(() => undefined);
+}
+
+async function parseShow(slug: string, text: string): Promise<Show> {
   const md = text.replace(/\r\n?/g, "\n");
   const [, front = "", body = md] = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(md) ?? [];
   let meta: Record<string, unknown> = {};

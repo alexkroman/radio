@@ -1,8 +1,16 @@
 // End-to-end tests against the real stack (Caddy, Liquidsoap, the app) running
 // on test/fixtures. Run with `npm run e2e`; test/global-setup.ts logs in.
 import { expect, test } from "@playwright/test";
-import { STATE } from "./global-setup.ts";
-import { BASE, month, player, playerState, SITE_PASSWORD, streamHead, waitForTrack } from "./helpers.ts";
+import {
+  BASE,
+  LOGGED_OUT,
+  month,
+  player,
+  playerState,
+  SITE_PASSWORD,
+  streamHead,
+  waitForTrack,
+} from "./helpers.ts";
 
 test("each show is its own MP3 stream", async () => {
   for (const show of ["default", "night"]) {
@@ -83,20 +91,6 @@ test("manifesto lists every stream", async ({ page }) => {
   await expect(page.locator(".streams")).toContainText("MP3 · 256 kbps");
 });
 
-test("favicons are served without a login", async ({ playwright }) => {
-  const request = await playwright.request.newContext({ baseURL: BASE, ignoreHTTPSErrors: true });
-  for (const [path, type] of [
-    ["/favicon.ico", "image/"],
-    ["/favicon.svg", "image/svg+xml"],
-    ["/apple-touch-icon.png", "image/png"],
-  ]) {
-    const res = await request.get(path);
-    expect(res.status(), path).toBe(200);
-    expect(res.headers()["content-type"], path).toContain(type);
-  }
-  await request.dispose();
-});
-
 test("show page shows its own now playing and history", async ({ page }) => {
   await page.goto("/night");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Fixture Night");
@@ -166,7 +160,7 @@ test("home page now playing and cover follow the track without a reload", async 
 
 test("cover art of the current track is served", async ({ request }) => {
   await expect(async () => {
-    const { cover } = await (await request.get("/night/now.json")).json();
+    const { cover } = (await (await request.get("/now.json")).json()).night;
     const res = await request.get(cover);
     expect(res.status()).toBe(200);
     expect(res.headers()["content-type"]).toBe("image/jpeg");
@@ -184,27 +178,6 @@ test("app.js and app.css are revalidated on every load", async ({ request }) => 
 
 test("an unknown show has no stream", async () => {
   expect((await streamHead("/nope/stream")).status).toBe(404);
-});
-
-test("only the app and the show streams are reachable", async ({ playwright }) => {
-  const paths = [
-    "/status-json.xsl",
-    "/status.xsl",
-    "/server_version.xsl",
-    "/admin/stats",
-    "/admin/listmounts",
-    "/admin/metadata",
-    "/default.md",
-    "/night/../status-json.xsl",
-    "/style.css",
-  ];
-  const request = await playwright.request.newContext({ baseURL: BASE, ignoreHTTPSErrors: true });
-  for (const path of paths) {
-    const res = await request.get(path);
-    expect([401, 404], `${path} → ${res.status()}`).toContain(res.status());
-    expect(await res.text()).not.toMatch(/icecast/i);
-  }
-  await request.dispose();
 });
 
 test("security headers are set and the server banner is stripped", async ({ request }) => {
@@ -298,7 +271,7 @@ test("switching shows plays the new stream in the tap, on the phone's own output
   expect(await page.evaluate(() => (window as unknown as { plays: boolean[] }).plays)).toEqual([true, true]);
   expect(await remote()).toEqual({ disabled: true, airplay: "deny" });
   // The lock screen's track, and the bar's off the station's page.
-  const { track } = await (await page.request.get("/night/now.json")).json();
+  const { track } = (await (await page.request.get("/now.json")).json()).night;
   await expect.poll(() => page.evaluate(() => navigator.mediaSession.metadata?.title)).toBe(track);
   await page.getByRole("link", { name: "Manifesto" }).first().click();
   await expect(page).toHaveURL(/\/manifesto$/);
@@ -373,59 +346,80 @@ for (const [name, viewport] of [
   ["phone", { width: 390, height: 844 }],
   ["desktop", { width: 1440, height: 900 }],
 ] as const)
-  test(`the player bar always shows (${name})`, async ({ browser }) => {
-    const context = await browser.newContext({
-      baseURL: BASE,
-      ignoreHTTPSErrors: true,
-      viewport,
-      storageState: STATE,
+  test.describe(() => {
+    test.use({ viewport });
+    test(`the player bar always shows (${name})`, async ({ page }) => {
+      await page.goto("/");
+      const bar = page.getByRole("region", { name: "Player" });
+      // Paused, with the page's first station, before anything plays.
+      await expect(bar).toBeVisible();
+      await expect(bar.getByRole("button", { name: /^Play / })).toBeVisible();
+      await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
+      await expect(bar).toBeVisible();
+      await expect(bar).toContainText("Fixture Night · Live");
+      await expect(bar).toContainText("Midnight · Gamma");
+      await expect(bar.getByRole("img", { name: "Cover art: Midnight, Gamma" })).toBeVisible();
+      // It (and the stream) stays through navigation.
+      await page.getByRole("link", { name: "Manifesto" }).click();
+      await expect(page).toHaveURL(/\/manifesto$/);
+      await expect(bar).toContainText("Fixture Night · Live");
+      await bar.getByRole("button", { name: "Pause Fixture Night" }).click();
+      // It stays, paused, with the same station, and plays it again.
+      await expect(bar).toBeVisible();
+      await expect(bar).toContainText("Fixture Night · Live");
+      await bar.getByRole("button", { name: "Play Fixture Night" }).click();
+      await expect(bar.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
     });
-    const page = await context.newPage();
-    await page.goto("/");
-    const bar = page.getByRole("region", { name: "Player" });
-    // Paused, with the page's first station, before anything plays.
-    await expect(bar).toBeVisible();
-    await expect(bar.getByRole("button", { name: /^Play / })).toBeVisible();
-    await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
-    await expect(bar).toBeVisible();
-    await expect(bar).toContainText("Fixture Night · Live");
-    await expect(bar).toContainText("Midnight · Gamma");
-    await expect(bar.getByRole("img", { name: "Cover art: Midnight, Gamma" })).toBeVisible();
-    // It (and the stream) stays through navigation.
-    await page.getByRole("link", { name: "Manifesto" }).click();
-    await expect(page).toHaveURL(/\/manifesto$/);
-    await expect(bar).toContainText("Fixture Night · Live");
-    await bar.getByRole("button", { name: "Pause Fixture Night" }).click();
-    // It stays, paused, with the same station, and plays it again.
-    await expect(bar).toBeVisible();
-    await expect(bar).toContainText("Fixture Night · Live");
-    await bar.getByRole("button", { name: "Play Fixture Night" }).click();
-    await expect(bar.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
-    await context.close();
   });
 
-test("the stream URL can be copied", async ({ browser }) => {
-  const context = await browser.newContext({
-    baseURL: BASE,
-    ignoreHTTPSErrors: true,
-    storageState: STATE,
+test.describe(() => {
+  test.use({ permissions: ["clipboard-read", "clipboard-write"] });
+  test("the stream URL can be copied", async ({ page }) => {
+    await page.goto("/night");
+    await page.getByRole("button", { name: "Copy" }).click();
+    await expect(page.getByRole("button", { name: "Copied" })).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${BASE}/night/stream`);
+    await expect(page.getByRole("button", { name: "Copy" })).toBeVisible();
   });
-  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-  const page = await context.newPage();
-  await page.goto("/night");
-  await page.getByRole("button", { name: "Copy" }).click();
-  await expect(page.getByRole("button", { name: "Copied" })).toBeVisible();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${BASE}/night/stream`);
-  await expect(page.getByRole("button", { name: "Copy" })).toBeVisible();
-  await context.close();
 });
 
-test.describe("site password", () => {
-  test.use({ storageState: { cookies: [], origins: [] } });
+test.describe("logged out", () => {
+  test.use(LOGGED_OUT);
+
+  test("favicons are served without a login", async ({ request }) => {
+    for (const [path, type] of [
+      ["/favicon.ico", "image/"],
+      ["/favicon.svg", "image/svg+xml"],
+      ["/apple-touch-icon.png", "image/png"],
+    ]) {
+      const res = await request.get(path);
+      expect(res.status(), path).toBe(200);
+      expect(res.headers()["content-type"], path).toContain(type);
+    }
+  });
+
+  test("only the app and the show streams are reachable", async ({ request }) => {
+    const paths = [
+      "/status-json.xsl",
+      "/status.xsl",
+      "/server_version.xsl",
+      "/admin/stats",
+      "/admin/listmounts",
+      "/admin/metadata",
+      "/default.md",
+      "/night/../status-json.xsl",
+      "/style.css",
+    ];
+    for (const path of paths) {
+      const res = await request.get(path);
+      expect([401, 404], `${path} → ${res.status()}`).toContain(res.status());
+      expect(await res.text()).not.toMatch(/icecast/i);
+    }
+  });
 
   test("pages need a login; streams and assets don't", async ({ page, request }) => {
     expect((await request.get("/night")).status()).toBe(401);
-    expect((await request.get("/night/now.json")).status()).toBe(401);
+    expect((await request.get("/now.json")).status()).toBe(401);
     expect((await request.get("/assets/app.css")).status()).toBe(200);
     expect((await streamHead("/night/stream")).status).toBe(200);
 

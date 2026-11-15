@@ -1,5 +1,5 @@
 // The web app behind Caddy: the stations list (/), each show's station page
-// (/<slug>) and current track (/<slug>/now.json), DJ pages (/djs/<dj>), /manifesto,
+// (/<slug>), every station's current track (/now.json), DJ pages (/djs/<dj>), /manifesto,
 // and the SoundExchange reports (/reports). Shows are shows/<slug>.md (app/shows.ts), with
 // their DJs in the front matter; Liquidsoap serves their streams via Caddy.
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -14,10 +14,10 @@ import { reports } from "./reports.tsx";
 import { getDj, getShow, getShows, type Show, SLUG } from "./shows.ts";
 import {
   Cover,
-  coverUrl,
+  nowTrack,
   DjCredit,
+  ICONS,
   Markdown,
-  npData,
   PlayButton,
   Poll,
   SITE_TITLE,
@@ -60,7 +60,7 @@ const StationRow = ({ show, play, num }: { show: Show; play?: Play; num?: number
       <Markdown class="station-desc" html={show.description} />
       {num !== undefined && <DjCredit djs={show.djs} class="station-credit" />}
     </div>
-    <div id={`np-${show.slug}`} class="station-np" {...npData(show.slug, play)}>
+    <div id={`np-${show.slug}`} class="station-np" data-np={show.slug}>
       <Cover play={play} size="cover-56" labelled />
       <div class="np-lines">
         <TrackLines play={play} cls="np" />
@@ -72,7 +72,7 @@ const StationRow = ({ show, play, num }: { show: Show; play?: Play; num?: number
 
 // The station page's cover and text (the play button stays put when this is refreshed).
 const NowPlaying = ({ show, play }: { show: Show; play?: Play }) => (
-  <div id="np" class="np" {...npData(show.slug, play)}>
+  <div id="np" class="np" data-np={show.slug}>
     <Cover play={play} size="cover-120" labelled />
     <div class="np-text">
       <span class="label np-status">
@@ -129,10 +129,14 @@ app.use(
   "/assets/*",
   serveStatic({ root: "dist/public", rewriteRequestPath: (p) => p.replace(/^\/assets/, "") }),
 );
-app.use("/:file{favicon\\.ico|favicon\\.svg|apple-touch-icon\\.png}", serveStatic({ root: "dist/public" }));
+app.on(
+  ["GET", "HEAD"],
+  ICONS.map((i) => i.href),
+  serveStatic({ root: "dist/public" }),
+);
 
-// The player bar's mount, with the station it shows before any is played or
-// found on the page: the first show.
+// The player bar's mount, with the station it shows before any is played: the
+// first show.
 async function Player() {
   const [first] = await getShows();
   return <div id="player" data-slug={first?.slug} data-title={first?.title} />;
@@ -146,9 +150,9 @@ app.use(
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false}' />
         <title>{title ? `${title} — ${SITE_TITLE}` : SITE_TITLE}</title>
-        <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        {ICONS.map((icon) => (
+          <link {...icon} />
+        ))}
         <link rel="stylesheet" href="/assets/app.css" />
         {script && <script src="/assets/app.js" defer />}
       </head>
@@ -176,17 +180,16 @@ app.route("/reports", reports);
 
 app.get("/", async (c) => {
   const [shows, latest] = await Promise.all([getShows(), latestPlays()]);
-  const rows = shows.map((s) => ({ ...s, play: latest.get(s.slug) }));
   return c.render(
     <main class="page page-index">
       <SiteHeader current="stations" home />
       <section id="stations" class="stations" aria-label="Stations">
-        {rows.map((s, i) => (
-          <StationRow show={s} play={s.play} num={i + 1} />
+        {shows.map((s, i) => (
+          <StationRow show={s} play={latest.get(s.slug)} num={i + 1} />
         ))}
       </section>
       <footer class="footer">{c.req.header("host")}</footer>
-      <Poll path="/" ids={rows.map((s) => `np-${s.slug}`)} />
+      <Poll path="/" ids={shows.map((s) => `np-${s.slug}`)} />
     </main>,
   );
 });
@@ -424,16 +427,11 @@ app.get(`/djs/:dj{${SLUG}}/photo`, async (c) => {
   return (photo && (await serveStatic({ path: photo })(c, async () => {}))) || c.notFound();
 });
 
-// The current track, for the player (client.ts) and the lock screen.
-app.get(`/:slug{${SLUG}}/now.json`, async (c) => {
-  const slug = c.req.param("slug");
-  const [show, [play]] = await Promise.all([getShow(slug), recentPlays(slug, 1)]);
-  if (!show) return c.notFound();
-  return c.json({
-    track: play?.title ?? "",
-    artist: play?.artist ?? "",
-    cover: play?.cover ? coverUrl(play.cover) : "",
-  });
+// Every station's current track, by slug: client.ts polls it for the player
+// bar, the lock screen and when to refresh the page.
+app.get("/now.json", async (c) => {
+  const [shows, latest] = await Promise.all([getShows(), latestPlays()]);
+  return c.json(Object.fromEntries(shows.map((s) => [s.slug, nowTrack(latest.get(s.slug))])));
 });
 
 // Per-track covers extracted by scripts/import.sh → covers/<show>/<stem>.jpg

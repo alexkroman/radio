@@ -1,7 +1,7 @@
 // Edge cases: odd titles and show files, missing music, traversal,
 // listener counting. Fixtures: test/fixtures/{shows,music}/{edge,plain,empty,quiet}.
 import { expect, test } from "@playwright/test";
-import { icyTitle, listen, loggedPlays, performances, streamHead, waitForTrack } from "./helpers.ts";
+import { listen, loggedPlays, performances, streamHead, waitForTrack } from "./helpers.ts";
 
 test("titles with unicode, pipes and HTML show exactly as tagged", async ({ page }) => {
   await page.goto("/edge");
@@ -13,7 +13,7 @@ test("titles with unicode, pipes and HTML show exactly as tagged", async ({ page
 test('cover art with a unicode or "&" file name is served', async ({ request }) => {
   expect((await request.get("/covers/default/Beta%20&%20Band-%20Second%20Wind.jpg")).status()).toBe(200);
   await expect(async () => {
-    const { cover } = await (await request.get("/edge/now.json")).json();
+    const { cover } = (await (await request.get("/now.json")).json()).edge;
     expect(cover).toBe("/covers/edge/Zo%C3%AB%20%C3%91and%C3%BA-%20Caf%C3%A9%20_%20Ol%C3%A9%20_b_.jpg");
     const res = await request.get(cover);
     expect(res.status()).toBe(200);
@@ -37,10 +37,10 @@ test("report keeps unicode and the whole title when it contains a pipe", async (
   await expect.poll(() => performances(request, "ZOË ÑANDÚ", "CAFÉ  OLÉ <B>")).toBeGreaterThan(0);
 });
 
-test("an untagged track is shown by its file name, without cover art", async ({ page, request }) => {
+test("a track without cover art shows the placeholder", async ({ page, request }) => {
   await page.goto("/plain");
   await waitForTrack(page, "Untitled Thing");
-  expect((await (await request.get("/plain/now.json")).json()).cover).toBe("");
+  expect((await (await request.get("/now.json")).json()).plain.cover).toBe("");
   await expect(page.locator("#np img")).toHaveCount(0);
   await expect(page.locator("#np .cover-ph")).toBeVisible();
 });
@@ -54,11 +54,6 @@ test("a show with no music folder still streams and renders", async ({ page }) =
   await page.goto("/empty");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Empty");
   await expect(page.locator("#np .np-track")).toHaveCount(0);
-});
-
-test("a show with nothing to play streams music/offline.mp3, without logging it", async () => {
-  expect(await icyTitle("/empty/stream")).toBe("Mazes Radio - Back soon");
-  expect((await loggedPlays()).some((p) => p.title === "Back soon")).toBe(false);
 });
 
 test("a track is skipped after 10 s of silence", async () => {

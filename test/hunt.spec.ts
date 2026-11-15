@@ -1,9 +1,7 @@
 // Bug hunt: in-stream metadata, escaping, layout, listener counting, load,
 // and the login throttle. Fixtures: shows/{odd,long}.
-import { request as https } from "node:https";
 import { expect, test } from "@playwright/test";
-import { STATE } from "./global-setup.ts";
-import { BASE, icyTitle, listen, loggedPlays, performances, streamHead } from "./helpers.ts";
+import { icyTitle, listen, LOGGED_OUT, loggedPlays, performances, streamHead } from "./helpers.ts";
 
 const ODD_ARTIST = 'Q "The" Artist';
 const ODD_TITLE = "Back\\slash \"Quotes\" & 'Ticks'";
@@ -41,22 +39,17 @@ test("quotes and backslashes survive the log, the page and the report", async ({
   );
 });
 
-test("pages fit a 320 px wide phone, even with very long titles", async ({ browser }) => {
-  const context = await browser.newContext({
-    baseURL: BASE,
-    ignoreHTTPSErrors: true,
-    viewport: { width: 320, height: 640 },
-    storageState: STATE,
+test.describe(() => {
+  test.use({ viewport: { width: 320, height: 640 } });
+  test("pages fit a 320 px wide phone, even with very long titles", async ({ page }) => {
+    for (const path of ["/", "/long", "/edge", "/reports"]) {
+      await page.goto(path);
+      if (path === "/long")
+        await expect(page.locator("#np .np-track")).toContainText("Supercalifragilisticexpialidocious");
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      expect(overflow, path).toBeLessThanOrEqual(0);
+    }
   });
-  const page = await context.newPage();
-  for (const path of ["/", "/long", "/edge", "/reports"]) {
-    await page.goto(path);
-    if (path === "/long")
-      await expect(page.locator("#np .np-track")).toContainText("Supercalifragilisticexpialidocious");
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    expect(overflow, path).toBeLessThanOrEqual(0);
-  }
-  await context.close();
 });
 
 test("history is newest first with valid times", async ({ page }) => {
@@ -69,7 +62,7 @@ test("history is newest first with valid times", async ({ page }) => {
   expect(times).toEqual([...times].sort((a, b) => b - a));
 });
 
-test("listener counts return to zero after listeners leave", async () => {
+test("listener counts return to zero after listeners leave", async ({ request }) => {
   const stops = [listen("/odd/stream"), listen("/odd/stream")];
   await expect
     .poll(async () => (await loggedPlays()).filter((p) => p.show === "odd").at(-1)?.listeners, {
@@ -78,19 +71,7 @@ test("listener counts return to zero after listeners leave", async () => {
     .toBe(2);
   stops.forEach((stop) => stop());
   // A HEAD request isn't a listener and must not hang.
-  await new Promise<void>((resolve, reject) => {
-    const req = https(
-      new URL("/odd/stream", BASE),
-      { method: "HEAD", rejectUnauthorized: false, timeout: 10_000 },
-      (res) => {
-        res.resume();
-        resolve();
-      },
-    );
-    req.on("timeout", () => req.destroy(new Error("HEAD timed out")));
-    req.on("error", reject);
-    req.end();
-  });
+  await request.head("/odd/stream", { timeout: 10_000 });
   const seen = (await loggedPlays()).length;
   const next = async () => (await loggedPlays()).slice(seen).find((p) => p.show === "odd");
   await expect.poll(next, { timeout: 60_000 }).toBeDefined();
@@ -103,17 +84,18 @@ test("50 simultaneous listeners all get audio", async () => {
 });
 
 // Last: it locks this client out of logging in for a while.
-test("wrong passwords are throttled, even sent all at once", async ({ playwright }) => {
-  const context = await playwright.request.newContext({ baseURL: BASE, ignoreHTTPSErrors: true });
-  const statuses = await Promise.all(
-    Array.from({ length: 30 }, async (_, i) =>
-      (
-        await context.post("/login", { form: { password: `wrong-${i}`, next: "/" }, maxRedirects: 0 })
-      ).status(),
-    ),
-  );
-  // Earlier tests made a wrong attempt or two, so at most 10 get through.
-  expect(statuses.filter((s) => s === 401).length).toBeLessThanOrEqual(10);
-  expect(statuses.filter((s) => s === 429).length).toBeGreaterThanOrEqual(20);
-  await context.dispose();
+test.describe(() => {
+  test.use(LOGGED_OUT);
+  test("wrong passwords are throttled, even sent all at once", async ({ request }) => {
+    const statuses = await Promise.all(
+      Array.from({ length: 30 }, async (_, i) =>
+        (
+          await request.post("/login", { form: { password: `wrong-${i}`, next: "/" }, maxRedirects: 0 })
+        ).status(),
+      ),
+    );
+    // Earlier tests made a wrong attempt or two, so at most 10 get through.
+    expect(statuses.filter((s) => s === 401).length).toBeLessThanOrEqual(10);
+    expect(statuses.filter((s) => s === 429).length).toBeGreaterThanOrEqual(20);
+  });
 });

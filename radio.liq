@@ -21,24 +21,23 @@ settings.clock.log_delay_threshold := 5.
 # Autocue measures each track ahead of play (default: at up to 70x real time)
 # and skips a track whose measuring it estimates at over 10 s (default), i.e.
 # any over ~12 min: those then played without loudness normalization or
-# silence trimming. Measure at up to 30x, which spreads out its CPU use,
-# and allow 90 s: tracks up to 45 min (gloaming has a few up to 2 hours, which
-# play unmeasured). A track is measured while the one before it plays.
+# silence trimming. scripts/import.sh removes tracks over 15 min, so measure
+# at up to 30x, which spreads out its CPU use, and allow 40 s: tracks up to
+# 20 min. A track is measured while the one before it plays.
 settings.autocue.internal.ratio := 30.
-settings.autocue.internal.timeout := 90.
+settings.autocue.internal.timeout := 40.
 enable_autocue_metadata()
 
 # Preparing a track (measuring included) may take as long as autocue allows.
 # The measuring isn't cut off at this limit (default 29 s), but Liquidsoap
-# warned "Time limit exceeded" for every track over ~15 min.
-settings.request.timeout := 120.
+# warns "Time limit exceeded" for a track that takes longer.
+settings.request.timeout := 45.
 
 # Every shows/<slug>.md is a 24/7 MP3 stream on Icecast mount /<slug> (public
 # at /<slug>/stream via Caddy) playing music/<slug>/ on shuffle. Each play is
 # appended to /plays/YYYY-MM.jsonl (read by the app's page and report).
-# Adding or removing a show needs (neither drops a listener):
-#   docker compose exec icecast sh /icecast/config.sh reload
-#   docker compose restart liquidsoap
+# Adding or removing a show needs an Icecast reload and a Liquidsoap restart
+# (neither drops a listener): scripts/reconcile.sh does both when needed.
 
 # Artists of a track (split on ",", "&", "feat.", "x", "with").
 def artists_of(a) =
@@ -50,49 +49,9 @@ def artists_of(a) =
   list.filter(fun (x) -> x != "", list.map(string.trim, parts))
 end
 
-# Artist and title from an "Artist- Title" file name (or the whole name as
-# title), for untagged files.
-def filename_tags(uri) =
-  name = path.remove_extension(path.basename(uri))
-  parts =
-    string.split(
-      separator="- ",
-      name
-    )
-  if
-    list.length(parts) > 1
-  then
-    [
-      ("artist", list.hd(default="", parts)),
-      (
-        "title",
-        string.concat(
-          separator="- ",
-          list.tl(parts)
-        )
-      )
-    ]
-  else
-    [("title", name)]
-  end
-end
-
-# A track's artists, from its tag or (untagged) its file name.
+# A track's artists, from its tag.
 def track_artists(r) =
-  a = list.assoc(default="", "artist", request.metadata(r))
-  artists_of(if a != "" then a else list.assoc(default="", "artist", filename_tags(request.uri(r))) end)
-end
-
-# Untagged files get artist/title from their file name so they still show up
-# in the log and the report.
-def title_from_filename(m) =
-  if
-    list.assoc(default="", "title", m) != ""
-  then
-    []
-  else
-    filename_tags(list.assoc(default="", "filename", m))
-  end
+  artists_of(list.assoc(default="", "artist", request.metadata(r)))
 end
 
 # Listeners on an Icecast mount right now, from its status page; 0 on error.
@@ -119,9 +78,6 @@ def safe_recode(s) =
     end
   end
 end
-
-# Played on a show that has nothing else to play (optional).
-offline = "/music/offline.mp3"
 
 def show(f) =
   slug = path.remove_extension(path.basename(f))
@@ -152,12 +108,7 @@ def show(f) =
     end
   end
 
-  tracks =
-    metadata.map(
-      insert_missing=true,
-      title_from_filename,
-      playlist(mode="randomize", reload_mode="watch", check_next=artist_not_recent, "/music/#{slug}")
-    )
+  tracks = playlist(mode="randomize", reload_mode="watch", check_next=artist_not_recent, "/music/#{slug}")
 
   # Per track (on the playlist: the crossfaded source doesn't mark every track),
   # from the raw metadata before the text recode below: the play log (with the
@@ -199,13 +150,9 @@ def show(f) =
   # once it has been silent for 10 s.
   music = crossfade(duration=12., fade_in=6., fade_out=6., blank.skip(max_blank=10., amplify(1., tracks)))
 
-  # When the show has nothing to play (no music, or every file fails), play
-  # music/offline.mp3 if there is one, else silence (mksafe), so listeners
-  # stay connected either way.
-  music =
-    if file.exists(offline) then fallback(track_sensitive=false, [music, single(offline)]) else music end
-
   # Limiter catches peaks from tracks autocue boosted and crossfade overlaps.
+  # When the show has nothing to play (no music, or every file fails), it
+  # plays silence (mksafe), so listeners stay connected.
   radio = limit(mksafe(music))
   radio = metadata.map(fun (m) -> list.map(fun (kv) -> (fst(kv), safe_recode(snd(kv))), m), radio)
 
@@ -225,4 +172,8 @@ def show(f) =
   )
 end
 
-list.iter(show, file.ls(absolute=true, pattern="*.md", "/shows"))
+shows = file.ls(absolute=true, pattern="*.md", "/shows")
+list.iter(show, shows)
+
+# The shows this process streams, for scripts/reconcile.sh to compare with /shows.
+file.write(data=string.concat(separator="\n", shows), "/tmp/shows")

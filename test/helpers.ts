@@ -7,6 +7,8 @@ import type { Play } from "../app/plays.ts";
 
 export const BASE = process.env.BASE_URL ?? "https://localhost";
 export const SITE_PASSWORD = process.env.SITE_PASSWORD ?? "";
+// For test.use(): a browser and `request` with no login cookie.
+export const LOGGED_OUT = { storageState: { cookies: [], origins: [] } };
 export const month = new Date().toISOString().slice(0, 7);
 
 // Status, type and first ~16 KB of a (never-ending) stream.
@@ -90,10 +92,10 @@ export async function loggedPlays(): Promise<Play[]> {
 }
 
 // Reload until the now playing track matches (the show may not have logged it yet).
-export async function waitForTrack(page: Page, text: string | RegExp, selector = "#np .np-track") {
+export async function waitForTrack(page: Page, text: string | RegExp) {
   await expect(async () => {
     await page.reload();
-    await expect(page.locator(selector)).toHaveText(text, { timeout: 1000 });
+    await expect(page.locator("#np .np-track")).toHaveText(text, { timeout: 1000 });
   }).toPass();
 }
 

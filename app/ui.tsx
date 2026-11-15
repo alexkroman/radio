@@ -4,6 +4,14 @@ import type { DjRef, Show } from "./shows.ts";
 
 export const SITE_TITLE = process.env.SITE_TITLE || "Mazes Radio";
 
+// The site's icons (app/public/): linked from every page, served from the root
+// (server.tsx) and public without a login (login.tsx).
+export const ICONS = [
+  { rel: "icon", href: "/favicon.ico", sizes: "any" },
+  { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+  { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+];
+
 // The labyrinth mark (design hand-off assets/logo-mark.svg), decorative here:
 // the link around it carries the name. The lines follow --color-ink (via the
 // link's color), so the mark turns white in dark mode; the centre stays orange.
@@ -87,7 +95,7 @@ export const DjCredit = ({ djs, class: cls }: { djs: DjRef[]; class: string }) =
     </p>
   );
 
-export const coverUrl = (cover: string) => `/covers/${encodeURI(cover)}`;
+const coverUrl = (cover: string) => `/covers/${encodeURI(cover)}`;
 
 // A track's artwork, or the placeholder square when it has none.
 // Decorative unless `labelled` (now-playing positions).
@@ -102,22 +110,22 @@ export const Cover = ({ play, size, labelled }: { play?: Play; size: string; lab
     <span class={`cover ${size} cover-ph`} aria-hidden="true" />
   );
 
-// Data the client reads to fill the player bar for a station.
-export const npData = (slug: string, play?: Play) => ({
-  "data-np": slug,
-  "data-track": play?.title ?? "",
-  "data-artist": play?.artist ?? "",
-  "data-cover": play?.cover ? coverUrl(play.cover) : "",
+// A station's current track as the player bar shows it (client.ts `Track`),
+// in /now.json.
+export const nowTrack = (play?: Play) => ({
+  track: play?.title ?? "",
+  artist: play?.artist ?? "",
+  cover: play?.cover ? coverUrl(play.cover) : "",
 });
 
-// Re-fetches the page every 15 s (and on "refresh", sent when the stream's
-// metadata changes) and swaps in just the elements with these ids.
+// Re-fetches the page on "refresh" (sent by client.ts when a station shown
+// here, by data-np, changes track) and swaps in just the elements with these ids.
 export const Poll = ({ path, ids }: { path: string; ids: string[] }) => (
   <div
     id="poll"
     hidden
     hx-get={path}
-    hx-trigger="every 15s, refresh"
+    hx-trigger="refresh"
     hx-select="#poll"
     hx-select-oob={ids.map((id) => `#${id}`).join(",")}
     hx-target="this"

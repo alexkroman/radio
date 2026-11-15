@@ -3,8 +3,9 @@
 # (which its entrypoint has filled with the passwords and limits from
 # compose.yml) and the shows in /shows. compose.yml runs it before starting
 # Icecast. `config.sh reload` also tells the running Icecast to re-read it
-# (SIGHUP), which keeps every listener connected: scripts/deploy.sh runs it in
-# the container when a show is added or removed, instead of a restart.
+# (SIGHUP), which keeps every listener connected: scripts/reconcile.sh runs it
+# in the container on every deploy. (Always, not only when the file changed: a
+# reload cut short between writing the file and the SIGHUP is then finished.)
 #
 # Buffering for slow connections (the streams are 256 kbps, 32 KB/s):
 #   - burst-size: a new listener gets ~10 s of audio at once (default 64 KB,

@@ -2,13 +2,7 @@
 # Tags messy/untagged MP3s in-place using audio fingerprinting + MusicBrainz.
 # Run: scripts/import.sh [show-slug]
 #
-# One-time setup:
-#   brew install chromaprint pipx     # fpcalc fingerprinter + pipx
-#   pipx install beets && pipx inject beets pyacoustid
-#   pipx ensurepath                   # adds ~/.local/bin to PATH; restart shell
-#
-# If using Homebrew beets instead of pipx:
-#   /opt/homebrew/opt/beets/libexec/bin/pip install pyacoustid
+# Setup: see the requirements at the top of scripts/import.sh.
 
 # Write ID3v2.4 (beets' default). v2.3 can't hold a full original release
 # date or several genres/artists, so they were cut short on every write and

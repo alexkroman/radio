@@ -6,7 +6,7 @@ import { except } from "hono/combine";
 import { getSignedCookie, setSignedCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import { timingSafeEqual } from "hono/utils/buffer";
-import { Lockup } from "./ui.tsx";
+import { ICONS, Lockup } from "./ui.tsx";
 
 const PASSWORD = process.env.SITE_PASSWORD;
 const COOKIE = "radio_auth";
@@ -74,7 +74,7 @@ export function login(app: Hono) {
   });
 
   app.use(
-    except(["/assets/*", "/favicon.ico", "/favicon.svg", "/apple-touch-icon.png"], async (c, next) => {
+    except(["/assets/*", ...ICONS.map((i) => i.href)], async (c, next) => {
       if ((await getSignedCookie(c, PASSWORD, COOKIE)) === "1") return next();
       c.status(401);
       return c.render(<Login next={c.req.path} />, { script: false });

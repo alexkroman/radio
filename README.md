@@ -35,7 +35,7 @@ Open <https://localhost/>. On localhost your browser warns about the certificate
 
 Add or remove files in `music/<show>/` any time; they're picked up without a restart. Anything ffmpeg can decode works.
 
-A track that goes silent for 10 seconds (a hidden track after minutes of silence, a file that decodes to nothing) is skipped. A show with nothing to play streams `music/offline.mp3` on a loop if you add one (say, a short "back soon" message), or else silence, so listeners stay connected.
+A track that goes silent for 10 seconds (a hidden track after minutes of silence, a file that decodes to nothing) is skipped. A show with nothing to play streams silence, so listeners stay connected.
 
 ## Shows
 
@@ -68,14 +68,7 @@ djs:
 ---
 ```
 
-A DJ's page address comes from their name: lowercased, accents dropped, anything else between letters and digits turned into `-` (`Zoë Ñandú` → `/djs/zoe-nandu`). Set `slug:` to choose it yourself, e.g. for a name in a script without Latin letters, which otherwise makes no address and leaves the DJ out:
-
-```md
-djs:
-
-- name: 李小龙
-  slug: bruce-lee
-```
+A DJ's page address comes from their name: lowercased, accents dropped, anything else between letters and digits turned into `-` (`Zoë Ñandú` → `/djs/zoe-nandu`). A name without Latin letters or digits makes no address, and the DJ is left out.
 
 A show with one DJ lists just them, on one line if you like:
 
@@ -86,7 +79,7 @@ djs: [Ana Ruiz]
 ---
 ```
 
-The show files are in the repo. Adding or removing a show needs `docker compose exec icecast sh /icecast/config.sh reload && docker compose restart liquidsoap` (no listener is dropped); editing a title or description shows up immediately.
+The show files are in the repo. Adding or removing a show needs an Icecast reload and a Liquidsoap restart, which `scripts/reconcile.sh` does (a deploy runs it; no listener is dropped); editing a title or description shows up immediately.
 
 ## Where things are
 

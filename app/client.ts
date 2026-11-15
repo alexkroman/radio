@@ -16,7 +16,7 @@ import { mountBar, setBar } from "./bar.tsx";
 // The browser plays each show's MP3 stream itself, in every browser: switching
 // sets the element's URL and calls play() in the tap, as iOS requires. (A
 // player that decoded the stream into WebAudio left AirPlay speakers silent
-// after a switch.) The track comes from /<slug>/now.json.
+// after a switch.) The track comes from /now.json.
 const audio = new Audio();
 // AirPlay (a WiiM, say, picked in Control Center) gets the page's audio as the
 // phone's output, like any app's, rather than Safari handing the element
@@ -28,15 +28,16 @@ const session = navigator.mediaSession;
 type Show = { slug: string; title: string };
 // The station shown as playing: set on click, cleared when it stops.
 let active: Show | undefined;
-// The station in the player bar: the playing one, else the last one played,
-// else the page's first, else the site's first show (#player's data).
-let shown: Show | undefined;
-// The shown station's track, from the page or now.json.
+// The station in the player bar: the last one played, else the site's first
+// show (#player's data; app.js is deferred, so the page is there).
+const first = document.getElementById("player")!.dataset;
+let shown: Show | undefined = first.slug ? { slug: first.slug, title: first.title! } : undefined;
+// Every station's current track, by slug, from /now.json (and that JSON).
 type Track = { track: string; artist: string; cover: string };
-let now: Track = { track: "", artist: "", cover: "" };
-// The track last shown for the playing station (slug, track, artist).
-let nowKey = "";
-let nowTimer: ReturnType<typeof setInterval> | undefined;
+let tracks: Record<string, Track> = {};
+let tracksJson = "";
+// The track last put on the lock screen (slug, track, artist).
+let lockKey = "";
 // When a dropped stream stops being retried (0: not retrying).
 let retryUntil = 0;
 
@@ -45,32 +46,6 @@ function localTimes() {
     const d = new Date(el.getAttribute("datetime")!);
     el.textContent = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   });
-}
-
-// Take the shown station's track and cover from the page when it has them.
-function readPage() {
-  if (!shown) return;
-  // ui.tsx npData sets all three.
-  const np = document.querySelector<HTMLElement>(`[data-np="${shown.slug}"]`)?.dataset as Track | undefined;
-  if (np?.track) now = { track: np.track, artist: np.artist, cover: np.cover };
-}
-
-function pickShown() {
-  const button = document.querySelector<HTMLElement>("button[data-play]")?.dataset;
-  const player = document.getElementById("player")?.dataset;
-  const next =
-    active ??
-    shown ??
-    (button && { slug: button.play!, title: button.title! }) ??
-    (player?.slug ? { slug: player.slug, title: player.title! } : undefined);
-  if (next?.slug !== shown?.slug) {
-    now = { track: "", artist: "", cover: "" };
-    nowKey = "";
-  }
-  shown = next;
-  readPage();
-  // A page without the station's track (the manifesto, a DJ's other shows).
-  if (shown && !now.track) void fetchNow(shown.slug);
 }
 
 // Show the play state everywhere: play buttons, "Live" labels, the player bar (app/bar.tsx).
@@ -84,23 +59,13 @@ function sync() {
     el.textContent = el.dataset.status === active?.slug ? "Listening · Live" : "Live";
   });
   document.body.classList.toggle("playing", !!active);
-  setBar(shown && { title: shown.title, ...now, playing: !!active });
-}
-
-// The shown station's track from now.json, for the bar and the page, and the
-// lock screen when it's playing.
-async function fetchNow(slug: string) {
-  const next = await fetch(`/${slug}/now.json`)
-    .then((r) => (r.ok ? (r.json() as Promise<Track>) : undefined))
-    .catch(() => undefined);
-  const key = `${slug}\n${next?.track}\n${next?.artist}`;
-  if (!next || shown?.slug !== slug || key === nowKey) return;
-  nowKey = key;
-  now = next;
-  sync();
-  if (active?.slug !== slug) return;
-  // The page's now playing (and with it the cover) catches up.
-  if (document.getElementById("poll")) htmx.trigger("#poll", "refresh");
+  const none = { track: "", artist: "", cover: "" };
+  setBar(shown && { title: shown.title, ...(tracks[shown.slug] ?? none), playing: !!active });
+  // The lock screen, when the playing station's track changes.
+  const now = active && tracks[active.slug];
+  const key = `${active?.slug}\n${now?.track}\n${now?.artist}`;
+  if (!active || !now || key === lockKey) return;
+  lockKey = key;
   session.metadata = new MediaMetadata({
     title: now.track,
     artist: now.artist,
@@ -108,6 +73,24 @@ async function fetchNow(slug: string) {
     artwork: now.cover ? [{ src: now.cover, type: "image/jpeg" }] : [],
   });
 }
+
+// The one poll, every 15 s: every station's current track, for the player bar
+// and the lock screen. A page showing a station whose track changed refreshes
+// itself (ui.tsx Poll).
+async function poll() {
+  const json = await fetch("/now.json")
+    .then((r) => (r.ok ? r.text() : undefined))
+    .catch(() => undefined);
+  if (!json || json === tracksJson) return;
+  const before = tracksJson ? tracks : undefined;
+  tracksJson = json;
+  tracks = JSON.parse(json) as Record<string, Track>;
+  sync();
+  const changed = (slug: string) => JSON.stringify(tracks[slug]) !== JSON.stringify(before?.[slug]);
+  const shownHere = [...document.querySelectorAll<HTMLElement>("[data-np]")].map((el) => el.dataset.np!);
+  if (before && document.getElementById("poll") && shownHere.some(changed)) htmx.trigger("#poll", "refresh");
+}
+setInterval(() => void poll(), 15_000);
 
 function playStream(slug: string) {
   audio.src = `/${slug}/stream`;
@@ -120,22 +103,15 @@ function playStream(slug: string) {
 function start(slug: string, title: string) {
   active = { slug, title };
   shown = active;
-  now = { track: "", artist: "", cover: "" };
-  readPage();
   sync();
   retryUntil = 0;
-  nowKey = "";
   // Synchronously, in the tap: iOS allows play() only there.
   playStream(slug);
-  void fetchNow(slug);
-  clearInterval(nowTimer);
-  nowTimer = setInterval(() => active && void fetchNow(active.slug), 15_000);
 }
 
 function stop() {
   active = undefined;
   session.playbackState = "paused";
-  clearInterval(nowTimer);
   sync();
   audio.pause();
   // Drop the connection, rather than buffer a live stream nobody hears.
@@ -191,9 +167,6 @@ document.addEventListener("click", (e) => {
 document.addEventListener("htmx:beforeRequest", (e) => {
   const poll = e.target as Element;
   if (poll.id !== "poll") return;
-  // Don't poll while the tab is hidden (an hx-trigger filter would need eval,
-  // which the CSP forbids).
-  if (document.hidden) return e.preventDefault();
   // A refresh still in flight when its page is swapped out (a link, back) would
   // otherwise land in the next page: htmx swaps a removed element's
   // hx-select-oob into the document. Its events no longer reach `document`.
@@ -204,9 +177,9 @@ mountBar(document.getElementById("player")!, () => shown && toggle(shown.slug, s
 
 function settle() {
   localTimes();
-  pickShown();
   sync();
 }
 document.addEventListener("htmx:afterSettle", settle);
 document.addEventListener("htmx:historyRestore", settle);
 settle();
+void poll();

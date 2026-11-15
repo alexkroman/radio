@@ -27,9 +27,6 @@
 #   brew install chromaprint fdupes ffmpeg pipx
 #   pipx install beets && pipx inject beets pyacoustid pillow
 #   pipx ensurepath   # adds ~/.local/bin to PATH if needed; restart shell
-#
-# If using Homebrew beets instead of pipx:
-#   /opt/homebrew/opt/beets/libexec/bin/pip install pyacoustid pillow
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -62,13 +59,8 @@ beet_ver=$(beet -c "$CONFIG" -l "$tmpdir/check.db" version 2>&1 </dev/null || tr
 rm -rf "$tmpdir"
 beet_python=$(head -n1 "$(command -v beet)" | sed 's/^#! *//; s/ .*//')
 if ! echo "$beet_ver" | grep -q "chroma" || ! "$beet_python" -c "import PIL" 2>/dev/null; then
-  beet_bin=$(command -v beet)
   echo "ERROR: pyacoustid or Pillow not installed in beets' Python environment." >&2
-  if [[ $beet_bin == */Cellar/* || $beet_bin == */opt/homebrew/* ]]; then
-    echo "  Fix (Homebrew): /opt/homebrew/opt/beets/libexec/bin/pip install pyacoustid pillow" >&2
-  else
-    echo "  Fix (pipx): pipx inject beets pyacoustid pillow" >&2
-  fi
+  echo "  pipx inject beets pyacoustid pillow" >&2
   exit 1
 fi
 

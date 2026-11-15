@@ -2,7 +2,7 @@
 // The fixed player bar, rendered in the browser with hono/jsx/dom
 // into #player (outside the swapped page, so it and the audio survive
 // navigation). app/client.ts sets what it shows with setBar(); it always shows,
-// with the playing station, else the last one played (or a default), paused.
+// with the last station played (at first, the site's first show), paused.
 import { render, useLayoutEffect, useRef, useState } from "hono/jsx/dom";
 
 export type BarState = { title: string; track: string; artist: string; cover: string; playing: boolean };

@@ -135,8 +135,8 @@ app.on(
   serveStatic({ root: "dist/public" }),
 );
 
-// The player bar's mount, with the station it shows before any is played or
-// found on the page: the first show.
+// The player bar's mount, with the station it shows before any is played: the
+// first show.
 async function Player() {
   const [first] = await getShows();
   return <div id="player" data-slug={first?.slug} data-title={first?.title} />;
@@ -179,8 +179,7 @@ login(app);
 app.route("/reports", reports);
 
 app.get("/", async (c) => {
-  const shows = await getShows();
-  const latest = await latestPlays(shows.map((s) => s.slug));
+  const [shows, latest] = await Promise.all([getShows(), latestPlays()]);
   return c.render(
     <main class="page page-index">
       <SiteHeader current="stations" home />
@@ -371,9 +370,8 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
 });
 
 app.get(`/djs/:dj{${SLUG}}`, async (c) => {
-  const dj = await getDj(c.req.param("dj"));
+  const [dj, latest] = await Promise.all([getDj(c.req.param("dj")), latestPlays()]);
   if (!dj) return c.notFound();
-  const latest = await latestPlays(dj.shows.map((s) => s.slug));
   return c.render(
     <main class="page page-dj">
       <SiteHeader />
@@ -432,8 +430,7 @@ app.get(`/djs/:dj{${SLUG}}/photo`, async (c) => {
 // Every station's current track, by slug: client.ts polls it for the player
 // bar, the lock screen and when to refresh the page.
 app.get("/now.json", async (c) => {
-  const shows = await getShows();
-  const latest = await latestPlays(shows.map((s) => s.slug));
+  const [shows, latest] = await Promise.all([getShows(), latestPlays()]);
   return c.json(Object.fromEntries(shows.map((s) => [s.slug, nowTrack(latest.get(s.slug))])));
 });
 

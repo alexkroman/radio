@@ -28,9 +28,10 @@ const session = navigator.mediaSession;
 type Show = { slug: string; title: string };
 // The station shown as playing: set on click, cleared when it stops.
 let active: Show | undefined;
-// The station in the player bar: the playing one, else the last one played,
-// else the page's first, else the site's first show (#player's data).
-let shown: Show | undefined;
+// The station in the player bar: the last one played, else the site's first
+// show (#player's data; app.js is deferred, so the page is there).
+const first = document.getElementById("player")!.dataset;
+let shown: Show | undefined = first.slug ? { slug: first.slug, title: first.title! } : undefined;
 // Every station's current track, by slug, from /now.json (and that JSON).
 type Track = { track: string; artist: string; cover: string };
 let tracks: Record<string, Track> = {};
@@ -45,16 +46,6 @@ function localTimes() {
     const d = new Date(el.getAttribute("datetime")!);
     el.textContent = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   });
-}
-
-function pickShown() {
-  const button = document.querySelector<HTMLElement>("button[data-play]")?.dataset;
-  const player = document.getElementById("player")?.dataset;
-  shown =
-    active ??
-    shown ??
-    (button && { slug: button.play!, title: button.title! }) ??
-    (player?.slug ? { slug: player.slug, title: player.title! } : undefined);
 }
 
 // Show the play state everywhere: play buttons, "Live" labels, the player bar (app/bar.tsx).
@@ -186,7 +177,6 @@ mountBar(document.getElementById("player")!, () => shown && toggle(shown.slug, s
 
 function settle() {
   localTimes();
-  pickShown();
   sync();
 }
 document.addEventListener("htmx:afterSettle", settle);

@@ -180,7 +180,8 @@ login(app);
 app.route("/reports", reports);
 
 app.get("/", async (c) => {
-  const [shows, latest] = await Promise.all([getShows(), latestPlays()]);
+  const shows = await getShows();
+  const latest = await latestPlays(shows.map((s) => s.slug));
   return c.render(
     <main class="page page-index">
       <SiteHeader current="stations" home />
@@ -371,8 +372,9 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
 });
 
 app.get(`/djs/:dj{${SLUG}}`, async (c) => {
-  const [dj, latest] = await Promise.all([getDj(c.req.param("dj")), latestPlays()]);
+  const dj = await getDj(c.req.param("dj"));
   if (!dj) return c.notFound();
+  const latest = await latestPlays(dj.shows.map((s) => s.slug));
   return c.render(
     <main class="page page-dj">
       <SiteHeader />

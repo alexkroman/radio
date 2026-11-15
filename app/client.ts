@@ -197,6 +197,13 @@ document.addEventListener("click", (e) => {
   );
 });
 
+// A refresh that failed (a 502 while the app restarts, say) brought no track:
+// the playing station's comes from now.json instead.
+for (const failed of ["htmx:responseError", "htmx:sendError"])
+  document.addEventListener(failed, (e) => {
+    if ((e.target as Element).id === "poll" && active) void fetchNow(active.slug);
+  });
+
 document.addEventListener("htmx:beforeRequest", (e) => {
   const poll = e.target as Element;
   if (poll.id !== "poll") return;

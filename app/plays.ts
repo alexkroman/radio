@@ -34,14 +34,13 @@ export async function monthPlays(month: string): Promise<Play[]> {
   return parse(await readFile(file(month), "utf8").catch(() => ""));
 }
 
-// The last ~256 KB of a month's log (plenty for a show page's history), and
-// whether that is the whole log. Kept until the log grows: pages and their
-// 15 s polls all read it.
+// The last ~256 KB of a month's log: plenty for a show page's history. Kept
+// until the log grows (pages and their 15 s polls all read it).
 const TAIL = 262_144;
 const tails = new Map<string, { size: number; plays: Play[] }>();
-async function tail(month: string): Promise<{ plays: Play[]; whole: boolean }> {
+async function tail(month: string): Promise<Play[]> {
   const fh = await open(file(month)).catch(() => undefined);
-  if (!fh) return { plays: [], whole: true };
+  if (!fh) return [];
   try {
     const { size } = await fh.stat();
     let hit = tails.get(month);
@@ -55,31 +54,34 @@ async function tail(month: string): Promise<{ plays: Play[]; whole: boolean }> {
       tails.set(month, hit);
       if (tails.size > 2) tails.delete(tails.keys().next().value!);
     }
-    return { plays: hit.plays, whole: size <= TAIL };
+    return hit.plays;
   } finally {
     await fh.close();
   }
 }
 
-// The newest plays of every show, oldest first: this month's log, and last
-// month's too while this month's is still short (the first day or so).
-async function recent(): Promise<Play[]> {
+// The newest plays, oldest first: this month's log, and last month's too when
+// that isn't `enough` (early in a month, or a show quiet for a while).
+async function recent(enough: (plays: Play[]) => boolean): Promise<Play[]> {
   const now = new Date();
   const current = await tail(monthOf(now));
-  if (!current.whole) return current.plays;
-  const last = await tail(monthOf(new Date(now.getFullYear(), now.getMonth() - 1, 1)));
-  return [...last.plays, ...current.plays];
+  if (enough(current)) return current;
+  return [...(await tail(monthOf(new Date(now.getFullYear(), now.getMonth() - 1, 1)))), ...current];
 }
 
 // A show's newest plays, newest first.
 export async function recentPlays(show: string, limit: number): Promise<Play[]> {
-  return (await recent())
-    .filter((p) => p.show === show)
+  const mine = (plays: Play[]) => plays.filter((p) => p.show === show);
+  return mine(await recent((plays) => mine(plays).length >= limit))
     .slice(-limit)
     .reverse();
 }
 
-// Each show's newest play, by show slug (one read of the log for all shows).
-export async function latestPlays(): Promise<Map<string, Play>> {
-  return new Map((await recent()).map((p) => [p.show, p]));
+// These shows' newest plays, by show slug.
+export async function latestPlays(shows: string[]): Promise<Map<string, Play>> {
+  const plays = await recent((plays) => {
+    const seen = new Set(plays.map((p) => p.show));
+    return shows.every((s) => seen.has(s));
+  });
+  return new Map(plays.map((p) => [p.show, p]));
 }

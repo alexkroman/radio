@@ -87,20 +87,25 @@ function djEntry(v: unknown): DjEntry | undefined {
 }
 
 // Parsed shows, re-read only when a file changes (every page renders the show
-// list, and polls re-render pages every 15 s).
+// list, and polls re-render pages every 15 s). The inode is in the key since
+// rsync (deploy.sh) replaces a file, keeping the source's mtime.
 const cache = new Map<string, { key: string; show: Promise<Show> }>();
 
 export async function getShow(slug: string): Promise<Show | undefined> {
   if (RESERVED.has(slug)) return undefined;
   const file = `${SHOWS}/${slug}.md`;
   const st = await stat(file).catch(() => undefined);
-  if (!st?.isFile()) return undefined;
-  const key = `${st.mtimeMs}:${st.size}`;
+  if (!st?.isFile()) {
+    cache.delete(slug);
+    return undefined;
+  }
+  const key = `${st.ino}:${st.mtimeMs}:${st.size}`;
   let hit = cache.get(slug);
   if (hit?.key !== key) {
-    hit = { key, show: readFile(file, "utf8").then((text) => parseShow(slug, text)) };
-    cache.set(slug, hit);
-    hit.show.catch(() => cache.delete(slug));
+    const entry = { key, show: readFile(file, "utf8").then((text) => parseShow(slug, text)) };
+    cache.set(slug, entry);
+    entry.show.catch(() => cache.get(slug) === entry && cache.delete(slug));
+    hit = entry;
   }
   return hit.show.catch(() => undefined);
 }

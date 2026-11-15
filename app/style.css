@@ -79,6 +79,12 @@ button {
 }
 
 .page-station,
+.page-dj {
+  --width: var(--width-station);
+
+  gap: 56px;
+}
+
 .page-manifesto {
   --width: var(--width-prose);
 }

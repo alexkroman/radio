@@ -43,6 +43,7 @@ test("home page has what's on, what's next and the schedule", async ({ page }) =
     "Odd Characters",
     "plain",
     "Quiet",
+    "Complement",
   ]);
   await expect(rows.first().locator(".hours")).toHaveText(/^\d{1,2}:00 [AP]M–\d{1,2}:00 [AP]M$/);
   await expect(page.locator("#schedule .on-air")).toHaveCount(1);
@@ -280,10 +281,15 @@ test("play plays the stream in the tap, on the phone's own output", async ({ pag
   await expect.poll(() => player(page)).toEqual({ src: "/stream", playing: true });
   expect(await page.evaluate(() => (window as unknown as { plays: boolean[] }).plays)).toEqual([true]);
   expect(await remote()).toEqual({ disabled: true, airplay: "deny" });
-  // The lock screen's track and show, and the bar's on another page.
-  const { track } = await (await page.request.get("/now.json")).json();
+  // The lock screen's track, artist and album, and the bar's on another page.
+  const { track, artist, album } = await (await page.request.get("/now.json")).json();
   await expect.poll(() => page.evaluate(() => navigator.mediaSession.metadata?.title)).toBe(track);
-  expect(await page.evaluate(() => navigator.mediaSession.metadata?.album)).toBe("Fixture Night");
+  expect(
+    await page.evaluate(() => [
+      navigator.mediaSession.metadata?.artist,
+      navigator.mediaSession.metadata?.album,
+    ]),
+  ).toEqual([artist, album]);
   await page.getByRole("link", { name: "About" }).first().click();
   await expect(page).toHaveURL(/\/about$/);
   await expect(page.locator("#bar-track")).toContainText(track);

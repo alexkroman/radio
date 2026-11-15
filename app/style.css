@@ -443,7 +443,26 @@ img.cover {
   gap: 16px;
 }
 
-/* ── Archive ── */
+/* ── About: questions ── */
+.faq h3 {
+  margin: 20px 0 4px;
+  font: var(--type-track);
+  font-weight: 600;
+}
+
+/* ── Archive (and the home page's latest) ── */
+.latest {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.archive-more {
+  font: var(--type-nav);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .archive-show {
   display: flex;
   flex-direction: column;

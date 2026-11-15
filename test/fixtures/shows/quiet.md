@@ -1,5 +1,5 @@
 ---
-hours: 21-24
+hours: 21-23
 title: Quiet
 ---
 

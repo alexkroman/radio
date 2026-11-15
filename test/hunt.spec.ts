@@ -1,6 +1,7 @@
 // Bug hunt: in-stream metadata, escaping, layout, listener counting, load,
 // and the login throttle. Fixtures: shows/{odd,long}.
 import { expect, test } from "@playwright/test";
+import { complementViolations } from "../app/complement.ts";
 import { icyTitle, listen, LOGGED_OUT, loggedPlays, onAir, performances, streamHead } from "./helpers.ts";
 
 const ODD_ARTIST = 'Q "The" Artist';
@@ -9,7 +10,8 @@ const ODD_TITLE = "Back\\slash \"Quotes\" & 'Ticks'";
 test("in-stream (ICY) metadata is the current track, in UTF-8", async () => {
   // The crossfade into a show's first track takes a few seconds to reach the stream.
   await onAir("edge");
-  await expect.poll(() => icyTitle("/stream")).toBe("Zoë Ñandú - Café | Olé <b>");
+  // With the album, when the track has one.
+  await expect.poll(() => icyTitle("/stream")).toBe("Zoë Ñandú - Café | Olé <b> (Édition | Spéciale)");
   await onAir("odd");
   await expect.poll(() => icyTitle("/stream")).toBe(`${ODD_ARTIST} - ${ODD_TITLE}`);
 });
@@ -25,10 +27,11 @@ test("the player picks up the playing track for the lock screen", async ({ page 
           navigator.mediaSession.metadata && [
             navigator.mediaSession.metadata.artist,
             navigator.mediaSession.metadata.title,
+            navigator.mediaSession.metadata.album,
           ],
       ),
     )
-    .toEqual(["Zoë Ñandú", "Café | Olé <b>"]);
+    .toEqual(["Zoë Ñandú", "Café | Olé <b>", "Édition | Spéciale"]);
 });
 
 test("quotes and backslashes survive the log, the page and the report", async ({ page, request }) => {
@@ -88,6 +91,13 @@ test("listener counts return to zero after listeners leave", async ({ request })
 test("50 simultaneous listeners all get audio", async () => {
   const results = await Promise.all(Array.from({ length: 50 }, () => streamHead("/stream")));
   expect(results.filter((r) => r.status === 200 && r.type === "audio/mpeg")).toHaveLength(50);
+});
+
+test("every play in the run kept the performance complement", async () => {
+  // test/compose.yml's COMPLEMENT_WINDOW: 30 s for three hours.
+  const plays = await loggedPlays();
+  expect(plays.length).toBeGreaterThan(20);
+  expect(complementViolations(plays, 30)).toEqual([]);
 });
 
 // Last: it locks this client out of logging in for a while.

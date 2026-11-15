@@ -76,4 +76,7 @@ rsync -rt -e "$SSH" "$HOST:radio/plays/" backup/plays/
 # (scripts/archive-plays.sh backup/logs/access.log*).
 mkdir -p backup/logs
 rsync -rt -e "$SSH" --include='access.log*' --exclude='*' "$HOST:radio/logs/" backup/logs/
+# And the archive's track sidecars, which the reports read archive plays with.
+mkdir -p backup/archive/tracks
+rsync -rt -e "$SSH" "$HOST:radio/archive/tracks/" backup/archive/tracks/
 echo "Deployed to $IP"

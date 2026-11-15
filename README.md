@@ -92,18 +92,33 @@ The show files are in the repo. Adding or removing a show needs a Liquidsoap res
 
 ## Archive
 
-Liquidsoap records the program as broadcast (the final mix, after the limiter) to one 128 kbps MP3 per show block: `archive/recording/<show>-<YYYY-MM-DD>.mp3` while it records, the date being the day the block started, then `archive/blocks/` when the block ends. Blocks follow the clock, not the songs: Drift's is 17:00–22:00 to the second. A Liquidsoap restart mid-block carries on in the same file, and an error writing it (a full disk) is retried every 10 s without touching the stream.
+Liquidsoap records the program as broadcast (the final mix, after the limiter) at the stream's 256 kbps, one MP3 per show block: `archive/recording/<show>-<YYYY-MM-DD>.mp3` while it records, the date being the day the block started. A block follows the clock, not the songs: its show's hours plus a minute of what follows (`ARCHIVE_TAIL`), so Drift's runs 17:00–22:01 and a restart's few seconds don't take it under five hours. When it ends it moves to `archive/blocks/` if it's at least five hours long (an archived program under the statutory license must be), else to `archive/short/`, which nothing serves. A Liquidsoap restart mid-block carries on in the same file, and an error writing it (a full disk) is retried every 10 s without touching the stream.
 
-`/archive` lists each show's blocks, newest first, with date and length, and plays them in the site's player: from the beginning, with no seeking, no download and no track names. Icecast serves the files at `/archive/<show>-<date>.mp3` (Caddy passes only GET there, drops `Range`, and hides the length, so players can't seek), each play its own connection.
+Each block has a sidecar, `archive/tracks/<show>-<YYYY-MM-DD>.jsonl`: a line per track with its offset in the file and its tags. The player uses it to show each track's title, artist and album while it plays, never before (the block's `now.json?t=<seconds>` answers with the one track playing then), and the reports use it to count archive plays per track. Sidecars are kept after their blocks; deploys back them up to `backup/archive/tracks/`.
 
-Retention: the `archive-prune` service runs `scripts/prune-archive.sh` at start and every hour (so nightly too). It deletes blocks finished over 14 days ago, then all but the newest `ARCHIVE_KEEP` (`.env`, default 1) of each show. An hour is ~58 MB, so the default keeps ~1.4 GB of finished blocks, plus up to ~0.6 GB for the block being recorded.
+`/archive` lists each show's blocks, newest first, with date and length, and the home page has the latest. They play in the site's player from the beginning, then the show's block before, with no seeking and no download. Icecast serves the files at `/archive/<show>-<date>.mp3` (Caddy passes only GET there, drops `Range`, and hides the length, so players can't seek), each play its own connection.
 
-Plays: each request for a block is a line in Icecast's `logs/access.log` (kept when rotated, as `access.log.<date>`; deploys back them up to `backup/logs/`), apart from `/stream`'s. `scripts/archive-plays.sh` prints plays and hours connected per block per day:
+Retention: the `archive-prune` service runs `scripts/prune-archive.sh` at start and every hour (so nightly too). It deletes blocks before they've been up two weeks (at 14 days less an hour), then all but the newest `ARCHIVE_KEEP` (`.env`, default 1) of each show, and anything in `archive/short/`. An hour is ~115 MB, so the default keeps ~2.8 GB of finished blocks, plus up to ~1.3 GB being recorded.
+
+Plays: each request for a block is a line in Icecast's `logs/access.log` (kept when rotated, as `access.log.<date>`; deploys back them up to `backup/logs/`), apart from `/stream`'s. The SoundExchange reports count each archive play once for every track it reached (`app/archive-plays.ts`), and `scripts/archive-plays.sh` prints plays and hours connected per block per day:
 
 ```sh
 scripts/archive-plays.sh                    # logs/access.log* on the server
 scripts/archive-plays.sh backup/logs/access.log*
 ```
+
+## The statutory license
+
+The station plays music under the statutory license for noncommercial webcasting (17 U.S.C. § 114(d)(2), § 112(e); 37 C.F.R. Parts 380 and 370). `/about` links each provision and answers listeners' questions about them. What the code does to keep its conditions:
+
+- **Performance complement** (§ 114(j)(13)): `radio.liq` refuses any track that would make more than 4 by one artist (3 in a row) or 3 from one album (2 in a row) in three hours, across the station. A show with nothing else plays silence until it can. `app/complement.ts` checks a play log the same way (the e2e suite checks every play).
+- **No advance announcements** (§ 114(d)(2)(C)(ii)): the schedule names shows, never tracks; archive blocks list no tracks.
+- **Archived programs** (§ 114(d)(2)(C)(iii)): at least five hours, down before two weeks (above).
+- **No copying** (§ 114(d)(2)(C)(vi)): no downloads, no seeking.
+- **Track identification** (§ 114(d)(2)(C)(ix)): title, artist and album while each track plays, on the site, the lock screen and the stream's ICY title (`Artist - Title (Album)`).
+- **Reports of use** (37 C.F.R. Part 370): `/reports`, live and archive performances.
+
+Not in code: filing the Notice of Use with the Copyright Office, paying SoundExchange, and anything a lawyer would add.
 
 ## Where things are
 

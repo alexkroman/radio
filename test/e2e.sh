@@ -118,13 +118,23 @@ deploy_change() {
 # Liquidsoap's log has a line matching $1.
 logged() { dc logs liquidsoap 2>&1 | grep -q "$1"; }
 # The archive (radio.liq): the block being recorded (its file name), a file's
-# size, and whether a finished block exists.
+# size, whether a finished block exists, and a sidecar's offsets.
 recording() { dc exec -T liquidsoap ls /archive/recording | head -n 1; }
 size() { dc exec -T liquidsoap sh -c "wc -c <\"/archive/$1\"" 2>/dev/null || echo 0; }
 grows() { [ "$(size "recording/$1")" -gt "$2" ]; }
 finished() { dc exec -T liquidsoap test -s "/archive/blocks/$1"; }
+too_short() { dc exec -T liquidsoap test -s "/archive/short/$1"; }
 recording_is() { [ "$(recording)" = "$1" ]; }
 recording_not() { [ -n "$(recording)" ] && [ "$(recording)" != "$1" ]; }
+offsets() { dc exec -T liquidsoap sed -n 's/^{"offset":\([0-9.]*\),.*/\1/p' "/archive/tracks/${1%.mp3}.jsonl"; }
+# Icecast's answer to a block's URL (Caddy passes /archive/<block>.mp3 to it).
+served() { dc exec -T caddy wget -q -O /dev/null "http://icecast:8000/archive/$1"; }
+# Swap two shows' hours (Liquidsoap re-reads them within a minute).
+swap_hours() {
+  echo "edit_files '
+  a=\$(grep \"^hours:\" /shows/$1.md) b=\$(grep \"^hours:\" /shows/$2.md)
+  sed -i \"s/^hours:.*/\$b/\" /shows/$1.md && sed -i \"s/^hours:.*/\$a/\" /shows/$2.md'"
+}
 
 step "archive plays are counted per block and day from Icecast's access log, apart from the stream"
 plays=$(dc exec -T icecast cat /var/log/icecast/access.log | sh scripts/archive-plays.sh -)
@@ -135,13 +145,16 @@ printf '%s\n' "$plays" | grep -qE "^[0-9]{4}-[0-9]{2}-[0-9]{2}	night-2026-11-14	
 dc exec -T icecast grep -q '"GET /stream HTTP' /var/log/icecast/access.log ||
   fail "the access log has no live stream requests to tell apart"
 
-step "the archive records the block on air, into a growing file named for its show and date"
+step "the archive records the block on air at 256 kbps, into a growing file named for its show and date"
 wait_for test -n "$(recording)" || fail "nothing is being recorded"
 block=$(recording)
 echo "  recording $block"
 printf '%s\n' "$block" | grep -qE '^[a-z0-9-]+-[0-9]{4}-[0-9]{2}-[0-9]{2}\.mp3$' || fail "recording a badly named $block"
 before=$(size "recording/$block")
-wait_for grows "$block" "$before" || fail "$block isn't growing"
+sleep 10
+rate=$((($(size "recording/$block") - before) / 10))
+echo "  $rate bytes a second"
+[ "$rate" -ge 30000 ] && [ "$rate" -le 34000 ] || fail "recording at $rate bytes a second, not 256 kbps (32000)"
 
 listen
 expect 1 "connecting"
@@ -159,30 +172,49 @@ step "music added and removed: nothing restarts"
 deploy_change "" "a music change" \
   "edit_files 'cp /music/night/*.mp3 /music/default/ && rm \"/music/default/Alpha Artist- First Light.mp3\"'"
 
-step "a block boundary: the recording closes its block and starts the next, without a restart"
-# Swap the hours of the show recorded now and another, so another one's
-# block starts now (Liquidsoap re-reads the hours within a minute).
+step "a block boundary: the recording finishes its block, with its tracks, and starts the next, without a restart"
+# Swap the hours of the show recorded now and another, so the other's block
+# starts now.
 show=${block%-*-*-*.mp3}
 other=default
 [ "$show" != default ] || other=edge
-deploy_change "" "a new block" "edit_files '
-  a=\$(grep \"^hours:\" /shows/$show.md) b=\$(grep \"^hours:\" /shows/$other.md)
-  sed -i \"s/^hours:.*/\$b/\" /shows/$show.md && sed -i \"s/^hours:.*/\$a/\" /shows/$other.md'"
+deploy_change "" "a new block" "$(swap_hours "$show" "$other")"
 WAIT=90 wait_for finished "$block" || fail "$block wasn't moved to blocks/ when its block ended"
 wait_for recording_not "$block" || fail "no new block is being recorded after $block"
-echo "  finished $block ($(size "blocks/$block") bytes); now recording $(recording)"
+seconds=$(($(size "blocks/$block") / 32000))
+echo "  finished $block ($seconds s); now recording $(recording)"
 ended=$block
 block=$(recording)
 case $block in "$other"-*) ;; *) fail "recording $block, not $other's block" ;; esac
+# Its sidecar: a line per track, in order, within the block.
+offsets "$ended" | sed 's/^/  track at /'
+[ "$(offsets "$ended" | wc -l)" -ge 2 ] || fail "$ended's sidecar has under two tracks"
+offsets "$ended" | sort -n -c || fail "$ended's sidecar isn't in order"
+[ "$(offsets "$ended" | tail -n 1 | cut -d. -f1)" -le "$seconds" ] || fail "$ended's sidecar runs past its end"
+served "$ended" || fail "Icecast doesn't serve $ended"
 
-step "retention: blocks over 14 days old go, and all but ARCHIVE_KEEP (1) of a show"
+step "a block cut short isn't archived: it's kept from Icecast and the site"
+# Swap again before the new block reaches ARCHIVE_MIN_SECONDS (90).
+third=long
+[ "$show" != long ] || third=plain
+deploy_change "" "a short block" "$(swap_hours "$other" "$third")"
+WAIT=90 wait_for too_short "$block" || fail "$block, cut short, wasn't moved to short/"
+! finished "$block" || fail "$block, cut short, was archived"
+! served "$block" || fail "Icecast serves $block, cut short"
+short=$block
+block=$(recording)
+
+step "retention: blocks up two weeks less an hour go, all but ARCHIVE_KEEP (1) of a show, and every short one"
 # shellcheck disable=SC2016 # expands in the container
 edit_files 'cd /archive/blocks && for d in 2026-10-01 2026-11-10 2026-11-12; do : >"zz-$d.mp3"; done &&
-  touch -d "$(date -d @$(($(date +%s) - 15 * 86400)) "+%Y-%m-%d %H:%M:%S")" zz-2026-10-01.mp3'
-dc run --rm --no-deps -T archive-prune sh /prune-archive.sh | sed 's/^/  /'
+  touch -d "$(date -d @$(($(date +%s) - 14 * 86400 + 3000)) "+%Y-%m-%d %H:%M:%S")" zz-2026-10-01.mp3'
+dc run --rm --no-deps -T -e ARCHIVE_KEEP=1 archive-prune sh /prune-archive.sh | sed 's/^/  /'
 [ "$(dc exec -T liquidsoap sh -c 'ls /archive/blocks | grep ^zz-')" = zz-2026-11-12.mp3 ] ||
   fail "pruning left $(dc exec -T liquidsoap sh -c 'ls /archive/blocks | grep ^zz- | xargs')"
 finished "$ended" || fail "pruning took $ended, its show's newest block"
+[ -z "$(dc exec -T liquidsoap ls /archive/short)" ] || fail "pruning left a short block"
+dc exec -T liquidsoap test -e "/archive/tracks/${short%.mp3}.jsonl" || fail "pruning took a sidecar"
+dc exec -T liquidsoap test -s "/archive/tracks/night-2026-11-13.jsonl" || fail "pruning took a pruned block's sidecar"
 
 step "hours changed: nothing restarts; Liquidsoap re-reads them, and a gap is an error in its log"
 deploy_change "" "an hours change" "edit_files 'sed -i \"s/^hours: 0-3$/hours: 0-2/\" /shows/*.md'"

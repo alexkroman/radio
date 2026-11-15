@@ -41,10 +41,10 @@ services:
       - -c
       - |
         set -e
-        mkdir -p /archive/recording /archive/blocks
+        mkdir -p /archive/recording /archive/blocks /archive/short /archive/tracks
         chown -R 10001:10001 /data /logs /covers /plays /archive
         chmod -R u+rwX,g+rwX /logs /covers /plays /data /archive
-        chmod g+s /logs /covers /plays /archive /archive/recording /archive/blocks
+        chmod g+s /logs /covers /plays /archive /archive/recording /archive/blocks /archive/short /archive/tracks
     volumes:
       - caddy:/data
       - ./logs:/logs
@@ -137,13 +137,15 @@ services:
       - ./covers:/covers:ro
       - ./plays:/plays:ro
       - ./archive:/archive:ro
+      # Icecast's access logs: archive plays, for the reports (app/archive-plays.ts).
+      - ./logs:/logs:ro
     depends_on:
       init: { condition: service_completed_successfully }
 
-  # Deletes archive blocks older than 14 days, and all but the newest
-  # ARCHIVE_KEEP of each show (scripts/prune-archive.sh): at start, then every
-  # hour (nightly included), so a finished block's predecessor goes within the
-  # hour and the archive stays at ARCHIVE_KEEP blocks a show.
+  # Deletes archive blocks before they've been up two weeks, all but the
+  # newest ARCHIVE_KEEP of each show, and blocks too short to archive
+  # (scripts/prune-archive.sh): at start, then every hour (nightly included),
+  # so a finished block's predecessor goes within the hour.
   archive-prune:
     <<: [*hardening, *logging]
     user: "10001:10001"

@@ -1,6 +1,7 @@
 // SoundExchange reports, mounted at /reports (linked from the site nav): the
 // last 12 months, each a Report of Use from the play log at /reports/<YYYY-MM>.
 import { Hono } from "hono";
+import { archivePerformances } from "./archive-plays.ts";
 import { monthOf, monthPlays } from "./plays.ts";
 import { SiteHeader } from "./ui.tsx";
 
@@ -20,19 +21,26 @@ const HEADER = [
 const field = (v: string | number) =>
   typeof v === "number" ? String(v) : `^${v.toUpperCase().replace(/[|^]/g, "")}^`;
 
-// One row per song across all shows; each play counts its listeners (at least 1).
-// ISRCs come from tags written by scripts/import.sh (beet mbsync).
+// One row per song across all shows and the archive. Each live play counts
+// its listeners (at least 1); each archive play counts once for each track of
+// the block it reached (app/archive-plays.ts). ISRCs come from tags written
+// by scripts/import.sh (beet mbsync).
 async function report(month: string): Promise<string> {
   const songs = new Map<
     string,
     { artist: string; title: string; isrc: string; album: string; label: string; count: number }
   >();
-  for (const p of await monthPlays(month)) {
+  const add = (
+    p: { artist: string; title: string; isrc: string; album: string; label: string },
+    n: number,
+  ) => {
     const key = `${p.artist}\n${p.title}`;
     const song = songs.get(key) ?? { ...p, count: 0 };
-    song.count += Math.max(p.listeners, 1);
+    song.count += n;
     songs.set(key, song);
-  }
+  };
+  for (const p of await monthPlays(month)) add(p, Math.max(p.listeners, 1));
+  for (const t of await archivePerformances(month)) add(t, 1);
   const rows: (string | number)[][] = [HEADER];
   const sorted = [...songs.values()].sort(
     (a, b) => b.count - a.count || a.artist.localeCompare(b.artist) || a.title.localeCompare(b.title),

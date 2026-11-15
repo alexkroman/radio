@@ -25,5 +25,7 @@ FROM mcr.microsoft.com/playwright:v1.65.0-noble AS e2e
 WORKDIR /app
 COPY --from=deps /app/node_modules node_modules
 COPY package.json playwright.config.ts tsconfig.json ./
+# The specs check the reports and the play log with the app's own code.
+COPY app app
 COPY test test
 CMD ["npx", "playwright", "test"]

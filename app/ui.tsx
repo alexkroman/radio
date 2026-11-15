@@ -70,22 +70,26 @@ const PauseIcon = ({ size }: { size: number }) => (
 );
 
 // Plays the stream (whatever is on air), or an archive block (src, with its
-// title). The client (app/client.ts) finds these by data-play and shows the
+// title, and the blocks to play after it: the show's earlier ones, newest
+// first). The client (app/client.ts) finds these by data-play and shows the
 // pause state on every one for what's playing.
 export const PlayButton = ({
   large,
   src = "/stream",
   title = SITE_TITLE,
+  then,
 }: {
   large?: boolean;
   src?: string;
   title?: string;
+  then?: { src: string; title: string }[];
 }) => (
   <button
     type="button"
     class={large ? "play play-lg" : "play"}
     data-play={src}
     data-title={title}
+    data-then={then?.length ? JSON.stringify(then) : undefined}
     aria-label={`Play ${title}`}
   >
     <PlayIcon size={large ? 20 : 14} d={large ? "M4.5 2.5v9l7.5-4.5z" : "M4 2.5v9l7.5-4.5z"} />
@@ -107,7 +111,7 @@ export const DjCredit = ({ djs, class: cls }: { djs: DjRef[]; class: string }) =
     </p>
   );
 
-const coverUrl = (cover: string) => `/covers/${encodeURI(cover)}`;
+export const coverUrl = (cover: string) => `/covers/${encodeURI(cover)}`;
 
 // A track's artwork, or the placeholder square when it has none.
 // Decorative unless `labelled` (now-playing positions).
@@ -129,6 +133,7 @@ export const nowTrack = (play: Play | undefined, title: string) => ({
   title,
   track: play?.title ?? "",
   artist: play?.artist ?? "",
+  album: play?.album ?? "",
   cover: play?.cover ? coverUrl(play.cover) : "",
 });
 

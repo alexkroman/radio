@@ -15,8 +15,9 @@ services:
       - |
         [ -e /music/.seeded ] && exit
         cp -r /fixture-shows/. /shows/ && cp -r /fixture-music/. /music/ && cp -r /fixture-covers/. /covers/
-        # A finished archive block (20 s, no tags) for the archive tests.
-        mkdir -p /archive/blocks && cp /fixture-archive/night-2026-11-14.mp3 /archive/blocks/
+        # Two finished archive blocks of the night show (14 s each, untagged)
+        # with their track sidecars, for the archive tests.
+        mkdir -p /archive && cp -r /fixture-archive/. /archive/
         chmod -R a+rX /shows /music /archive
         touch /music/.seeded
     volumes:
@@ -41,9 +42,15 @@ services:
       - e2e-logs:/var/log/icecast
       - e2e-archive:/archive:ro
   liquidsoap:
-    # The tests put the show they need on air (radio.liq onair; test/helpers.ts).
+    # The tests put the show they need on air (radio.liq onair; test/helpers.ts),
+    # and shrink the times: the complement's three hours to 30 s, a block's
+    # tail to 5 s, and the shortest archived block from five hours to 90 s
+    # (over the minute radio.liq takes to see an hours change).
     environment:
       ONAIR_PORT: 7000
+      COMPLEMENT_WINDOW: 30
+      ARCHIVE_TAIL: 5
+      ARCHIVE_MIN_SECONDS: 90
     volumes:
       - e2e-shows:/shows:ro
       - e2e-music:/music:ro
@@ -51,12 +58,20 @@ services:
       - e2e-plays:/plays
       - e2e-archive:/archive
   app:
+    # Two blocks a show, so a block can go on to the one before; the fixture
+    # blocks are 20 s.
+    environment:
+      ARCHIVE_KEEP: 2
+      ARCHIVE_MIN_SECONDS: 10
     volumes:
       - e2e-shows:/shows:ro
       - e2e-covers:/covers:ro
       - e2e-plays:/plays:ro
       - e2e-archive:/archive:ro
+      - e2e-logs:/logs:ro
   archive-prune:
+    environment:
+      ARCHIVE_KEEP: 2
     volumes:
       - e2e-archive:/archive
   caddy:
@@ -75,6 +90,9 @@ services:
     volumes:
       - ./test-results:/app/test-results
       - e2e-plays:/plays:ro
+      # For the specs to check the reports and the archive against.
+      - e2e-logs:/logs:ro
+      - e2e-archive:/archive:ro
     depends_on:
       caddy: { condition: service_started }
       liquidsoap: { condition: service_started }

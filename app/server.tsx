@@ -3,7 +3,7 @@
 // /about, and the SoundExchange reports (/reports). Shows are
 // shows/<slug>.md (app/shows.ts), with their DJs and hours in the front matter;
 // Liquidsoap plays them on their hours on the one stream, /stream (via Caddy).
-import { archive, day, duration } from "./archive.ts";
+import { archive, BLOCK, type Block, day, duration, trackAt } from "./archive.ts";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -17,6 +17,7 @@ import { nextSlot, scheduled, showAt, upNext } from "./schedule.ts";
 import { getDj, getShow, getShows, type Show, SLUG } from "./shows.ts";
 import {
   Cover,
+  coverUrl,
   nowTrack,
   DjCredit,
   ICONS,
@@ -31,8 +32,101 @@ import {
 const COVERS = process.env.COVERS_DIR ?? "/covers";
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL || "alex@mazesradio.com";
 const GITHUB_URL = "https://github.com/alexkroman/radio";
-// radio.liq: %mp3(bitrate = 256).
+// radio.liq: %mp3(bitrate = 256), the stream and the archive both.
 const FORMAT = "MP3 · 256 kbps";
+
+// The law the station plays music under, for the About page: each provision,
+// where to read it, and how the station keeps it.
+const USC = "https://www.law.cornell.edu/uscode/text/17";
+const CFR = "https://www.law.cornell.edu/cfr/text/37";
+const LAWS = [
+  {
+    cite: "17 U.S.C. § 114(d)(2)",
+    url: `${USC}/114#d_2`,
+    what: "the statutory license for noncommercial webcasting, which lets the station play any released recording without a deal with its label, on the conditions below.",
+  },
+  {
+    cite: "§ 114(j)(13)",
+    url: `${USC}/114#j_13`,
+    what: "the sound recording performance complement: in any three hours, no more than 4 tracks by one artist (3 in a row) or 3 from one album (2 in a row). The station checks every track before it plays, and won't play one that would break it.",
+  },
+  {
+    cite: "§ 114(d)(2)(C)(ii)",
+    url: `${USC}/114#d_2_C_ii`,
+    what: "no schedule of upcoming songs or artists. The schedule names shows, never what they'll play.",
+  },
+  {
+    cite: "§ 114(d)(2)(C)(iii)",
+    url: `${USC}/114#d_2_C_iii`,
+    what: "archived programs are at least five hours long and up for less than two weeks. Shorter recordings are never published, and old ones come down automatically.",
+  },
+  {
+    cite: "§ 114(d)(2)(C)(vi)",
+    url: `${USC}/114#d_2_C_vi`,
+    what: "nothing that helps listeners copy the music: no downloads, and no seeking or skipping in the archive.",
+  },
+  {
+    cite: "§ 114(d)(2)(C)(ix)",
+    url: `${USC}/114#d_2_C_ix`,
+    what: "each track's title, album and artist shown while it plays, but not before: on the site, on your lock screen, and in the stream for radio apps.",
+  },
+  {
+    cite: "§ 114(g)(2)",
+    url: `${USC}/114#g_2`,
+    what: "how the royalties are split: 50% to the rights owner, 45% to the featured artists, 5% to session musicians and singers, paid through SoundExchange.",
+  },
+  {
+    cite: "17 U.S.C. § 112(e)",
+    url: `${USC}/112#e`,
+    what: "the copies a station makes to broadcast, which covers the archive's recordings.",
+  },
+  {
+    cite: "37 C.F.R. Part 380",
+    url: `${CFR}/part-380`,
+    what: "the rates and terms for noncommercial webcasters, set by the Copyright Royalty Judges.",
+  },
+  {
+    cite: "37 C.F.R. Part 370",
+    url: `${CFR}/part-370`,
+    what: "reports of use: every performance, live or archived, with its listeners, reported to SoundExchange each month. Ours are public.",
+  },
+];
+
+// Questions about what the license allows, for the About page.
+const FAQ = [
+  {
+    q: "Why can't I see what's coming up next?",
+    a: "The license forbids announcing songs or artists before they play (§ 114(d)(2)(C)(ii)). We can tell you which show is on next, but not what it will play.",
+  },
+  {
+    q: "Why does a show's page list what's played, but the archive doesn't list a show's tracks?",
+    a: "A list of what has already played on air is fine: those songs have been performed. An archived show hasn't played for you yet, so its track list would announce songs before they play. The archive shows each track, with its album and artist, while it plays.",
+  },
+  {
+    q: "Why can't I pick a song, skip or rewind?",
+    a: "Choosing songs would make this an interactive service (§ 114(j)(7)), which the statutory license doesn't cover: every song would need a deal with its label. We leave out skipping and rewinding too, so the station stays radio and the archive plays shows as they were broadcast.",
+  },
+  {
+    q: "Why can't I download a show?",
+    a: "The license requires us not to help listeners make copies (§ 114(d)(2)(C)(vi)). You can listen as often as you like while a show is in the archive.",
+  },
+  {
+    q: "Why are archived shows only up for two weeks, and why only whole shows?",
+    a: "An archived program has to be at least five hours long and can't be offered for more than two weeks (§ 114(d)(2)(C)(iii)). A show cut short, by a restart say, isn't archived.",
+  },
+  {
+    q: "Why won't you play a whole album, or an hour of one artist?",
+    a: "The performance complement (§ 114(j)(13)): in any three hours, at most 3 tracks from one album, 2 in a row, and 4 by one artist, 3 in a row. The station won't play a track that would break it, even if a show goes quiet for a moment.",
+  },
+  {
+    q: "Why does every song show its album?",
+    a: "The license requires each recording to be identified by title, album and featured artist while it plays (§ 114(d)(2)(C)(ix)).",
+  },
+  {
+    q: "Do artists get paid when I listen to the archive?",
+    a: "Yes. Every track you reach in an archived show counts as a performance in our monthly SoundExchange report, the same as live.",
+  },
+];
 
 declare module "hono" {
   interface ContextRenderer {
@@ -43,11 +137,18 @@ declare module "hono" {
   }
 }
 
-// Track title and artist; `cls` prefixes their classes (np-track, h-artist, …).
+// Track title, artist and album (the statutory license has us show all
+// three while a track plays); `cls` prefixes their classes (np-track,
+// h-artist, …).
 const TrackLines = ({ play, cls }: { play?: Play; cls: string }) => (
   <>
     {play && <span class={`${cls}-track`}>{play.title}</span>}
-    {play?.artist && <span class={`${cls}-artist`}>{play.artist}</span>}
+    {(play?.artist || play?.album) && (
+      <span class={`${cls}-artist`}>
+        {play.artist}
+        {play.album && <span class="album">{`${play.artist ? " · " : ""}${play.album}`}</span>}
+      </span>
+    )}
   </>
 );
 
@@ -222,7 +323,16 @@ app.route("/reports", reports);
 
 app.get("/", async (c) => {
   const shows = await getShows();
-  const [{ show, play }, recent] = await Promise.all([onAir(shows), recentPlays(11)]);
+  const [{ show, play }, recent, blocks] = await Promise.all([onAir(shows), recentPlays(11), archive()]);
+  // The newest block of any show (by its date, then its show's start hour),
+  // then that show's earlier ones.
+  const started = (b: Block) =>
+    `${b.date} ${String(shows.find((s) => s.slug === b.show)?.hours?.[0] ?? 0).padStart(2, "0")}`;
+  const newest = [...blocks.values()]
+    .map((b) => b[0]!)
+    .sort((a, b) => started(b).localeCompare(started(a)))[0];
+  const latestShow = newest && shows.find((s) => s.slug === newest.show);
+  const latest = latestShow && { show: latestShow, blocks: blocks.get(latestShow.slug)! };
   const now = new Date();
   const next = upNext(shows, now);
   return c.render(
@@ -252,6 +362,26 @@ app.get("/", async (c) => {
           </>
         )}
       </p>
+      {latest && (
+        <section class="latest" aria-labelledby="latest-heading">
+          <h2 id="latest-heading" class="label">
+            Latest archive
+          </h2>
+          <div class="archive-blocks">
+            <div class="archive-block">
+              <BlockButton show={latest.show} blocks={latest.blocks} i={0} />
+              <span class="archive-title">
+                <a href={`/${latest.show.slug}`}>{latest.show.title}</a>
+              </span>
+              <span class="archive-date">{day(latest.blocks[0]!.date)}</span>
+              <span class="archive-length">{duration(latest.blocks[0]!.seconds)}</span>
+              <a class="archive-more" href="/archive">
+                All archives
+              </a>
+            </div>
+          </div>
+        </section>
+      )}
       <StreamUrl host={c.req.header("host") ?? ""} />
       <section id="schedule" class="schedule" aria-labelledby="schedule-heading">
         <h2 id="schedule-heading" class="label">
@@ -269,9 +399,32 @@ app.get("/", async (c) => {
   );
 });
 
+// An archive block's title, as its play button and the player show it.
+const blockTitle = (show: Show, b: Block) => `${show.title}, ${day(b.date)}`;
+
+// A block's play button: when it ends, the show's earlier blocks follow.
+const BlockButton = ({
+  show,
+  blocks,
+  i,
+  large,
+}: {
+  show: Show;
+  blocks: Block[];
+  i: number;
+  large?: boolean;
+}) => (
+  <PlayButton
+    large={large}
+    src={blocks[i]!.url}
+    title={blockTitle(show, blocks[i]!)}
+    then={blocks.slice(i + 1).map((b) => ({ src: b.url, title: blockTitle(show, b) }))}
+  />
+);
+
 // Each show's recorded blocks, newest first, played (from the beginning, no
-// seeking) in the site's player. No track names: a block is its show, date
-// and length.
+// seeking) in the site's player, which shows each track while it plays. No
+// track lists: a block is its show, date and length.
 app.get("/archive", async (c) => {
   const [shows, blocks] = await Promise.all([getShows(), archive()]);
   const listed = scheduled(shows).filter((s) => blocks.has(s.slug));
@@ -280,7 +433,9 @@ app.get("/archive", async (c) => {
       <SiteHeader current="archive" />
       <header class="title-block">
         <h1 class="display">Archive</h1>
-        <p class="subtitle">Recent shows, as broadcast, for up to two weeks. Each plays from the start.</p>
+        <p class="subtitle">
+          Recent shows as broadcast, for up to two weeks. Each plays from the start, then the show before it.
+        </p>
       </header>
       {listed.length === 0 ? (
         <p class="muted">Nothing recorded yet.</p>
@@ -291,9 +446,9 @@ app.get("/archive", async (c) => {
               {show.title}
             </h2>
             <ol class="archive-blocks">
-              {blocks.get(show.slug)!.map((b) => (
+              {blocks.get(show.slug)!.map((b, i, all) => (
                 <li class="archive-block">
-                  <PlayButton src={b.url} title={`${show.title}, ${day(b.date)}`} />
+                  <BlockButton show={show} blocks={all} i={i} />
                   <span class="archive-title">
                     <a href={`/${show.slug}`}>{show.title}</a>
                   </span>
@@ -308,6 +463,23 @@ app.get("/archive", async (c) => {
     </main>,
     { title: "Archive" },
   );
+});
+
+// The track playing t seconds into an archive block, for the player (only
+// that track: never a block's track list). As /now.json.
+app.get(`/archive/:block{${BLOCK}}/now.json`, async (c) => {
+  const name = c.req.param("block");
+  const blocks = [...(await archive()).values()].flat();
+  if (!blocks.some((b) => b.name === name)) return c.notFound();
+  const t = c.req.query("t") ?? "";
+  if (!/^\d+(\.\d+)?$/.test(t)) return c.text("t: seconds into the block", 400);
+  const track = await trackAt(name, Number(t));
+  return c.json({
+    track: track?.title ?? "",
+    artist: track?.artist ?? "",
+    album: track?.album ?? "",
+    cover: track?.cover ? coverUrl(track.cover) : "",
+  });
 });
 
 app.get("/about", (c) => {
@@ -382,8 +554,8 @@ app.get("/about", (c) => {
           label deals.
         </p>
         <p>
-          When a channel here plays a band, the band gets paid, directly, at the same rate as anyone else. Our{" "}
-          <a href="/reports">reports</a> show every play.
+          When the station plays a band, live or from the archive, the band gets paid, directly, at the same
+          rate as anyone else. Our <a href="/reports">reports</a> show every play.
         </p>
       </section>
       <section class="prose" aria-labelledby="about-not">
@@ -397,7 +569,7 @@ app.get("/about", (c) => {
           </li>
           <li>
             Artist marathons or whole albums. The license limits how many tracks from one artist or album can
-            play in a row.
+            play in three hours, and in a row.
           </li>
           <li>Algorithms. People pick every song.</li>
           <li>
@@ -405,6 +577,46 @@ app.get("/about", (c) => {
             choose to pay, which is enough because the costs are flat.
           </li>
         </ul>
+      </section>
+      <section class="prose" aria-labelledby="about-archive">
+        <h2 id="about-archive" class="label">
+          The archive
+        </h2>
+        <p>
+          Every show is recorded as it goes out, start to finish, at the same quality as the stream. The{" "}
+          <a href="/archive">archive</a> keeps the latest of each show for you to hear again, from the
+          beginning, as it was broadcast: each track, its album and its artist show as it plays, and when a
+          show ends, the one before it starts. Archived shows are at least five hours long and come down
+          before they've been up two weeks. You can't skip, rewind or download them, and archive plays pay the
+          artists like any other.
+        </p>
+      </section>
+      <section class="prose" aria-labelledby="about-law">
+        <h2 id="about-law" class="label">
+          The law
+        </h2>
+        <p>
+          The station plays music under the statutory license for noncommercial webcasting, which comes with
+          conditions. These are the ones we keep, and how:
+        </p>
+        <ul>
+          {LAWS.map((l) => (
+            <li>
+              <a href={l.url}>{l.cite}</a>: {l.what}
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section class="prose faq" aria-labelledby="about-faq">
+        <h2 id="about-faq" class="label">
+          Questions
+        </h2>
+        {FAQ.map((q) => (
+          <>
+            <h3>{q.q}</h3>
+            <p>{q.a}</p>
+          </>
+        ))}
       </section>
       <section class="prose" aria-labelledby="about-listen">
         <h2 id="about-listen" class="label">
@@ -430,7 +642,8 @@ app.get("/about", (c) => {
         </h2>
         <p>
           The code that runs this station is open source. Anyone can use it to start their own: add some
-          music, write a page for each channel and switch it on. It's all on <a href={GITHUB_URL}>GitHub</a>.
+          music, write a page for each show, give it its hours and switch it on. It's all on{" "}
+          <a href={GITHUB_URL}>GitHub</a>.
         </p>
       </section>
       <section class="prose" aria-labelledby="about-contact">

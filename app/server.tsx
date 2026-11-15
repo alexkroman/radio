@@ -26,7 +26,7 @@ import {
 } from "./ui.tsx";
 
 const COVERS = process.env.COVERS_DIR ?? "/covers";
-const CONTACT_EMAIL = process.env.CONTACT_EMAIL || "hello@mazesradio.com";
+const CONTACT_EMAIL = process.env.CONTACT_EMAIL || "alex@mazesradio.com";
 const GITHUB_URL = "https://github.com/alexkroman/radio";
 // radio.liq: %mp3(bitrate = 256).
 const FORMAT = "MP3 · 256 kbps";

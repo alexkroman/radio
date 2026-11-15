@@ -180,6 +180,7 @@ describe("manifesto", () => {
   test("is linked from the site, and the old /about redirects to it", async () => {
     expect(await (await page("/")).text()).toContain('href="/manifesto"');
     expect((await page("/manifesto")).status).toBe(200);
+    expect(await (await page("/manifesto")).text()).toContain('href="https://github.com/alexkroman/radio"');
     const old = await page("/about");
     expect(old.status).toBe(301);
     expect(old.headers.get("location")).toBe("/manifesto");

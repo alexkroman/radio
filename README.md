@@ -144,3 +144,7 @@ pre-commit run --all-files  # run them by hand
 ```
 
 In Claude Code cloud sessions, `.claude/hooks/session-start.sh` does all of this automatically: it installs pre-commit and `node_modules`, starts Docker, pulls the images, sets up Docker builds behind the session's proxy (so `npm run e2e` works) and installs the git hook.
+
+## License
+
+[MIT](LICENSE).

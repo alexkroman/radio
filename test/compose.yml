@@ -58,11 +58,9 @@ services:
       - e2e-plays:/plays
       - e2e-archive:/archive
   app:
-    # Two blocks a show, so a block can go on to the one before; the fixture
-    # blocks are 20 s.
+    # Two blocks a show, so a block can go on to the one before.
     environment:
       ARCHIVE_KEEP: 2
-      ARCHIVE_MIN_SECONDS: 10
     volumes:
       - e2e-shows:/shows:ro
       - e2e-covers:/covers:ro

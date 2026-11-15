@@ -2,7 +2,16 @@
 // and the login throttle. Fixtures: shows/{odd,long}.
 import { expect, test } from "@playwright/test";
 import { complementViolations } from "../app/complement.ts";
-import { icyTitle, listen, LOGGED_OUT, loggedPlays, onAir, performances, streamHead } from "./helpers.ts";
+import {
+  COMPLEMENT_WINDOW,
+  icyTitle,
+  listen,
+  LOGGED_OUT,
+  loggedPlays,
+  onAir,
+  performances,
+  streamHead,
+} from "./helpers.ts";
 
 const ODD_ARTIST = 'Q "The" Artist';
 const ODD_TITLE = "Back\\slash \"Quotes\" & 'Ticks'";
@@ -94,10 +103,9 @@ test("50 simultaneous listeners all get audio", async () => {
 });
 
 test("every play in the run kept the performance complement", async () => {
-  // test/compose.yml's COMPLEMENT_WINDOW: 30 s for three hours.
   const plays = await loggedPlays();
   expect(plays.length).toBeGreaterThan(20);
-  expect(complementViolations(plays, 30)).toEqual([]);
+  expect(complementViolations(plays, COMPLEMENT_WINDOW)).toEqual([]);
 });
 
 // Last: it locks this client out of logging in for a while.

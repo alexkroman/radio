@@ -40,14 +40,16 @@ let playing = false;
 // statutory license requires) and cover.
 type Track = { track: string; artist: string; album: string; cover: string };
 const NO_TRACK: Track = { track: "", artist: "", album: "", cover: "" };
-// The track on air and its show, from /now.json (and that JSON).
-type Now = Track & { show: string; title: string };
-let now: Now = { ...NO_TRACK, show: "", title: "" };
+// The track on air and its show's title, from /now.json (and that JSON).
+type Now = Track & { title: string };
+let now: Now = { ...NO_TRACK, title: "" };
 let nowJson = "";
 // The track playing in an archive block, from the block's now.json (by how
-// far into it the player is), and that JSON.
+// far into it the player is), and when the next starts (seconds into the
+// block; undefined once it's the last). Unknown until fetched.
 let blockTrack = NO_TRACK;
-let blockJson = "";
+let blockUntil: number | undefined;
+let blockFetched = false;
 // What was last put on the lock screen.
 let lockKey = "";
 // When a dropped stream stops being retried (0: not retrying).
@@ -75,7 +77,7 @@ function sync() {
   setBar({
     ...NO_TRACK,
     ...(live() || playing ? track : {}),
-    station: live() ? station : source.title,
+    station: source.title,
     title: live() ? now.title || station : source.title,
     live: live(),
     playing,
@@ -97,22 +99,27 @@ function sync() {
   );
 }
 
-// While an archive block plays, every 2 s: the track playing in it, by how
-// far in the player is (it plays from the beginning, without seeking). Only
-// that track: the block's track list is never fetched.
+// While an archive block plays: the track playing in it, by how far in the
+// player is (it plays from the beginning, without seeking), fetched when it
+// starts and again when that track ends. Only that track: the block's track
+// list is never fetched.
+let blockFetching = false;
 async function pollBlock() {
   const src = source.src;
-  if (!playing || live() || audio.paused) return;
-  const t = Math.floor(audio.currentTime);
-  const json = await fetch(`${src.replace(/\.mp3$/, "")}/now.json?t=${t}`)
-    .then((r) => (r.ok ? r.text() : undefined))
+  if (!playing || live() || audio.paused || blockFetching) return;
+  const t = audio.currentTime;
+  if (blockFetched && (blockUntil === undefined || t < blockUntil)) return;
+  blockFetching = true;
+  const res = await fetch(`${src.replace(/\.mp3$/, "")}/now.json?t=${Math.floor(t)}`)
+    .then((r) => (r.ok ? (r.json() as Promise<Track & { until?: number }>) : undefined))
     .catch(() => undefined);
-  if (!json || source.src !== src || json === blockJson) return;
-  blockJson = json;
-  blockTrack = JSON.parse(json) as Track;
+  blockFetching = false;
+  if (!res || source.src !== src) return;
+  ({ until: blockUntil, ...blockTrack } = res);
+  blockFetched = true;
   sync();
 }
-setInterval(() => void pollBlock(), 2_000);
+setInterval(() => void pollBlock(), 1_000);
 
 // The one poll, every 15 s: the track on air, for the player bar and the
 // lock screen. When it changes, a page showing it refreshes itself (ui.tsx Poll).
@@ -123,7 +130,7 @@ async function poll() {
   if (!json || json === nowJson) return;
   const first = !nowJson;
   nowJson = json;
-  now = { ...NO_TRACK, ...(JSON.parse(json) as Partial<Now>) } as Now;
+  now = JSON.parse(json) as Now;
   sync();
   if (!first && document.getElementById("poll")) htmx.trigger("#poll", "refresh");
 }
@@ -141,7 +148,7 @@ function playSource() {
 function start(to: Source) {
   source = to;
   blockTrack = NO_TRACK;
-  blockJson = "";
+  blockFetched = false;
   playing = true;
   sync();
   retryUntil = 0;
@@ -168,9 +175,8 @@ audio.addEventListener("playing", () => {
 });
 // Back to the live stream, paused.
 function backToLive() {
-  stop();
   source = LIVE;
-  sync();
+  stop();
 }
 // The live stream dropped (a server restart, a network change): reconnect for
 // up to two minutes. iOS allows play() on an element a tap has started. An

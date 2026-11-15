@@ -6,9 +6,7 @@
 // test/hunt.spec.ts, last.
 import { expect, test } from "@playwright/test";
 import { complementViolations } from "../app/complement.ts";
-import { loggedPlays, onAir } from "./helpers.ts";
-
-const WINDOW = 30;
+import { COMPLEMENT_WINDOW as WINDOW, loggedPlays, onAir } from "./helpers.ts";
 
 test("a show with one artist plays no more than the complement allows, then waits", async () => {
   const before = (await loggedPlays()).length;

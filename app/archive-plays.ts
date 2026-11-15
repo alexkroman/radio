@@ -6,7 +6,7 @@
 // ALLOWANCE for audio a player had fetched ahead of what it played (counting
 // a track that may not have been heard, rather than miss one that was).
 // scripts/archive-plays.sh counts the same requests per block per day.
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { BLOCK, type BlockTrack, blockTracks } from "./archive.ts";
 
 const LOGS = process.env.LOGS_DIR ?? "/logs";
@@ -19,10 +19,17 @@ const LINE = new RegExp(
 
 type ArchivePlay = { month: string; block: string; seconds: number };
 
-// Every archive play in the access logs.
-async function archivePlays(): Promise<ArchivePlay[]> {
+// The archive plays in the access logs that can hold a month's ("YYYY-MM"):
+// those last written since it began.
+async function archivePlays(month: string): Promise<ArchivePlay[]> {
+  const since = new Date(`${month}-01T00:00:00`).getTime();
   const files = (await readdir(LOGS).catch(() => [] as string[])).filter((f) => f.startsWith("access.log"));
-  const texts = await Promise.all(files.map((f) => readFile(`${LOGS}/${f}`, "utf8").catch(() => "")));
+  const texts = await Promise.all(
+    files.map(async (f) => {
+      const st = await stat(`${LOGS}/${f}`).catch(() => undefined);
+      return st && st.mtimeMs >= since ? readFile(`${LOGS}/${f}`, "utf8").catch(() => "") : "";
+    }),
+  );
   return texts.flatMap((text) =>
     text.split("\n").flatMap((line) => {
       const m = LINE.exec(line);
@@ -35,13 +42,9 @@ async function archivePlays(): Promise<ArchivePlay[]> {
 
 // The tracks archive plays performed in a month ("YYYY-MM"), once per play.
 export async function archivePerformances(month: string): Promise<BlockTrack[]> {
-  const plays = (await archivePlays()).filter((p) => p.month === month);
-  const tracks = new Map<string, Promise<BlockTrack[]>>();
+  const plays = (await archivePlays(month)).filter((p) => p.month === month);
   const performed = await Promise.all(
-    plays.map(async (p) => {
-      if (!tracks.has(p.block)) tracks.set(p.block, blockTracks(p.block));
-      return (await tracks.get(p.block)!).filter((t) => t.offset <= p.seconds + ALLOWANCE);
-    }),
+    plays.map(async (p) => (await blockTracks(p.block)).filter((t) => t.offset <= p.seconds + ALLOWANCE)),
   );
   return performed.flat();
 }

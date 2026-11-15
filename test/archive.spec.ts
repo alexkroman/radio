@@ -5,43 +5,14 @@
 // and the site's player plays them from the beginning, showing each track
 // while it plays, then the show's block before. test/e2e.sh checks the
 // recording itself, the play counts and the retention.
-import { request as https } from "node:https";
-import { expect, type Page, test } from "@playwright/test";
-import { BASE, LOGGED_OUT, player } from "./helpers.ts";
+import { expect, test } from "@playwright/test";
+import { get, LOGGED_OUT, lockScreen, player } from "./helpers.ts";
 
 const BLOCK = "/archive/night-2026-11-14.mp3";
 const EARLIER = "/archive/night-2026-11-13.mp3";
-const TITLE = "Fixture Night, Sat, Nov 14";
-const EARLIER_TITLE = "Fixture Night, Fri, Nov 13";
+const TITLE = "Fixture Night #2";
+const EARLIER_TITLE = "Fixture Night #1";
 const BYTES = 448_888;
-
-// A whole response: status, headers and body.
-function get(path: string, headers: Record<string, string> = {}, method = "GET") {
-  return new Promise<{ status?: number; headers: Record<string, unknown>; body: Buffer }>(
-    (resolve, reject) => {
-      const req = https(
-        new URL(path, BASE),
-        { method, headers, rejectUnauthorized: false, timeout: 30_000 },
-        (res) => {
-          const chunks: Buffer[] = [];
-          res.on("data", (c: Buffer) => chunks.push(c));
-          res.on("end", () =>
-            resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }),
-          );
-        },
-      );
-      req.on("timeout", () => req.destroy(new Error(`timeout reading ${path}`)));
-      req.on("error", reject);
-      req.end();
-    },
-  );
-}
-
-const lockScreen = (page: Page) =>
-  page.evaluate(() => {
-    const m = navigator.mediaSession.metadata;
-    return m && { title: m.title, artist: m.artist, album: m.album };
-  });
 
 test("the archive lists each show's blocks, without track names or downloads", async ({ page }) => {
   await page.goto("/");
@@ -50,6 +21,8 @@ test("the archive lists each show's blocks, without track names or downloads", a
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Archive");
   const night = page.locator(".archive-show", { has: page.getByRole("heading", { name: "Fixture Night" }) });
   const blocks = night.locator(".archive-block");
+  // Numbered (the blocks have no names of their own), with their dates.
+  await expect(blocks.locator(".archive-title")).toHaveText([TITLE, EARLIER_TITLE]);
   await expect(blocks.locator(".archive-date")).toHaveText(["Sat, Nov 14", "Fri, Nov 13"]);
   await expect(blocks.locator(".archive-length")).toHaveText(["14 s", "14 s"]);
   await expect(blocks.first().getByRole("button", { name: `Play ${TITLE}` })).toBeVisible();
@@ -87,13 +60,20 @@ test("a block is served from the beginning only, as a stream with no length", as
 
 test("a block's now.json has only the track playing at a time into it", async ({ request }) => {
   const at = async (t: number) => (await request.get(`/archive/night-2026-11-14/now.json?t=${t}`)).json();
+  // With when it ends, so the player asks again only then.
   expect(await at(0)).toEqual({
     track: "Midnight",
     artist: "Gamma",
     album: "",
     cover: "/covers/night/Gamma-%20Midnight.jpg",
+    until: 6,
   });
-  expect(await at(15)).toMatchObject({ track: "Second Wind", artist: "Beta & Band" });
+  expect(await at(7)).toEqual({
+    track: "Second Wind",
+    artist: "Beta & Band",
+    album: "",
+    cover: "/covers/default/Beta%20&%20Band-%20Second%20Wind.jpg",
+  });
   expect((await request.get("/archive/night-2026-11-10/now.json?t=0")).status()).toBe(404);
 });
 
@@ -148,7 +128,7 @@ test("the home page plays the latest archive", async ({ page }) => {
   await page.goto("/");
   const latest = page.locator(".latest");
   await expect(latest.getByRole("heading", { name: "Latest archive" })).toBeVisible();
-  await expect(latest.locator(".archive-title")).toHaveText("Fixture Night");
+  await expect(latest.locator(".archive-title")).toHaveText(TITLE);
   await expect(latest.locator(".archive-date")).toHaveText("Sat, Nov 14");
   await expect(latest).not.toContainText("Midnight");
   await latest.getByRole("button", { name: `Play ${TITLE}` }).click();

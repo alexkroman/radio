@@ -2,7 +2,7 @@
 // last 12 months, each a Report of Use from the play log at /reports/<YYYY-MM>.
 import { Hono } from "hono";
 import { archivePerformances } from "./archive-plays.ts";
-import { monthOf, monthPlays } from "./plays.ts";
+import { monthOf, monthPlays, type Track } from "./plays.ts";
 import { SiteHeader } from "./ui.tsx";
 
 const SERVICE = "MAZES RADIO";
@@ -26,14 +26,8 @@ const field = (v: string | number) =>
 // the block it reached (app/archive-plays.ts). ISRCs come from tags written
 // by scripts/import.sh (beet mbsync).
 async function report(month: string): Promise<string> {
-  const songs = new Map<
-    string,
-    { artist: string; title: string; isrc: string; album: string; label: string; count: number }
-  >();
-  const add = (
-    p: { artist: string; title: string; isrc: string; album: string; label: string },
-    n: number,
-  ) => {
+  const songs = new Map<string, Track & { count: number }>();
+  const add = (p: Track, n: number) => {
     const key = `${p.artist}\n${p.title}`;
     const song = songs.get(key) ?? { ...p, count: 0 };
     song.count += n;

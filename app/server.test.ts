@@ -61,13 +61,16 @@ beforeAll(async () => {
     const at = new Date(Date.now() - ageMs);
     await utimes(f, at, at);
   };
-  await block("blocks/night-2026-11-14.mp3", 5 * HOUR + 60 * 32_000);
-  await block("blocks/night-2026-11-13.mp3", 5 * HOUR);
-  await block("blocks/night-2026-11-12.mp3", 5 * HOUR); // third: ARCHIVE_KEEP is 2
+  // radio.liq puts only blocks of 5 hours or more in blocks/; odd's finished last.
+  const earlier = 3600 * 1000;
+  await block("blocks/night-2026-11-14.mp3", 5 * HOUR + 60 * 32_000, earlier);
+  await block("blocks/night-2026-11-13.mp3", 5 * HOUR, earlier);
+  await block("blocks/night-2026-11-12.mp3", 5 * HOUR, earlier); // third: ARCHIVE_KEEP is 2
   await block("blocks/odd-2026-11-15.mp3", 6 * HOUR);
-  await block("blocks/default-2026-11-14.mp3", 5 * HOUR - 32_000); // a second short of 5 hours
+  await block("blocks/default-2026-11-14.mp3", 11 * HOUR, earlier);
   await block("blocks/edge-2026-11-02.mp3", 8 * HOUR, (14 * 24 - 2) * 3600 * 1000); // up two weeks less two hours
   await block("blocks/nope-2026-11-14.mp3", 5 * HOUR); // not a show
+  await writeFile(join(archive, "tracks", "default-2026-11-10.jsonl"), ""); // a block gone since: default's first
   await block("blocks/notes.txt", 10);
   await block("recording/long-2026-11-15.mp3", 6 * HOUR); // still recording
   const sidecar = (name: string, tracks: object[]) =>
@@ -239,7 +242,6 @@ describe("pages", () => {
 
   test("now.json has the track on air and its show", async () => {
     expect(await (await page("/now.json")).json()).toEqual({
-      show: "night",
       title: "Fixture Night",
       track: "Midnight",
       artist: "Gamma",
@@ -266,15 +268,18 @@ describe("pages", () => {
 });
 
 describe("archive", () => {
-  test("lists each show's blocks of at least 5 hours, up under two weeks, newest ARCHIVE_KEEP first", async () => {
+  test("lists each show's blocks up under two weeks, newest ARCHIVE_KEEP first, numbered by day", async () => {
     const html = await (await page("/archive")).text();
     const rows = [...html.matchAll(/data-play="([^"]+)" data-title="([^"]+)"/g)].map((m) => [m[1], m[2]]);
+    // Numbered from each show's first day with a block (or a sidecar of one).
     expect(rows).toEqual([
-      ["/archive/edge-2026-11-02.mp3", "Edge Cases, Mon, Nov 2"],
-      ["/archive/night-2026-11-14.mp3", "Fixture Night, Sat, Nov 14"],
-      ["/archive/night-2026-11-13.mp3", "Fixture Night, Fri, Nov 13"],
-      ["/archive/odd-2026-11-15.mp3", "Odd Characters, Sun, Nov 15"],
+      ["/archive/default-2026-11-14.mp3", "Fixture Default #5"],
+      ["/archive/edge-2026-11-02.mp3", "Edge Cases #1"],
+      ["/archive/night-2026-11-14.mp3", "Fixture Night #3"],
+      ["/archive/night-2026-11-13.mp3", "Fixture Night #2"],
+      ["/archive/odd-2026-11-15.mp3", "Odd Characters #1"],
     ]);
+    expect(html).toContain("Sat, Nov 14");
     expect(html).toContain("5 h 1 min");
     expect(html).toContain("6 h 0 min");
     expect(html).toContain('aria-current="page">Archive');
@@ -284,7 +289,7 @@ describe("archive", () => {
     const html = await (await page("/archive")).text();
     const then = /data-play="\/archive\/night-2026-11-14\.mp3"[^>]*data-then="([^"]+)"/.exec(html)?.[1];
     expect(JSON.parse(then!.replaceAll("&quot;", '"'))).toEqual([
-      { src: "/archive/night-2026-11-13.mp3", title: "Fixture Night, Fri, Nov 13" },
+      { src: "/archive/night-2026-11-13.mp3", title: "Fixture Night #2" },
     ]);
     expect(html).not.toMatch(/data-play="\/archive\/night-2026-11-13\.mp3"[^>]*data-then/);
   });
@@ -299,8 +304,15 @@ describe("archive", () => {
 
   test("a block's now.json has only the track playing at t, with title, artist and album", async () => {
     const at = async (t: string) => (await page(`/archive/night-2026-11-14/now.json?t=${t}`)).json();
-    expect(await at("0")).toEqual({ track: "Midnight", artist: "Gamma", album: "Album", cover: "" });
-    expect(await at("10")).toMatchObject({ track: "Midnight" });
+    // With when it ends (the next track's offset), none for the last.
+    expect(await at("0")).toEqual({
+      track: "Midnight",
+      artist: "Gamma",
+      album: "Album",
+      cover: "",
+      until: 10.2,
+    });
+    expect(await at("10")).toMatchObject({ track: "Midnight", until: 10.2 });
     expect(await at("11")).toEqual({
       track: "Second Wind",
       artist: "Beta & Band",
@@ -310,7 +322,7 @@ describe("archive", () => {
     for (const t of ["-1", "x", ""])
       expect((await page(`/archive/night-2026-11-14/now.json?t=${t}`)).status).toBe(400);
     // Not for a block that can't be played.
-    for (const name of ["default-2026-11-14", "night-2026-11-12", "long-2026-11-15", "nope-2026-11-14"])
+    for (const name of ["long-2026-11-15", "nope-2026-11-14", "night-2026-11-10"])
       expect((await page(`/archive/${name}/now.json?t=0`)).status, name).toBe(404);
     expect((await req("/archive/night-2026-11-14/now.json?t=0")).status).toBe(401);
   });
@@ -318,9 +330,7 @@ describe("archive", () => {
   test("the home page plays the latest archive, then that show's earlier ones", async () => {
     const html = await (await page("/")).text();
     expect(html).toContain("Latest archive");
-    expect(html).toMatch(
-      /data-play="\/archive\/odd-2026-11-15\.mp3" data-title="Odd Characters, Sun, Nov 15"/,
-    );
+    expect(html).toMatch(/data-play="\/archive\/odd-2026-11-15\.mp3" data-title="Odd Characters #1"/);
     expect(html).not.toContain("Track A");
   });
 

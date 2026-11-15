@@ -171,6 +171,11 @@ complement_played = ref([])
 complement_pending = ref([])
 
 # Whether a candidate track (request metadata) for show slug keeps the complement.
+# What the complement counts of a track: its artists and album.
+def complement_key(p) =
+  (p.artists, p.album)
+end
+
 def complement_allows(slug, uri, m) =
   c = complement_entry(uri, m)
   now = time()
@@ -180,16 +185,8 @@ def complement_allows(slug, uri, m) =
 
   # Everything that counts in the window, and the tracks in the order they
   # play before the candidate, newest first.
-  everything =
-    list.append(
-      list.map(fun (p) -> (p.artists, p.album), played),
-      list.map(fun (p) -> (p.artists, p.album), complement_pending())
-    )
-  before =
-    list.append(
-      list.rev(list.map(fun (p) -> (p.artists, p.album), own)),
-      list.map(fun (p) -> (p.artists, p.album), played)
-    )
+  everything = list.append(list.map(complement_key, played), list.map(complement_key, complement_pending()))
+  before = list.append(list.rev(list.map(complement_key, own)), list.map(complement_key, played))
   def rec run(matches, ls) =
     if ls != [] and matches(list.hd(ls)) then 1 + run(matches, list.tl(ls)) else 0 end
   end
@@ -202,7 +199,7 @@ def complement_allows(slug, uri, m) =
   def from_album(e) =
     snd(e) == c.album
   end
-  others_entries = list.map(fun (p) -> (p.artists, p.album), others)
+  others_entries = list.map(complement_key, others)
   artists_ok =
     list.for_all(
       fun (a) ->
@@ -250,6 +247,12 @@ end
 # show each track's title, album and artist while it plays (the license
 # requires that), and the reports can count archive plays per track. The
 # sidecars are kept after their blocks (for the reports).
+# A file's name without its folder and extension: a show's slug from its
+# shows/<slug>.md, a block's name from its archive file.
+def slug_of(f) =
+  path.remove_extension(path.basename(f))
+end
+
 archive_recording = "/archive/recording"
 archive_blocks = "/archive/blocks"
 archive_short = "/archive/short"
@@ -257,6 +260,11 @@ archive_tracks = "/archive/tracks"
 archive_bytes_per_second = 32000.
 archive_tail = float_of_string(default=60., environment.get("ARCHIVE_TAIL"))
 archive_min = float_of_string(default=18000., environment.get("ARCHIVE_MIN_SECONDS"))
+
+# A block's sidecar.
+def sidecar_path(name) =
+  "#{archive_tracks}/#{name}.jsonl"
+end
 
 # The track playing now, for a block that opens mid-track.
 no_track = {title = "", artist = "", album = "", label = "", isrc = "", cover = ""}
@@ -294,11 +302,7 @@ def archive_track(play) =
     fun (f) ->
       try
         offset = float_of_int(file.size(f)) / archive_bytes_per_second
-        file.write(
-          append=true,
-          data=sidecar_line(offset, t),
-          "#{archive_tracks}/#{path.remove_extension(path.basename(f))}.jsonl"
-        )
+        file.write(append=true, data=sidecar_line(offset, t), sidecar_path(slug_of(f)))
       catch e do
         log.severe(
           "Archive: couldn't add a track to #{f}'s sidecar: #{e}"
@@ -310,7 +314,7 @@ end
 
 # A show's source.
 def show(f) =
-  slug = path.remove_extension(path.basename(f))
+  slug = slug_of(f)
 
   # Artist separation, beyond the complement: reject a candidate if any of
   # its artists was among the last 20 artists picked on this show; after 20
@@ -410,12 +414,16 @@ def show(f) =
 end
 
 shows = file.ls(absolute=true, pattern="*.md", "/shows")
-slug_of = fun (f) -> path.remove_extension(path.basename(f))
 
 # Each show's hours, by slug, re-read every minute so an edit applies without
 # a restart.
 read_hours = fun () -> list.map(fun (f) -> (slug_of(f), show_hours(f)), shows)
 schedule = ref(read_hours())
+
+# A show's hours (show_hours) now.
+def hours_of(slug) =
+  list.assoc(default=(0, 0), slug, schedule())
+end
 
 # Every hour must have exactly one show. app/check-schedule.ts stops a commit
 # or deploy that breaks this; if it happens anyway, it's an error in the log,
@@ -476,14 +484,7 @@ thread.run(
 
 # Whether a show is on air: by its hours, or by hand (onair).
 def on_air(slug) =
-  fun () ->
-    if
-      onair() != ""
-    then
-      onair() == slug
-    else
-      within(time.local().hour, list.assoc(default=(0, 0), slug, schedule()))
-    end
+  fun () -> if onair() != "" then onair() == slug else within(time.local().hour, hours_of(slug)) end
 end
 
 # The show on air: when one's hours start, the playing track finishes first
@@ -549,11 +550,6 @@ output.icecast(
 def ymd(t) =
   pad = fun (n) -> n < 10 ? "0#{n}" : "#{n}"
   "#{t.year}-#{pad(t.month)}-#{pad(t.day)}"
-end
-
-# A show's hours (show_hours) now.
-def hours_of(slug) =
-  list.assoc(default=(0, 0), slug, schedule())
 end
 
 # Whether a show's block is being recorded: in its hours, or in the tail.
@@ -665,7 +661,7 @@ def recorder(f) =
         then
           file.write(
             data=current_track().title == "" ? "" : sidecar_line(0., current_track()),
-            "#{archive_tracks}/#{name}.jsonl"
+            sidecar_path(name)
           )
         end
         target

@@ -3,7 +3,7 @@
 // /about, and the SoundExchange reports (/reports). Shows are
 // shows/<slug>.md (app/shows.ts), with their DJs and hours in the front matter;
 // Liquidsoap plays them on their hours on the one stream, /stream (via Caddy).
-import { archive, BLOCK, type Block, day, duration, trackAt } from "./archive.ts";
+import { archive, BLOCK, type Block, day, duration, inArchive, trackAt } from "./archive.ts";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -17,7 +17,6 @@ import { nextSlot, scheduled, showAt, upNext } from "./schedule.ts";
 import { getDj, getShow, getShows, type Show, SLUG } from "./shows.ts";
 import {
   Cover,
-  coverUrl,
   nowTrack,
   DjCredit,
   ICONS,
@@ -27,6 +26,7 @@ import {
   SITE_TITLE,
   SiteHeader,
   Time,
+  trackJson,
 } from "./ui.tsx";
 
 const COVERS = process.env.COVERS_DIR ?? "/covers";
@@ -323,14 +323,9 @@ app.route("/reports", reports);
 
 app.get("/", async (c) => {
   const shows = await getShows();
-  const [{ show, play }, recent, blocks] = await Promise.all([onAir(shows), recentPlays(11), archive()]);
-  // The newest block of any show (by its date, then its show's start hour),
-  // then that show's earlier ones.
-  const started = (b: Block) =>
-    `${b.date} ${String(shows.find((s) => s.slug === b.show)?.hours?.[0] ?? 0).padStart(2, "0")}`;
-  const newest = [...blocks.values()]
-    .map((b) => b[0]!)
-    .sort((a, b) => started(b).localeCompare(started(a)))[0];
+  const [{ show, play }, recent, blocks] = await Promise.all([onAir(shows), recentPlays(11), archive(shows)]);
+  // The block that finished last, then its show's earlier ones.
+  const newest = [...blocks.values()].map((b) => b[0]!).sort((a, b) => b.finished - a.finished)[0];
   const latestShow = newest && shows.find((s) => s.slug === newest.show);
   const latest = latestShow && { show: latestShow, blocks: blocks.get(latestShow.slug)! };
   const now = new Date();
@@ -368,17 +363,11 @@ app.get("/", async (c) => {
             Latest archive
           </h2>
           <div class="archive-blocks">
-            <div class="archive-block">
-              <BlockButton show={latest.show} blocks={latest.blocks} i={0} />
-              <span class="archive-title">
-                <a href={`/${latest.show.slug}`}>{latest.show.title}</a>
-              </span>
-              <span class="archive-date">{day(latest.blocks[0]!.date)}</span>
-              <span class="archive-length">{duration(latest.blocks[0]!.seconds)}</span>
+            <BlockRow show={latest.show} blocks={latest.blocks} i={0} as="div">
               <a class="archive-more" href="/archive">
                 All archives
               </a>
-            </div>
+            </BlockRow>
           </div>
         </section>
       )}
@@ -399,34 +388,49 @@ app.get("/", async (c) => {
   );
 });
 
-// An archive block's title, as its play button and the player show it.
-const blockTitle = (show: Show, b: Block) => `${show.title}, ${day(b.date)}`;
+// An archive block's title, as its row, play button and the player show it:
+// shows' blocks have no names of their own, so they're numbered.
+const blockTitle = (show: Show, b: Block) => `${show.title} #${b.number}`;
 
-// A block's play button: when it ends, the show's earlier blocks follow.
-const BlockButton = ({
+// A block in a list: its play button (when it ends, the show's earlier blocks
+// follow), title, date and length.
+const BlockRow = ({
   show,
   blocks,
   i,
-  large,
+  as: Tag = "li",
+  children,
 }: {
   show: Show;
   blocks: Block[];
   i: number;
-  large?: boolean;
-}) => (
-  <PlayButton
-    large={large}
-    src={blocks[i]!.url}
-    title={blockTitle(show, blocks[i]!)}
-    then={blocks.slice(i + 1).map((b) => ({ src: b.url, title: blockTitle(show, b) }))}
-  />
-);
+  as?: "li" | "div";
+  children?: unknown;
+}) => {
+  const b = blocks[i]!;
+  return (
+    <Tag class="archive-block">
+      <PlayButton
+        src={b.url}
+        title={blockTitle(show, b)}
+        then={blocks.slice(i + 1).map((e) => ({ src: e.url, title: blockTitle(show, e) }))}
+      />
+      <span class="archive-title">
+        <a href={`/${show.slug}`}>{blockTitle(show, b)}</a>
+      </span>
+      <span class="archive-date">{day(b.date)}</span>
+      <span class="archive-length">{duration(b.seconds)}</span>
+      {children}
+    </Tag>
+  );
+};
 
 // Each show's recorded blocks, newest first, played (from the beginning, no
 // seeking) in the site's player, which shows each track while it plays. No
 // track lists: a block is its show, date and length.
 app.get("/archive", async (c) => {
-  const [shows, blocks] = await Promise.all([getShows(), archive()]);
+  const shows = await getShows();
+  const blocks = await archive(shows);
   const listed = scheduled(shows).filter((s) => blocks.has(s.slug));
   return c.render(
     <main class="page page-station page-archive">
@@ -446,15 +450,8 @@ app.get("/archive", async (c) => {
               {show.title}
             </h2>
             <ol class="archive-blocks">
-              {blocks.get(show.slug)!.map((b, i, all) => (
-                <li class="archive-block">
-                  <BlockButton show={show} blocks={all} i={i} />
-                  <span class="archive-title">
-                    <a href={`/${show.slug}`}>{show.title}</a>
-                  </span>
-                  <span class="archive-date">{day(b.date)}</span>
-                  <span class="archive-length">{duration(b.seconds)}</span>
-                </li>
+              {blocks.get(show.slug)!.map((_, i, all) => (
+                <BlockRow show={show} blocks={all} i={i} />
               ))}
             </ol>
           </section>
@@ -466,20 +463,17 @@ app.get("/archive", async (c) => {
 });
 
 // The track playing t seconds into an archive block, for the player (only
-// that track: never a block's track list). As /now.json.
+// that track, never a block's track list), as /now.json does live, and when
+// it ends (`until`, seconds into the block; absent for the last), so the
+// player asks again only then.
 app.get(`/archive/:block{${BLOCK}}/now.json`, async (c) => {
   const name = c.req.param("block");
-  const blocks = [...(await archive()).values()].flat();
-  if (!blocks.some((b) => b.name === name)) return c.notFound();
+  const show = await getShow(name.slice(0, -11));
+  if (!show || !(await inArchive(name))) return c.notFound();
   const t = c.req.query("t") ?? "";
   if (!/^\d+(\.\d+)?$/.test(t)) return c.text("t: seconds into the block", 400);
-  const track = await trackAt(name, Number(t));
-  return c.json({
-    track: track?.title ?? "",
-    artist: track?.artist ?? "",
-    album: track?.album ?? "",
-    cover: track?.cover ? coverUrl(track.cover) : "",
-  });
+  const { track, until } = await trackAt(name, Number(t));
+  return c.json({ ...trackJson(track), until });
 });
 
 app.get("/about", (c) => {

@@ -4,6 +4,9 @@ import { open, readFile } from "node:fs/promises";
 
 const PLAYS = process.env.PLAYS_DIR ?? "/plays";
 
+// A track's tags, as logged with each play and in archive sidecars.
+export type Track = Pick<Play, "title" | "artist" | "album" | "label" | "isrc" | "cover">;
+
 export type Play = {
   time: number; // Unix seconds
   show: string;
@@ -19,15 +22,17 @@ export type Play = {
 export const monthOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 const file = (month: string) => `${PLAYS}/${month}.jsonl`;
 
-// Skips a line that is still being written.
-const parse = (text: string): Play[] =>
+// JSON Lines (the play log, the archive's sidecars), skipping a line that is
+// still being written.
+export const parseJsonl = <T>(text: string): T[] =>
   text.split("\n").flatMap((line) => {
     try {
-      return line ? [JSON.parse(line) as Play] : [];
+      return line ? [JSON.parse(line) as T] : [];
     } catch {
       return [];
     }
   });
+const parse = parseJsonl<Play>;
 
 // Every play in a month ("YYYY-MM").
 export async function monthPlays(month: string): Promise<Play[]> {

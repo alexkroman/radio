@@ -183,7 +183,7 @@ test("cover art of the track on air is served", async ({ request }) => {
   await onAir("night");
   await expect(async () => {
     const now = await (await request.get("/now.json")).json();
-    expect(now).toMatchObject({ show: "night", title: "Fixture Night", track: "Midnight" });
+    expect(now).toMatchObject({ title: "Fixture Night", track: "Midnight" });
     const res = await request.get(now.cover);
     expect(res.status()).toBe(200);
     expect(res.headers()["content-type"]).toBe("image/jpeg");

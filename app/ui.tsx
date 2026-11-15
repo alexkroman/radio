@@ -1,5 +1,5 @@
 // Shared page parts for the public site (DESIGN: a printed radio listing).
-import type { Play } from "./plays.ts";
+import type { Play, Track } from "./plays.ts";
 import type { DjRef } from "./shows.ts";
 
 export const SITE_TITLE = process.env.SITE_TITLE || "Mazes Radio";
@@ -111,7 +111,7 @@ export const DjCredit = ({ djs, class: cls }: { djs: DjRef[]; class: string }) =
     </p>
   );
 
-export const coverUrl = (cover: string) => `/covers/${encodeURI(cover)}`;
+const coverUrl = (cover: string) => `/covers/${encodeURI(cover)}`;
 
 // A track's artwork, or the placeholder square when it has none.
 // Decorative unless `labelled` (now-playing positions).
@@ -126,16 +126,17 @@ export const Cover = ({ play, size, labelled }: { play?: Play; size: string; lab
     <span class={`cover ${size} cover-ph`} aria-hidden="true" />
   );
 
-// The track on air as the player bar shows it (client.ts `Now`), in
-// /now.json, with its show's slug and title.
-export const nowTrack = (play: Play | undefined, title: string) => ({
-  show: play?.show ?? "",
-  title,
-  track: play?.title ?? "",
-  artist: play?.artist ?? "",
-  album: play?.album ?? "",
-  cover: play?.cover ? coverUrl(play.cover) : "",
+// A track as the player shows it (client.ts `Track`): live in /now.json, and
+// in an archive block's now.json.
+export const trackJson = (t?: Track) => ({
+  track: t?.title ?? "",
+  artist: t?.artist ?? "",
+  album: t?.album ?? "",
+  cover: t?.cover ? coverUrl(t.cover) : "",
 });
+
+// The track on air and its show's title, in /now.json.
+export const nowTrack = (play: Play | undefined, title: string) => ({ title, ...trackJson(play) });
 
 // Re-fetches the page on "refresh" (sent by client.ts when the track on air
 // changes) and swaps in just the elements with these ids.
@@ -154,8 +155,7 @@ export const Poll = ({ path, ids }: { path: string; ids: string[] }) => (
 );
 
 // A time of day, in the listener's time zone once client.ts has run.
-export const Time = ({ at }: { at: Date }) => {
-  const d = at;
+export const Time = ({ at: d }: { at: Date }) => {
   return (
     <time class="time" datetime={d.toISOString()}>
       {d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}

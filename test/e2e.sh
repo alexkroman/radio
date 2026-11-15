@@ -131,9 +131,8 @@ offsets() { dc exec -T liquidsoap sed -n 's/^{"offset":\([0-9.]*\),.*/\1/p' "/ar
 served() { dc exec -T caddy wget -q -O /dev/null "http://icecast:8000/archive/$1"; }
 # Swap two shows' hours (Liquidsoap re-reads them within a minute).
 swap_hours() {
-  echo "edit_files '
-  a=\$(grep \"^hours:\" /shows/$1.md) b=\$(grep \"^hours:\" /shows/$2.md)
-  sed -i \"s/^hours:.*/\$b/\" /shows/$1.md && sed -i \"s/^hours:.*/\$a/\" /shows/$2.md'"
+  edit_files "a=\$(grep '^hours:' /shows/$1.md) b=\$(grep '^hours:' /shows/$2.md)
+    sed -i \"s/^hours:.*/\$b/\" /shows/$1.md && sed -i \"s/^hours:.*/\$a/\" /shows/$2.md"
 }
 
 step "archive plays are counted per block and day from Icecast's access log, apart from the stream"
@@ -178,7 +177,7 @@ step "a block boundary: the recording finishes its block, with its tracks, and s
 show=${block%-*-*-*.mp3}
 other=default
 [ "$show" != default ] || other=edge
-deploy_change "" "a new block" "$(swap_hours "$show" "$other")"
+deploy_change "" "a new block" "swap_hours $show $other"
 WAIT=90 wait_for finished "$block" || fail "$block wasn't moved to blocks/ when its block ended"
 wait_for recording_not "$block" || fail "no new block is being recorded after $block"
 seconds=$(($(size "blocks/$block") / 32000))
@@ -197,7 +196,7 @@ step "a block cut short isn't archived: it's kept from Icecast and the site"
 # Swap again before the new block reaches ARCHIVE_MIN_SECONDS (90).
 third=long
 [ "$show" != long ] || third=plain
-deploy_change "" "a short block" "$(swap_hours "$other" "$third")"
+deploy_change "" "a short block" "swap_hours $other $third"
 WAIT=90 wait_for too_short "$block" || fail "$block, cut short, wasn't moved to short/"
 ! finished "$block" || fail "$block, cut short, was archived"
 ! served "$block" || fail "Icecast serves $block, cut short"

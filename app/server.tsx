@@ -26,7 +26,8 @@ import {
 } from "./ui.tsx";
 
 const COVERS = process.env.COVERS_DIR ?? "/covers";
-const CONTACT_EMAIL = process.env.CONTACT_EMAIL || "hello@example.com";
+const CONTACT_EMAIL = process.env.CONTACT_EMAIL || "hello@mazesradio.com";
+const GITHUB_URL = "https://github.com/alexkroman/radio";
 // radio.liq: %mp3(bitrate = 256).
 const FORMAT = "MP3 · 256 kbps";
 
@@ -308,6 +309,15 @@ app.get("/manifesto", async (c) => {
             <dd>{FORMAT}</dd>
           </div>
         </dl>
+      </section>
+      <section class="prose" aria-labelledby="manifesto-yours">
+        <h2 id="manifesto-yours" class="label">
+          Start your own
+        </h2>
+        <p>
+          The code that runs this station is open source. Anyone can use it to start their own: add some
+          music, write a page for each channel and switch it on. It's all on <a href={GITHUB_URL}>GitHub</a>.
+        </p>
       </section>
       <section class="prose" aria-labelledby="manifesto-contact">
         <h2 id="manifesto-contact" class="label">

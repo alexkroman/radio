@@ -3,28 +3,29 @@
 # so e2e.sh can add and remove one, as a deploy does), nothing
 # published to the host, and a Playwright container driving it.
 services:
-  init:
-    # Override command: seed the shows volume with the fixture shows and the
-    # covers volume with pre-extracted fixture art (no caddy:/data in e2e, so
-    # the base chown for /data is dropped too).
+  # Seeds the shows volume with the fixture shows and the covers volume with
+  # pre-extracted fixture art, before init sets their owners as in production.
+  # test/e2e.sh also runs it to add and remove a show.
+  seed:
+    image: busybox:1.38.0
     command:
-      - sh
-      - -c
-      - |
-        set -e
-        cp -r /fixture-shows/. /shows/
-        chmod -R a+rX /shows
-        cp -r /fixture-covers/. /covers/
-        chown -R 10001:10001 /logs /covers /plays
-        chmod -R u+rwX,g+rwX /logs /covers /plays
-        chmod g+s /logs /covers /plays
+      [
+        "sh",
+        "-c",
+        "cp -r /fixture-shows/. /shows/ && chmod -R a+rX /shows && cp -r /fixture-covers/. /covers/",
+      ]
+    volumes:
+      - e2e-shows:/shows
+      - e2e-covers:/covers
+      - ./test/fixtures/shows:/fixture-shows:ro
+      - ./test/fixtures/covers:/fixture-covers:ro
+  init:
     volumes:
       - e2e-logs:/logs
       - e2e-covers:/covers
       - e2e-plays:/plays
-      - ./test/fixtures/covers:/fixture-covers:ro
-      - e2e-shows:/shows
-      - ./test/fixtures/shows:/fixture-shows:ro
+    depends_on:
+      seed: { condition: service_completed_successfully }
   icecast:
     volumes:
       - e2e-logs:/var/log/icecast

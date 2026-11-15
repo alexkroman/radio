@@ -34,26 +34,41 @@ export async function monthPlays(month: string): Promise<Play[]> {
   return parse(await readFile(file(month), "utf8").catch(() => ""));
 }
 
-// The last ~256 KB of a month's log: plenty for a show page's history.
-async function tail(month: string, bytes = 262_144): Promise<Play[]> {
+// The last ~256 KB of a month's log (plenty for a show page's history), and
+// whether that is the whole log. Kept until the log grows: pages and their
+// 15 s polls all read it.
+const TAIL = 262_144;
+const tails = new Map<string, { size: number; plays: Play[] }>();
+async function tail(month: string): Promise<{ plays: Play[]; whole: boolean }> {
   const fh = await open(file(month)).catch(() => undefined);
-  if (!fh) return [];
+  if (!fh) return { plays: [], whole: true };
   try {
     const { size } = await fh.stat();
-    const length = Math.min(size, bytes);
-    const { buffer } = await fh.read(Buffer.alloc(length), 0, length, size - length);
-    const text = buffer.toString("utf8");
-    return parse(size > bytes ? text.slice(text.indexOf("\n") + 1) : text);
+    let hit = tails.get(month);
+    if (hit?.size !== size) {
+      const length = Math.min(size, TAIL);
+      const { buffer } = await fh.read(Buffer.alloc(length), 0, length, size - length);
+      const text = buffer.toString("utf8");
+      hit = { size, plays: parse(size > TAIL ? text.slice(text.indexOf("\n") + 1) : text) };
+      // Newest last; only this month and the one before are ever asked for.
+      tails.delete(month);
+      tails.set(month, hit);
+      if (tails.size > 2) tails.delete(tails.keys().next().value!);
+    }
+    return { plays: hit.plays, whole: size <= TAIL };
   } finally {
     await fh.close();
   }
 }
 
-// The newest plays of every show, oldest first (from this month's and last month's logs).
+// The newest plays of every show, oldest first: this month's log, and last
+// month's too while this month's is still short (the first day or so).
 async function recent(): Promise<Play[]> {
   const now = new Date();
-  const months = [monthOf(new Date(now.getFullYear(), now.getMonth() - 1, 1)), monthOf(now)];
-  return (await Promise.all(months.map((m) => tail(m)))).flat();
+  const current = await tail(monthOf(now));
+  if (!current.whole) return current.plays;
+  const last = await tail(monthOf(new Date(now.getFullYear(), now.getMonth() - 1, 1)));
+  return [...last.plays, ...current.plays];
 }
 
 // A show's newest plays, newest first.

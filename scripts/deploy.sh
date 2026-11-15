@@ -50,53 +50,20 @@ fi
 HOST=ubuntu@$IP
 
 # Mirror local files to the server. -O: the ubuntu user can't set times on the
-# dirs compose.yml's init service owns. -i lists each change as it happens; tee
-# keeps a copy in $log to know what changed (sh has no pipefail, so rsync's exit
-# status goes through $log.status).
-log=$(mktemp)
-trap 'rm -f "$log" "$log.status"' EXIT
-rs() {
-  { rsync -rltO --delete --chmod=D755,F644 -e "$SSH" -i "$@" ||
-    echo $? >"$log.status"; } | tee -a "$log"
-  [ ! -s "$log.status" ]
-}
-
-# Sync everything.
+# dirs compose.yml's init service owns. -i lists each change.
+rs() { rsync -rltO --delete --chmod=D755,F644 -e "$SSH" -i "$@"; }
 { git ls-files -z && printf '.env\0'; } | rs --from0 --files-from=- ./ "$HOST:radio/"
 rs music covers shows "$HOST:radio/"
-out=$(cat "$log")
 
 # Pre-create bind-mounted dirs so Docker doesn't create them as root on first run.
 # No build attestations: they're stamped with the build time, so every deploy
 # made a new app image (even one built all from cache) and recreated the app.
+# Then reload Icecast and restart Liquidsoap if what they run is out of date
+# (a show added or removed, radio.liq edited); neither drops a listener.
 $SSH "$HOST" 'chmod 600 radio/.env && cd radio &&
   mkdir -p music plays logs covers &&
-  BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose up -d --build --remove-orphans'
-
-changed() { printf '%s\n' "$out" | grep -qF "$1"; }
-
-# Neither step below drops a listener. Icecast builds each show's fallback mount
-# from shows/ (icecast/config.sh); reloading its config keeps everyone
-# connected, unlike a restart. Liquidsoap reads radio.liq once at startup and
-# builds one output per show slug; while it restarts, listeners hear the
-# fallback. So when a show file is added or removed (rsync's ">f+++++++++" and
-# "*deleting"), reload Icecast first (the new show gets its fallback) and then
-# restart Liquidsoap. Edits to a show (">f.st......") or anything under
-# shows/djs/ need neither: only the app reads them, on every request.
-shows_changed=$(printf '%s\n' "$out" | grep -cE '^(>f\+{9}|\*deleting) +shows/[^/]+\.md$' || true)
-if [ "$shows_changed" -gt 0 ] || changed icecast/; then
-  $SSH "$HOST" 'cd radio && docker compose exec -T icecast sh /icecast/config.sh reload'
-fi
-# radio.liq is a single-file bind mount, so the container keeps the file it
-# started with after rsync replaces it: restart when that differs from the
-# synced one, rather than when this run's rsync changed it, so a deploy that
-# stopped after the sync but before this restart is caught up by the next one.
-# (A restart mounts the file afresh.)
-liq_stale=$($SSH "$HOST" 'cd radio &&
-  docker compose exec -T liquidsoap cat /radio.liq | cmp -s - radio.liq || echo yes')
-if [ "$shows_changed" -gt 0 ] || [ -n "$liq_stale" ]; then
-  $SSH "$HOST" 'cd radio && docker compose restart liquidsoap'
-fi
+  BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose up -d --build --remove-orphans &&
+  sh scripts/reconcile.sh'
 
 # Caddy reloads its config in place without dropping connections (a no-op
 # when it's unchanged), so do it every time, which also catches up after an

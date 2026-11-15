@@ -7,6 +7,8 @@ import type { Play } from "../app/plays.ts";
 
 export const BASE = process.env.BASE_URL ?? "https://localhost";
 export const SITE_PASSWORD = process.env.SITE_PASSWORD ?? "";
+// For test.use(): a browser and `request` with no login cookie.
+export const LOGGED_OUT = { storageState: { cookies: [], origins: [] } };
 export const month = new Date().toISOString().slice(0, 7);
 
 // Status, type and first ~16 KB of a (never-ending) stream.

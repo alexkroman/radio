@@ -21,24 +21,23 @@ settings.clock.log_delay_threshold := 5.
 # Autocue measures each track ahead of play (default: at up to 70x real time)
 # and skips a track whose measuring it estimates at over 10 s (default), i.e.
 # any over ~12 min: those then played without loudness normalization or
-# silence trimming. Measure at up to 30x, which spreads out its CPU use,
-# and allow 90 s: tracks up to 45 min (gloaming has a few up to 2 hours, which
-# play unmeasured). A track is measured while the one before it plays.
+# silence trimming. scripts/import.sh removes tracks over 15 min, so measure
+# at up to 30x, which spreads out its CPU use, and allow 40 s: tracks up to
+# 20 min. A track is measured while the one before it plays.
 settings.autocue.internal.ratio := 30.
-settings.autocue.internal.timeout := 90.
+settings.autocue.internal.timeout := 40.
 enable_autocue_metadata()
 
 # Preparing a track (measuring included) may take as long as autocue allows.
 # The measuring isn't cut off at this limit (default 29 s), but Liquidsoap
-# warned "Time limit exceeded" for every track over ~15 min.
-settings.request.timeout := 120.
+# warns "Time limit exceeded" for a track that takes longer.
+settings.request.timeout := 45.
 
 # Every shows/<slug>.md is a 24/7 MP3 stream on Icecast mount /<slug> (public
 # at /<slug>/stream via Caddy) playing music/<slug>/ on shuffle. Each play is
 # appended to /plays/YYYY-MM.jsonl (read by the app's page and report).
-# Adding or removing a show needs (neither drops a listener):
-#   docker compose exec icecast sh /icecast/config.sh reload
-#   docker compose restart liquidsoap
+# Adding or removing a show needs an Icecast reload and a Liquidsoap restart
+# (neither drops a listener): scripts/reconcile.sh does both when needed.
 
 # Artists of a track (split on ",", "&", "feat.", "x", "with").
 def artists_of(a) =
@@ -225,4 +224,8 @@ def show(f) =
   )
 end
 
-list.iter(show, file.ls(absolute=true, pattern="*.md", "/shows"))
+shows = file.ls(absolute=true, pattern="*.md", "/shows")
+list.iter(show, shows)
+
+# The shows this process streams, for scripts/reconcile.sh to compare with /shows.
+file.write(data=string.concat(separator="\n", shows), "/tmp/shows")

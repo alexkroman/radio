@@ -4,6 +4,14 @@ import type { DjRef, Show } from "./shows.ts";
 
 export const SITE_TITLE = process.env.SITE_TITLE || "Mazes Radio";
 
+// The site's icons (app/public/): linked from every page, served from the root
+// (server.tsx) and public without a login (login.tsx).
+export const ICONS = [
+  { rel: "icon", href: "/favicon.ico", sizes: "any" },
+  { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+  { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+];
+
 // The labyrinth mark (design hand-off assets/logo-mark.svg), decorative here:
 // the link around it carries the name. The lines follow --color-ink (via the
 // link's color), so the mark turns white in dark mode; the centre stays orange.

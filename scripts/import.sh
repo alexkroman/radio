@@ -122,9 +122,10 @@ for show_dir in "${show_dirs[@]}"; do
   echo "── Deduplication"
   fdupes --delete --noprompt --quiet "$show_dir"
 
-  # 1b. Remove tracks over 15 minutes (to the Trash). Liquidsoap's autocue
-  #     can't measure a track that long in time (radio.liq), so it would play
-  #     without loudness normalization or silence trimming. Length is ffprobe's,
+  # 1b. Remove tracks over 15 minutes (to the Trash): the stations' limit.
+  #     radio.liq's autocue settings measure tracks up to 20 minutes; a
+  #     longer one would play without loudness normalization or silence
+  #     trimming. Length is ffprobe's,
   #     not beets': beets has some files' lengths badly wrong.
   echo "── Removing tracks over $((MAX_SECONDS / 60)) minutes"
   while IFS= read -r -d '' file; do

@@ -86,7 +86,7 @@ djs: [Ana Ruiz]
 ---
 ```
 
-The show files are in the repo. Adding or removing a show needs `docker compose exec icecast sh /icecast/config.sh reload && docker compose restart liquidsoap` (no listener is dropped); editing a title or description shows up immediately.
+The show files are in the repo. Adding or removing a show needs an Icecast reload and a Liquidsoap restart, which `scripts/reconcile.sh` does (a deploy runs it; no listener is dropped); editing a title or description shows up immediately.
 
 ## Where things are
 

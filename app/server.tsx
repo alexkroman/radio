@@ -16,6 +16,7 @@ import {
   Cover,
   nowTrack,
   DjCredit,
+  ICONS,
   Markdown,
   npData,
   PlayButton,
@@ -129,7 +130,11 @@ app.use(
   "/assets/*",
   serveStatic({ root: "dist/public", rewriteRequestPath: (p) => p.replace(/^\/assets/, "") }),
 );
-app.use("/:file{favicon\\.ico|favicon\\.svg|apple-touch-icon\\.png}", serveStatic({ root: "dist/public" }));
+app.on(
+  ["GET", "HEAD"],
+  ICONS.map((i) => i.href),
+  serveStatic({ root: "dist/public" }),
+);
 
 // The player bar's mount, with the station it shows before any is played or
 // found on the page: the first show.
@@ -146,9 +151,9 @@ app.use(
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false}' />
         <title>{title ? `${title} — ${SITE_TITLE}` : SITE_TITLE}</title>
-        <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        {ICONS.map((icon) => (
+          <link {...icon} />
+        ))}
         <link rel="stylesheet" href="/assets/app.css" />
         {script && <script src="/assets/app.js" defer />}
       </head>

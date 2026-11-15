@@ -34,9 +34,8 @@ let shown: Show | undefined;
 // The shown station's track, from the page or now.json.
 type Track = { track: string; artist: string; cover: string };
 let now: Track = { track: "", artist: "", cover: "" };
-// The track last shown for the playing station (slug, track, artist).
+// The track last shown for the shown station (slug, track, artist).
 let nowKey = "";
-let nowTimer: ReturnType<typeof setInterval> | undefined;
 // When a dropped stream stops being retried (0: not retrying).
 let retryUntil = 0;
 
@@ -52,7 +51,23 @@ function readPage() {
   if (!shown) return;
   // ui.tsx npData sets all three.
   const np = document.querySelector<HTMLElement>(`[data-np="${shown.slug}"]`)?.dataset as Track | undefined;
-  if (np?.track) now = { track: np.track, artist: np.artist, cover: np.cover };
+  if (np?.track) setNow({ track: np.track, artist: np.artist, cover: np.cover });
+}
+
+// A new track for the shown station: the bar shows it (on the next sync), and
+// the lock screen too when the station is playing.
+function setNow(next: Track) {
+  const key = `${shown?.slug}\n${next.track}\n${next.artist}`;
+  if (key === nowKey) return;
+  nowKey = key;
+  now = next;
+  if (!active || active.slug !== shown?.slug) return;
+  session.metadata = new MediaMetadata({
+    title: now.track,
+    artist: now.artist,
+    album: active.title,
+    artwork: now.cover ? [{ src: now.cover, type: "image/jpeg" }] : [],
+  });
 }
 
 function pickShown() {
@@ -87,27 +102,24 @@ function sync() {
   setBar(shown && { title: shown.title, ...now, playing: !!active });
 }
 
-// The shown station's track from now.json, for the bar and the page, and the
-// lock screen when it's playing.
+// The shown station's track from now.json, when the page doesn't have it.
 async function fetchNow(slug: string) {
   const next = await fetch(`/${slug}/now.json`)
     .then((r) => (r.ok ? (r.json() as Promise<Track>) : undefined))
     .catch(() => undefined);
-  const key = `${slug}\n${next?.track}\n${next?.artist}`;
-  if (!next || shown?.slug !== slug || key === nowKey) return;
-  nowKey = key;
-  now = next;
+  if (!next || shown?.slug !== slug) return;
+  setNow(next);
   sync();
-  if (active?.slug !== slug) return;
-  // The page's now playing (and with it the cover) catches up.
-  if (document.getElementById("poll")) htmx.trigger("#poll", "refresh");
-  session.metadata = new MediaMetadata({
-    title: now.track,
-    artist: now.artist,
-    album: active.title,
-    artwork: now.cover ? [{ src: now.cover, type: "image/jpeg" }] : [],
-  });
 }
+
+// The one poll, every 15 s. The page refreshes itself (ui.tsx Poll), which
+// brings the playing station's track along when the page shows it (readPage,
+// on settle); otherwise, or in a hidden tab (the lock screen), now.json does.
+setInterval(() => {
+  const poll = !document.hidden && document.getElementById("poll");
+  if (poll) htmx.trigger(poll, "refresh");
+  if (active && !(poll && document.querySelector(`[data-np="${active.slug}"]`))) void fetchNow(active.slug);
+}, 15_000);
 
 function playStream(slug: string) {
   audio.src = `/${slug}/stream`;
@@ -121,21 +133,18 @@ function start(slug: string, title: string) {
   active = { slug, title };
   shown = active;
   now = { track: "", artist: "", cover: "" };
+  nowKey = "";
   readPage();
   sync();
   retryUntil = 0;
-  nowKey = "";
   // Synchronously, in the tap: iOS allows play() only there.
   playStream(slug);
   void fetchNow(slug);
-  clearInterval(nowTimer);
-  nowTimer = setInterval(() => active && void fetchNow(active.slug), 15_000);
 }
 
 function stop() {
   active = undefined;
   session.playbackState = "paused";
-  clearInterval(nowTimer);
   sync();
   audio.pause();
   // Drop the connection, rather than buffer a live stream nobody hears.
@@ -191,9 +200,6 @@ document.addEventListener("click", (e) => {
 document.addEventListener("htmx:beforeRequest", (e) => {
   const poll = e.target as Element;
   if (poll.id !== "poll") return;
-  // Don't poll while the tab is hidden (an hx-trigger filter would need eval,
-  // which the CSP forbids).
-  if (document.hidden) return e.preventDefault();
   // A refresh still in flight when its page is swapped out (a link, back) would
   // otherwise land in the next page: htmx swaps a removed element's
   // hx-select-oob into the document. Its events no longer reach `document`.

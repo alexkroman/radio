@@ -116,14 +116,14 @@ export const npData = (slug: string, play?: Play) => {
   return { "data-np": slug, "data-track": track, "data-artist": artist, "data-cover": cover };
 };
 
-// Re-fetches the page every 15 s (and on "refresh", sent when the stream's
-// metadata changes) and swaps in just the elements with these ids.
+// Re-fetches the page on "refresh" (sent every 15 s by client.ts's one poll)
+// and swaps in just the elements with these ids.
 export const Poll = ({ path, ids }: { path: string; ids: string[] }) => (
   <div
     id="poll"
     hidden
     hx-get={path}
-    hx-trigger="every 15s, refresh"
+    hx-trigger="refresh"
     hx-select="#poll"
     hx-select-oob={ids.map((id) => `#${id}`).join(",")}
     hx-target="this"

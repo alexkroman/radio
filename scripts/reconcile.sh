@@ -11,7 +11,10 @@
 #     mount, so the container still has the one it started with. Listeners
 #     hear their show's fallback meanwhile. A container `up` just created
 #     gets up to 30 s to write /tmp/shows first.
-# Edits to a show need neither: the app re-reads a show file when it changes.
+#   - Caddy reloads its config in place, keeping every connection (a no-op
+#     when it's unchanged).
+# Edits to a show and music need none of these: the app re-reads a show file
+# when it changes, and Liquidsoap watches the music folders.
 # Run from the checkout. COMPOSE overrides the compose command (test/e2e.sh's
 # names its project and files).
 set -eu
@@ -28,3 +31,6 @@ if ! dc exec -T liquidsoap cat /radio.liq | cmp -s - radio.liq ||
   sleep 5
   dc restart liquidsoap >/dev/null
 fi
+# Its output (info lines like "using config from file") only if it fails.
+out=$(dc exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>&1) ||
+  { printf '%s\n' "$out" >&2 && exit 1; }

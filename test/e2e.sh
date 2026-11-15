@@ -25,11 +25,14 @@ docker buildx bake --load ${bake_flags[@]+"${bake_flags[@]}"} "${files[@]}" app 
 dc up -d --no-build caddy liquidsoap
 dc run --rm --no-deps e2e npx playwright test "$@"
 
-# Deploys don't drop listeners: add and then remove a show and run what
-# scripts/deploy.sh runs after a sync (scripts/reconcile.sh) with listeners
-# connected, and check after each that they still are and on their own show
-# (Icecast's per-show silence fallbacks hold them while Liquidsoap restarts;
-# see icecast/config.sh).
+# Deploys disturb no listener. With listeners playing through Caddy (as
+# players do, test/listen.ts), run a deploy's server side (`compose up`, then
+# scripts/reconcile.sh) for each kind of change, and check that they stay
+# connected, on their own show, without a pause in the audio longer than
+# MAX_GAP_MS (Icecast's burst gives a player ~10 s of audio in hand), and that
+# only what had to restart did. Icecast's per-show silence fallbacks hold
+# listeners while Liquidsoap restarts (icecast/config.sh).
+MAX_GAP_MS=5000
 fail() {
   echo "e2e deploy: $*" >&2
   exit 1
@@ -52,8 +55,21 @@ listeners() {
 has_listeners() { [ "$(listeners "$1")" = "$2" ]; }
 # /$1 has $2 listeners; a listener moved to a fallback or another show never comes back.
 expect() { wait_for has_listeners "$1" "$2" || fail "after $3, /$1 has $(listeners "$1") listeners, not $2"; }
-listen() { dc exec -d caddy wget -qO /dev/null "http://icecast:8000/$1"; }
-edit_shows() { dc run --rm --no-deps -T seed sh -c "$1"; }
+# A listener on /$1/stream through Caddy, in the background (radio-e2e-listen-$1).
+listen() { dc run -d --no-deps --name "radio-e2e-listen-$1" e2e node test/listen.ts "$1" >/dev/null; }
+# Stop /$1's listener and check its log: never dropped, no pause over MAX_GAP_MS.
+heard() {
+  local log longest
+  docker stop "radio-e2e-listen-$1" >/dev/null
+  log=$(docker logs "radio-e2e-listen-$1")
+  docker rm "radio-e2e-listen-$1" >/dev/null
+  printf '%s\n' "$log" | sed "s|^|  /$1: |"
+  longest=$(printf '%s\n' "$log" | sed -n 's/.* longest gap \([0-9]*\) ms$/\1/p')
+  [ -n "$longest" ] || fail "/$1's listener was dropped"
+  [ "$longest" -le "$MAX_GAP_MS" ] || fail "/$1's listener heard a ${longest} ms pause"
+}
+# Change the shows or music volumes (as a deploy's sync does).
+edit_files() { dc run --rm --no-deps -T seed sh -c "$1"; }
 has_fallback() { dc exec -T icecast grep -q "<fallback-mount>/fallback-$1.mp3<" /tmp/icecast.xml; }
 # Times Icecast has moved listeners from /$1's fallback back to /$1.
 returns() {
@@ -61,16 +77,26 @@ returns() {
     /var/log/icecast/error.log || true
 }
 returned() { [ "$(returns "$1")" -gt "$2" ]; }
-liquidsoap_started() { docker inspect -f '{{.State.StartedAt}}' "$(dc ps -q liquidsoap)"; }
-# Run scripts/reconcile.sh, as a deploy does, and wait until the listeners on
+# When each long-running container started: unchanged means not restarted.
+started() {
+  local service
+  for service in icecast liquidsoap app caddy; do
+    printf '%s %s\n' "$service" "$(docker inspect -f '{{.State.StartedAt}}' "$(dc ps -q "$service")")"
+  done
+}
+# The changed lines of started's output: the containers that restarted.
+restarted() { { diff <(printf '%s\n' "$1") <(started) || true; } | sed -n 's/^> \([a-z]*\) .*/\1/p' | xargs; }
+# A deploy's server side (scripts/deploy.sh): `compose up` (the images are
+# already built), then scripts/reconcile.sh. Then wait until the listeners on
 # each of the shows given went to their fallback and back (Liquidsoap
 # restarted). Waiting on Icecast's log, not the listener counts: a stopped
 # container's connections can linger in Icecast (until its source-timeout)
-# with listeners still attached, which would pass a count without testing the
-# fallback at all.
-reconcile() {
+# with listeners still attached, which would pass a count without testing
+# the fallback at all.
+deploy() {
   local slug before=() i=0
   for slug in "$@"; do before+=("$(returns "$slug")"); done
+  dc up -d --no-build --remove-orphans caddy liquidsoap 2>/dev/null
   COMPOSE="docker compose -p radio-e2e --env-file test/test.env ${files[*]}" sh scripts/reconcile.sh
   for slug in "$@"; do
     wait_for returned "$slug" "${before[i]}" ||
@@ -78,29 +104,51 @@ reconcile() {
     i=$((i + 1))
   done
 }
-no_listeners() { [ -z "$(listeners "$1")" ]; }
+# Make a change (the command $3, described by $2) and deploy it, then check
+# that exactly the containers named in $1 (none if "") restarted, and that
+# /default's listener is still there. Further arguments go to deploy.
+deploy_change() {
+  local want=$1 change=$2 before got
+  before=$(started)
+  eval "$3"
+  shift 3
+  deploy "$@"
+  got=$(restarted "$before")
+  [ "$got" = "$want" ] || fail "deploying $change restarted \"$got\", not \"$want\""
+  expect default 1 "deploying $change"
+}
 
 listen default
 expect default 1 "connecting"
 
-step "a deploy with no show added or removed restarts nothing"
-started=$(liquidsoap_started)
-reconcile
-[ "$(liquidsoap_started)" = "$started" ] || fail "reconcile.sh restarted Liquidsoap with nothing changed"
+step "nothing changed: nothing restarts"
+deploy_change "" "nothing" :
 
-step "adding a show"
-edit_shows 'printf -- "---\ntitle: Added\n---\n" >/shows/added.md && chmod a+r /shows/added.md'
-reconcile default
+step "a new app: only the app restarts"
+deploy_change app "a new app" "dc up -d --no-build --no-deps --force-recreate app 2>/dev/null"
+
+step "a Caddyfile change: Caddy reloads in place"
+deploy_change "" "a Caddyfile change" "dc exec -T caddy caddy reload --config /etc/caddy/Caddyfile --force 2>/dev/null"
+
+step "music added and removed: nothing restarts"
+deploy_change "" "a music change" \
+  "edit_files 'cp /music/night/*.mp3 /music/default/ && rm \"/music/default/Alpha Artist- First Light.mp3\"'"
+
+step "a show added: Liquidsoap restarts"
+deploy_change liquidsoap "a new show" \
+  "edit_files 'printf -- \"---\\ntitle: Added\\n---\\n\" >/shows/added.md && chmod a+r /shows/added.md'" default
 has_fallback added || fail "the reload didn't give the new show a fallback"
-expect default 1 "deploying a new show"
 listen added
 expect added 1 "connecting to the new show"
 
-step "removing a show"
-edit_shows 'rm /shows/night.md'
-reconcile default added
+step "a show removed: Liquidsoap restarts"
+deploy_change liquidsoap "a removed show" "edit_files 'rm /shows/night.md'" default added
 ! has_fallback night || fail "the reload kept the removed show's fallback"
-expect default 1 "deploying a removed show"
 expect added 1 "deploying a removed show (the new show's fallback)"
+no_listeners() { [ -z "$(listeners "$1")" ]; }
 wait_for no_listeners night || fail "the removed show is still streaming"
-step "listeners stayed connected through adding and removing a show"
+
+step "what the listeners heard"
+heard default
+heard added
+step "listeners stayed connected, without a pause over ${MAX_GAP_MS} ms, through every deploy"

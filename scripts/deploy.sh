@@ -58,21 +58,12 @@ rs music covers shows "$HOST:radio/"
 # Pre-create bind-mounted dirs so Docker doesn't create them as root on first run.
 # No build attestations: they're stamped with the build time, so every deploy
 # made a new app image (even one built all from cache) and recreated the app.
-# Then reload Icecast and restart Liquidsoap if what they run is out of date
-# (a show added or removed, radio.liq edited); neither drops a listener.
+# Then bring Icecast, Liquidsoap and Caddy up to date (scripts/reconcile.sh),
+# which drops no listener.
 $SSH "$HOST" 'chmod 600 radio/.env && cd radio &&
   mkdir -p music plays logs covers &&
   BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose up -d --build --remove-orphans &&
   sh scripts/reconcile.sh'
-
-# Caddy reloads its config in place without dropping connections (a no-op
-# when it's unchanged), so do it every time, which also catches up after an
-# interrupted deploy. Its output (info lines like "using config from file")
-# is shown only if the reload fails.
-# shellcheck disable=SC2016 # $out expands on the server
-$SSH "$HOST" 'cd radio &&
-  out=$(docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>&1) ||
-  { printf "%s\n" "$out" >&2; exit 1; }'
 
 # Back up the play log (the only record for SoundExchange reports) to
 # backup/plays/. Never deletes, and never touches the local plays/.

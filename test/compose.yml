@@ -1,23 +1,28 @@
 # End-to-end overlay for compose.yml (run with test/e2e.sh): the real stack on
-# fixture shows/music, with shows/logs/covers/plays in throwaway volumes (shows
-# so e2e.sh can add and remove one, as a deploy does), nothing
+# fixture shows/music, with shows/music/logs/covers/plays in throwaway volumes
+# (shows and music so e2e.sh can change them, as a deploy does), nothing
 # published to the host, and a Playwright container driving it.
 services:
-  # Seeds the shows volume with the fixture shows and the covers volume with
-  # pre-extracted fixture art, before init sets their owners as in production.
-  # test/e2e.sh also runs it to add and remove a show.
+  # Seeds the shows, music and covers volumes from the fixtures, before init
+  # sets their owners as in production; once, as test/e2e.sh's deploys run it
+  # again (`up` starts init and so this). e2e.sh also runs it to change shows
+  # and music.
   seed:
     image: busybox:1.38.0
     command:
-      [
-        "sh",
-        "-c",
-        "cp -r /fixture-shows/. /shows/ && chmod -R a+rX /shows && cp -r /fixture-covers/. /covers/",
-      ]
+      - sh
+      - -c
+      - |
+        [ -e /music/.seeded ] && exit
+        cp -r /fixture-shows/. /shows/ && cp -r /fixture-music/. /music/ && cp -r /fixture-covers/. /covers/
+        chmod -R a+rX /shows /music
+        touch /music/.seeded
     volumes:
       - e2e-shows:/shows
+      - e2e-music:/music
       - e2e-covers:/covers
       - ./test/fixtures/shows:/fixture-shows:ro
+      - ./test/fixtures/music:/fixture-music:ro
       - ./test/fixtures/covers:/fixture-covers:ro
   init:
     volumes:
@@ -33,7 +38,7 @@ services:
   liquidsoap:
     volumes:
       - e2e-shows:/shows:ro
-      - ./test/fixtures/music:/music:ro
+      - e2e-music:/music:ro
       - e2e-covers:/covers:ro
       - e2e-plays:/plays
   app:
@@ -63,6 +68,7 @@ services:
 
 volumes:
   e2e-shows: {}
+  e2e-music: {}
   e2e-logs: {}
   e2e-covers: {}
   e2e-plays: {}

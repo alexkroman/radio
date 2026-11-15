@@ -78,20 +78,9 @@ button {
   --width: var(--width-index);
 }
 
-.page-station {
-  --width: var(--width-station);
-
-  gap: 56px;
-}
-
+.page-station,
 .page-manifesto {
   --width: var(--width-prose);
-}
-
-.page-dj {
-  --width: var(--width-station);
-
-  gap: 56px;
 }
 
 /* ── Site header + logo lockup ── */
@@ -373,13 +362,16 @@ img.cover {
   color: var(--color-muted);
 }
 
-/* stylelint-disable-next-line no-descending-specificity -- unrelated links */
-.credit a {
+/* Underlined links: DJ credits and body text. */
+/* stylelint-disable no-descending-specificity -- unrelated links */
+.credit a,
+.prose p a {
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
   text-decoration-color: var(--color-link-underline);
 }
+/* stylelint-enable no-descending-specificity */
 
 .station-credit {
   margin-top: 2px;
@@ -492,7 +484,6 @@ img.cover {
 
 .history li {
   display: flex;
-  flex-wrap: nowrap;
   align-items: center;
   gap: 4px 20px;
   padding: 12px 0;
@@ -568,14 +559,6 @@ img.cover {
   font: var(--type-body);
   color: var(--color-body);
   list-style: disc;
-}
-
-/* stylelint-disable-next-line no-descending-specificity -- body-text links only */
-.prose p a {
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-  text-decoration-color: var(--color-link-underline);
 }
 
 .streams {

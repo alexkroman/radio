@@ -14,7 +14,7 @@ import { reports } from "./reports.tsx";
 import { getDj, getShow, getShows, type Show, SLUG } from "./shows.ts";
 import {
   Cover,
-  coverUrl,
+  nowTrack,
   DjCredit,
   Markdown,
   npData,
@@ -176,17 +176,16 @@ app.route("/reports", reports);
 
 app.get("/", async (c) => {
   const [shows, latest] = await Promise.all([getShows(), latestPlays()]);
-  const rows = shows.map((s) => ({ ...s, play: latest.get(s.slug) }));
   return c.render(
     <main class="page page-index">
       <SiteHeader current="stations" home />
       <section id="stations" class="stations" aria-label="Stations">
-        {rows.map((s, i) => (
-          <StationRow show={s} play={s.play} num={i + 1} />
+        {shows.map((s, i) => (
+          <StationRow show={s} play={latest.get(s.slug)} num={i + 1} />
         ))}
       </section>
       <footer class="footer">{c.req.header("host")}</footer>
-      <Poll path="/" ids={rows.map((s) => `np-${s.slug}`)} />
+      <Poll path="/" ids={shows.map((s) => `np-${s.slug}`)} />
     </main>,
   );
 });
@@ -429,11 +428,7 @@ app.get(`/:slug{${SLUG}}/now.json`, async (c) => {
   const slug = c.req.param("slug");
   const [show, [play]] = await Promise.all([getShow(slug), recentPlays(slug, 1)]);
   if (!show) return c.notFound();
-  return c.json({
-    track: play?.title ?? "",
-    artist: play?.artist ?? "",
-    cover: play?.cover ? coverUrl(play.cover) : "",
-  });
+  return c.json(nowTrack(play));
 });
 
 // Per-track covers extracted by scripts/import.sh → covers/<show>/<stem>.jpg

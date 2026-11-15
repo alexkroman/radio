@@ -90,10 +90,10 @@ export async function loggedPlays(): Promise<Play[]> {
 }
 
 // Reload until the now playing track matches (the show may not have logged it yet).
-export async function waitForTrack(page: Page, text: string | RegExp, selector = "#np .np-track") {
+export async function waitForTrack(page: Page, text: string | RegExp) {
   await expect(async () => {
     await page.reload();
-    await expect(page.locator(selector)).toHaveText(text, { timeout: 1000 });
+    await expect(page.locator("#np .np-track")).toHaveText(text, { timeout: 1000 });
   }).toPass();
 }
 

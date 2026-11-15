@@ -87,7 +87,7 @@ export const DjCredit = ({ djs, class: cls }: { djs: DjRef[]; class: string }) =
     </p>
   );
 
-export const coverUrl = (cover: string) => `/covers/${encodeURI(cover)}`;
+const coverUrl = (cover: string) => `/covers/${encodeURI(cover)}`;
 
 // A track's artwork, or the placeholder square when it has none.
 // Decorative unless `labelled` (now-playing positions).
@@ -102,13 +102,19 @@ export const Cover = ({ play, size, labelled }: { play?: Play; size: string; lab
     <span class={`cover ${size} cover-ph`} aria-hidden="true" />
   );
 
-// Data the client reads to fill the player bar for a station.
-export const npData = (slug: string, play?: Play) => ({
-  "data-np": slug,
-  "data-track": play?.title ?? "",
-  "data-artist": play?.artist ?? "",
-  "data-cover": play?.cover ? coverUrl(play.cover) : "",
+// A station's current track as the player bar shows it (client.ts `Track`):
+// served as /<slug>/now.json and as the data-* attributes of npData.
+export const nowTrack = (play?: Play) => ({
+  track: play?.title ?? "",
+  artist: play?.artist ?? "",
+  cover: play?.cover ? coverUrl(play.cover) : "",
 });
+
+// Data the client reads to fill the player bar for a station.
+export const npData = (slug: string, play?: Play) => {
+  const { track, artist, cover } = nowTrack(play);
+  return { "data-np": slug, "data-track": track, "data-artist": artist, "data-cover": cover };
+};
 
 // Re-fetches the page every 15 s (and on "refresh", sent when the stream's
 // metadata changes) and swaps in just the elements with these ids.

@@ -432,7 +432,7 @@ img.cover {
 }
 
 .next {
-  margin: 0;
+  margin-block: 0;
   font: var(--type-small);
   color: var(--color-muted);
 }

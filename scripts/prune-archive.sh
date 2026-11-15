@@ -23,7 +23,7 @@ find . -maxdepth 1 -name '*.mp3' -mmin +20100 -print -delete | sed 's|^\./|prune
 # Newest first by name (the date), so each show's first $keep stay. (Blocks
 # are named <slug>-<date>.mp3: nothing to quote.)
 printf '%s\n' *-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].mp3 | sort -r |
-  awk -v keep="$keep" '{ show = $0; sub(/-[0-9-]+\.mp3$/, "", show) } ++n[show] > keep' |
+  awk -v keep="$keep" '{ show = $0; sub(/-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\.mp3$/, "", show) } ++n[show] > keep' |
   while read -r f; do
     [ -e "$f" ] || continue
     echo "prune-archive: keeping $keep a show: $f"

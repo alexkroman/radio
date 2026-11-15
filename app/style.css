@@ -347,6 +347,25 @@ img.cover {
   color: var(--color-muted);
 }
 
+/* A show's last archived block, playable from the schedule (above the
+   card's link). */
+.station-archive {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.station-archive-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font: var(--type-time);
+  color: var(--color-muted);
+}
+
 .on-air {
   flex: none;
   display: flex;
@@ -450,19 +469,7 @@ img.cover {
   font-weight: 600;
 }
 
-/* ── Archive (and the home page's latest) ── */
-.latest {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.archive-more {
-  font: var(--type-nav);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
+/* ── Archive ── */
 .archive-show {
   display: flex;
   flex-direction: column;

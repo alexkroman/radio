@@ -217,10 +217,16 @@ def complement_allows(slug, uri, m) =
 end
 
 # A track starts playing: it's played, no longer pending.
-def complement_played_now(m) =
+def complement_played_now(slug, m) =
   c = complement_entry(list.assoc(default="", "filename", m), m)
   now = time()
-  complement_pending := list.filter(fun (p) -> p.file != c.file, complement_pending())
+
+  # It's no longer pending, nor are this show's picks from before it: those
+  # were skipped (they failed, or the playlist dropped them) and won't play.
+  picked = list.filter(fun (p) -> p.show == slug and p.file == c.file, complement_pending())
+  picked_at = list.fold(fun (t, p) -> p.time < t ? p.time : t, now, picked)
+  complement_pending :=
+    list.filter(fun (p) -> p.show != slug or (p.file != c.file and p.time > picked_at), complement_pending())
   complement_played :=
     {time = now, artists = c.artists, album = c.album}::list.filter(
       fun (p) -> p.time > now - complement_window,
@@ -360,14 +366,14 @@ def show(f) =
       complement_pending :=
         list.append(
           complement_pending(),
-          [{show = slug, file = c.file, artists = c.artists, album = c.album}]
+          [{show = slug, file = c.file, artists = c.artists, album = c.album, time = time()}]
         )
       true
     end
   end
 
   tracks = playlist(mode="randomize", reload_mode="watch", check_next=next_ok, "/music/#{slug}")
-  tracks.on_track(synchronous=true, complement_played_now)
+  tracks.on_track(synchronous=true, fun (m) -> complement_played_now(slug, m))
 
   # Per track (on the playlist: the crossfaded source doesn't mark every track),
   # from the raw metadata before the text recode below: the play log (with the
@@ -413,7 +419,7 @@ def show(f) =
   music
 end
 
-shows = file.ls(absolute=true, pattern="*.md", "/shows")
+shows = file.ls(absolute=true, sorted=true, pattern="*.md", "/shows")
 
 # Each show's hours, by slug, re-read every minute so an edit applies without
 # a restart.
@@ -612,10 +618,18 @@ def slug_of_block(f) =
   list.assoc(default="", 1, m)
 end
 
+# Whether a recording's block is over: its show isn't recording, or is
+# recording another block (another day's, for a show on all day, or after
+# being down from one block into the next).
+def block_ended(f) =
+  slug = slug_of_block(f)
+  on = recording_on(slug)
+  not on() or path.basename(f) != "#{block_name(slug)}.mp3"
+end
+
 # Blocks that ended while this wasn't running.
 def finish_if_ended(f) =
-  on = recording_on(slug_of_block(f))
-  if not on() then finish_block(f) end
+  if block_ended(f) then finish_block(f) end
 end
 list.iter(finish_if_ended, file.ls(absolute=true, pattern="*.mp3", archive_recording))
 
@@ -623,15 +637,21 @@ list.iter(finish_if_ended, file.ls(absolute=true, pattern="*.mp3", archive_recor
 def recorder(f) =
   slug = slug_of(f)
   on = recording_on(slug)
+
+  # The block in the file open now.
+  opened = ref("")
   output.file(
     id="archive-#{slug}",
     fallible=true,
     %mp3(bitrate = 256),
     # The same block after a restart: carry on in its file.
     append=true,
-    # Each file closes when its block ends, or when this stops (a restart):
+    # Each file closes when its block ends (the switch below goes off, or the
+    # day changes for a show on all day), or when this stops (a restart):
     # only an ended block is finished.
-    on_close=fun (f) -> if not on() then finish_block(f) end,
+    reopen_when=fun () -> opened() != "" and block_name(slug) != opened(),
+    reopen_delay=5.,
+    on_close=fun (f) -> if block_ended(f) then finish_block(f) end,
     reopen_on_error=fun (e) ->
       begin
         log.severe(
@@ -642,6 +662,7 @@ def recorder(f) =
     {
       begin
         name = block_name(slug)
+        opened := name
         target = "#{archive_recording}/#{name}.mp3"
 
         # A block that ended and starts again (its hours changed back) carries on.

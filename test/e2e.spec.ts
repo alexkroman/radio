@@ -31,7 +31,9 @@ test("home page has what's on, what's next and the schedule", async ({ page }) =
   await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName("Mazes Radio, home");
   await expect(page.locator("#on-air h2")).toHaveText("Fixture Night");
   await expect(page.locator("#np .np-track")).toHaveText("Midnight");
-  await expect(page.locator("#next")).toContainText(/Up next: .+ at \d/);
+  // The show due now waits for Night's track to end if it isn't Night (the
+  // test put Night on air, whatever the hour).
+  await expect(page.locator("#next")).toContainText(/Up next: .+ (at \d|after this track)/);
   await expect(page.getByRole("main").getByRole("button", { name: "Play Mazes Radio" })).toBeVisible();
   const rows = page.locator("#schedule .station");
   await expect(rows.locator(".station-name")).toHaveText([

@@ -114,9 +114,12 @@ async function pollBlock() {
     .then((r) => (r.ok ? (r.json() as Promise<Track & { until?: number }>) : undefined))
     .catch(() => undefined);
   blockFetching = false;
-  if (!res || source.src !== src) return;
-  ({ until: blockUntil, ...blockTrack } = res);
+  if (source.src !== src) return;
   blockFetched = true;
+  // Unknown (the block was just pruned, the network's down): show no track
+  // rather than a stale one, and ask again in 15 s.
+  if (res) ({ until: blockUntil, ...blockTrack } = res);
+  else [blockTrack, blockUntil] = [NO_TRACK, t + 15];
   sync();
 }
 setInterval(() => void pollBlock(), 1_000);

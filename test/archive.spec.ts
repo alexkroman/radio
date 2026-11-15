@@ -124,22 +124,22 @@ test("the player plays a block with each track as it plays, then the show's bloc
   await expect.poll(() => player(page)).toEqual({ src: "/stream", playing: true });
 });
 
-test("the home page plays the latest archive", async ({ page }) => {
+test("the schedule plays each show's last archived show", async ({ page }) => {
   await page.goto("/");
-  const latest = page.locator(".latest");
-  await expect(latest.getByRole("heading", { name: "Latest archive" })).toBeVisible();
-  await expect(latest.locator(".archive-title")).toHaveText(TITLE);
-  await expect(latest.locator(".archive-date")).toHaveText("Sat, Nov 14");
-  await expect(latest).not.toContainText("Midnight");
-  await latest.getByRole("button", { name: `Play ${TITLE}` }).click();
+  const night = page.locator("#schedule .station", { has: page.locator('a[href="/night"]') });
+  await expect(night.locator(".station-archive")).toContainText("Last show");
+  await expect(night.locator(".station-archive")).toContainText("#2 · Sat, Nov 14");
+  await expect(night).not.toContainText("Midnight");
+  // Only shows with an archived block have one.
+  await expect(page.locator("#schedule .station-archive")).toHaveCount(1);
+  // It plays in place, above the card's link.
+  await night.getByRole("button", { name: `Play ${TITLE}` }).click();
+  await expect(page).toHaveURL(/\/$/);
   await expect.poll(() => player(page)).toEqual({ src: BLOCK, playing: true });
   await expect(page.locator("#bar-track")).toHaveText("Midnight · Gamma");
-  await latest.getByRole("button", { name: `Pause ${TITLE}` }).click();
+  await night.getByRole("button", { name: `Pause ${TITLE}` }).click();
   await expect.poll(() => player(page)).toEqual({ src: null, playing: false });
-  await latest.getByRole("link", { name: "All archives" }).click();
-  await expect(page).toHaveURL(/\/archive$/);
 });
-
 test.describe("logged out", () => {
   test.use(LOGGED_OUT);
   test("the archive page needs a login; its blocks play without one, like the stream", async ({

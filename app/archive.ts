@@ -29,7 +29,6 @@ export type Block = {
   date: string; // YYYY-MM-DD, the day it started
   number: number; // the show's nth day with a block
   seconds: number;
-  finished: number; // ms, when the file was last written
   url: string; // /archive/<name>.mp3
 };
 
@@ -59,7 +58,7 @@ export async function archive(shows: Show[], now = Date.now()): Promise<Map<stri
         const number = Math.round((Date.parse(date) - Date.parse(first.get(show)!)) / DAY_MS) + 1;
         const seconds = Math.round(st.size / BYTES_PER_SECOND);
         const name = file.slice(0, -4);
-        return [{ name, show, date, number, seconds, finished: st.mtimeMs, url: `/archive/${file}` }];
+        return [{ name, show, date, number, seconds, url: `/archive/${file}` }];
       }),
     )
   ).flat();

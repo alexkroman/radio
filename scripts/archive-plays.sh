@@ -3,7 +3,8 @@
 # access logs: each GET /archive/<show>-<YYYY-MM-DD>.mp3 answered 200 is one
 # play (Caddy strips Range, so a play is one request from the beginning).
 # Live listeners (/stream) are logged as their own requests and not counted.
-# Days are when the play started, in Icecast's time zone (TZ in compose.yml).
+# Days are when the listener left (the log's time), in Icecast's time zone
+# (TZ in compose.yml); the reports count a play in the month it started.
 #   scripts/archive-plays.sh                  # logs/access.log*
 #   scripts/archive-plays.sh some/access.log  # or any logs, or - for stdin
 # Prints: day, block, plays, hours connected (tab-separated, by day then block).

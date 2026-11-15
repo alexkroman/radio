@@ -169,11 +169,13 @@ const ShowRow = ({
   now,
   onAir,
   credit,
+  blocks = [],
 }: {
   show: Show;
   now: Date;
   onAir: boolean;
   credit?: boolean;
+  blocks?: Block[];
 }) => (
   <div class="station">
     <span class="station-hours">
@@ -190,6 +192,15 @@ const ShowRow = ({
       <span class="label on-air">
         <span class="dot" aria-hidden="true" />
         On air
+      </span>
+    )}
+    {blocks[0] && (
+      <span class="station-archive">
+        <BlockButton show={show} blocks={blocks} i={0} />
+        <span class="station-archive-text">
+          <span class="label">Last show</span>
+          <span>{`#${blocks[0].number} · ${day(blocks[0].date)}`}</span>
+        </span>
       </span>
     )}
   </div>
@@ -324,12 +335,11 @@ app.route("/reports", reports);
 app.get("/", async (c) => {
   const shows = await getShows();
   const [{ show, play }, recent, blocks] = await Promise.all([onAir(shows), recentPlays(11), archive(shows)]);
-  // The block that finished last, then its show's earlier ones.
-  const newest = [...blocks.values()].map((b) => b[0]!).sort((a, b) => b.finished - a.finished)[0];
-  const latestShow = newest && shows.find((s) => s.slug === newest.show);
-  const latest = latestShow && { show: latestShow, blocks: blocks.get(latestShow.slug)! };
   const now = new Date();
-  const next = upNext(shows, now);
+  // While the show whose hours have started waits for the last one's track to
+  // end, it's up next; otherwise the schedule's next show.
+  const due = showAt(shows, now);
+  const next = due && show && due.slug !== show.slug ? { show: due, start: undefined } : upNext(shows, now);
   return c.render(
     <main class="page page-station page-home">
       <SiteHeader current="home" home />
@@ -353,24 +363,17 @@ app.get("/", async (c) => {
       <p id="next" class="next">
         {next && (
           <>
-            Up next: <a href={`/${next.show.slug}`}>{next.show.title}</a> at <Time at={next.start} />
+            Up next: <a href={`/${next.show.slug}`}>{next.show.title}</a>{" "}
+            {next.start ? (
+              <>
+                at <Time at={next.start} />
+              </>
+            ) : (
+              "after this track"
+            )}
           </>
         )}
       </p>
-      {latest && (
-        <section class="latest" aria-labelledby="latest-heading">
-          <h2 id="latest-heading" class="label">
-            Latest archive
-          </h2>
-          <div class="archive-blocks">
-            <BlockRow show={latest.show} blocks={latest.blocks} i={0} as="div">
-              <a class="archive-more" href="/archive">
-                All archives
-              </a>
-            </BlockRow>
-          </div>
-        </section>
-      )}
       <StreamUrl host={c.req.header("host") ?? ""} />
       <section id="schedule" class="schedule" aria-labelledby="schedule-heading">
         <h2 id="schedule-heading" class="label">
@@ -378,7 +381,7 @@ app.get("/", async (c) => {
         </h2>
         <div class="stations">
           {scheduled(shows).map((s) => (
-            <ShowRow show={s} now={now} onAir={s.slug === show?.slug} credit />
+            <ShowRow show={s} now={now} onAir={s.slug === show?.slug} credit blocks={blocks.get(s.slug)} />
           ))}
         </div>
       </section>
@@ -392,38 +395,26 @@ app.get("/", async (c) => {
 // shows' blocks have no names of their own, so they're numbered.
 const blockTitle = (show: Show, b: Block) => `${show.title} #${b.number}`;
 
-// A block in a list: its play button (when it ends, the show's earlier blocks
-// follow), title, date and length.
-const BlockRow = ({
-  show,
-  blocks,
-  i,
-  as: Tag = "li",
-  children,
-}: {
-  show: Show;
-  blocks: Block[];
-  i: number;
-  as?: "li" | "div";
-  children?: unknown;
-}) => {
-  const b = blocks[i]!;
-  return (
-    <Tag class="archive-block">
-      <PlayButton
-        src={b.url}
-        title={blockTitle(show, b)}
-        then={blocks.slice(i + 1).map((e) => ({ src: e.url, title: blockTitle(show, e) }))}
-      />
-      <span class="archive-title">
-        <a href={`/${show.slug}`}>{blockTitle(show, b)}</a>
-      </span>
-      <span class="archive-date">{day(b.date)}</span>
-      <span class="archive-length">{duration(b.seconds)}</span>
-      {children}
-    </Tag>
-  );
-};
+// A block's play button: when it ends, the show's earlier blocks follow.
+const BlockButton = ({ show, blocks, i }: { show: Show; blocks: Block[]; i: number }) => (
+  <PlayButton
+    src={blocks[i]!.url}
+    title={blockTitle(show, blocks[i]!)}
+    then={blocks.slice(i + 1).map((e) => ({ src: e.url, title: blockTitle(show, e) }))}
+  />
+);
+
+// A block in the archive's list: its play button, title, date and length.
+const BlockRow = ({ show, blocks, i }: { show: Show; blocks: Block[]; i: number }) => (
+  <li class="archive-block">
+    <BlockButton show={show} blocks={blocks} i={i} />
+    <span class="archive-title">
+      <a href={`/${show.slug}`}>{blockTitle(show, blocks[i]!)}</a>
+    </span>
+    <span class="archive-date">{day(blocks[i]!.date)}</span>
+    <span class="archive-length">{duration(blocks[i]!.seconds)}</span>
+  </li>
+);
 
 // Each show's recorded blocks, newest first, played (from the beginning, no
 // seeking) in the site's player, which shows each track while it plays. No
@@ -661,7 +652,8 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
   if (!show) return c.notFound();
   const { show: on, play } = await onAir(shows);
   const isOn = on?.slug === show.slug;
-  const next = nextSlot(show, new Date());
+  const now = new Date();
+  const next = nextSlot(show, now);
   return c.render(
     <main class="page page-station">
       <SiteHeader />
@@ -682,7 +674,13 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
           <p class="next">
             {next ? (
               <>
-                Off air. Next on at <Time at={next.start} />.
+                {next.start <= now ? (
+                  "Starting after this track."
+                ) : (
+                  <>
+                    Off air. Next on at <Time at={next.start} />.
+                  </>
+                )}
               </>
             ) : (
               "Not on the schedule."
@@ -700,7 +698,7 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
 app.get(`/djs/:dj{${SLUG}}`, async (c) => {
   const [dj, shows] = await Promise.all([getDj(c.req.param("dj")), getShows()]);
   if (!dj) return c.notFound();
-  const { show: on } = await onAir(shows);
+  const [{ show: on }, blocks] = await Promise.all([onAir(shows), archive(shows)]);
   const now = new Date();
   return c.render(
     <main class="page page-dj">
@@ -720,7 +718,7 @@ app.get(`/djs/:dj{${SLUG}}`, async (c) => {
         </h2>
         <div id="dj-shows-list" class="stations">
           {dj.shows.map((s) => (
-            <ShowRow show={s} now={now} onAir={s.slug === on?.slug} />
+            <ShowRow show={s} now={now} onAir={s.slug === on?.slug} blocks={blocks.get(s.slug)} />
           ))}
         </div>
       </section>

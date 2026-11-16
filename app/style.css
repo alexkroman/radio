@@ -464,14 +464,15 @@ img.cover {
 
 /* ── Home: the on-air panel, then the shows as cards ── */
 .page-home {
-  gap: 48px;
+  gap: 40px;
 }
 
+/* Compact, so the show cards below are in view on most screens. */
 .hero {
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  padding: 32px;
+  gap: 20px;
+  padding: 24px 28px;
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-card);
   background: var(--color-panel);
@@ -480,7 +481,11 @@ img.cover {
 .hero-head {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+}
+
+.hero .display {
+  font-size: 40px;
 }
 
 .on-air-label {
@@ -511,8 +516,31 @@ img.cover {
 }
 
 .hero .np-block {
-  padding-top: 28px;
+  gap: 20px;
+  padding-top: 20px;
   border-top: 1px solid var(--color-hairline);
+}
+
+.hero .play-lg {
+  width: 56px;
+  height: 56px;
+}
+
+.hero .cover-120 {
+  width: 80px;
+  height: 80px;
+}
+
+.hero .np-text {
+  gap: 4px;
+}
+
+.hero .np-text .np-track {
+  font-size: 22px;
+}
+
+.hero .np-text .np-artist {
+  font-size: 16px;
 }
 
 .section-head {
@@ -1070,12 +1098,16 @@ img.cover {
   }
 
   .hero .np-block {
-    gap: 20px;
+    gap: 16px;
+  }
+
+  .hero .display {
+    font-size: 32px;
   }
 
   .hero .cover-120 {
-    width: 88px;
-    height: 88px;
+    width: 64px;
+    height: 64px;
   }
 
   .station-name {

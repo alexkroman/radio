@@ -500,7 +500,10 @@ app.get(`/archive/:block{${BLOCK}}/now.json`, async (c) => {
   return c.json({ ...trackJson(track), until });
 });
 
-app.get("/about", (c) => {
+// Also at /manifesto, its old name: /about once answered with a 301 there,
+// which browsers cache and follow without asking, so for them /about still
+// leads to /manifesto. (Redirecting /manifesto back to /about would loop.)
+app.on("GET", ["/about", "/manifesto"], (c) => {
   const host = c.req.header("host") ?? "";
   return c.render(
     <main class="page page-about">

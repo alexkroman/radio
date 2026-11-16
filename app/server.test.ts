@@ -375,6 +375,8 @@ describe("about", () => {
   test("is linked from the site", async () => {
     expect(await (await page("/")).text()).toContain('href="/about"');
     expect((await page("/about")).status).toBe(200);
+    // Browsers that cached /about's old 301 to /manifesto still get the page.
+    expect(await (await page("/manifesto")).text()).toContain('class="page page-about"');
     expect(await (await page("/about")).text()).toContain('href="https://github.com/alexkroman/radio"');
   });
 

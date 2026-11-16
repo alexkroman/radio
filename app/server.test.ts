@@ -3,7 +3,7 @@
 import { mkdir, mkdtemp, truncate, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeAll, describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test, vi } from "vitest";
 import type { Play } from "./plays.ts";
 
 const now = Math.floor(Date.now() / 1000);
@@ -205,7 +205,12 @@ describe("pages", () => {
   });
 
   test("a show page has its hours, and its track only while on air", async () => {
-    const off = await (await page("/default")).text();
+    // At 18:00 (UTC, the tests' TZ) today: default's hours (0-3) aren't due,
+    // so its page says when it's next on. (Night stays on air: the newest play.)
+    const today = new Date();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 18));
+    const off = await (await page("/default")).text().finally(() => vi.useRealTimers());
     expect(off).toMatch(
       /Daily <span class="hours"><time class="time" datetime="[^"]+">12:00 AM<\/time>–<time class="time" datetime="[^"]+">3:00 AM</,
     );

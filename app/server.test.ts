@@ -336,7 +336,7 @@ describe("archive", () => {
 
   test("the schedule plays each show's last archived show, then its earlier ones", async () => {
     const html = await (await page("/")).text();
-    const rows = html.split('class="station"').slice(1);
+    const rows = html.split('<article class="station').slice(1);
     const row = (slug: string) => rows.find((r) => r.includes(`href="/${slug}"`))!;
     expect(row("night")).toMatch(
       /data-play="\/archive\/night-2026-11-14\.mp3" data-title="Fixture Night #3"/,
@@ -346,6 +346,14 @@ describe("archive", () => {
     expect(row("odd")).toMatch(/data-play="\/archive\/odd-2026-11-15\.mp3" data-title="Odd Characters #1"/);
     expect(row("quiet")).not.toContain("data-play"); // nothing archived
     expect(html).not.toContain("Track A");
+  });
+
+  test("a show's page plays its recent archived shows, newest first", async () => {
+    const html = await (await page("/night")).text();
+    const plays = [...html.matchAll(/data-play="(\/archive\/[^"]+)"/g)].map((m) => m[1]);
+    expect(plays).toEqual(["/archive/night-2026-11-14.mp3", "/archive/night-2026-11-13.mp3"]);
+    expect(html).toContain("Recent shows");
+    expect(await (await page("/quiet")).text()).not.toContain("Recent shows");
   });
 
   test("while a show waits for the last one's track to end, it's up next, after this track", async () => {

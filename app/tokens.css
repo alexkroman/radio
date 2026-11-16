@@ -12,6 +12,7 @@
   --color-hairline: #e6e6e6; /* row dividers, outlined secondary buttons */
   --color-hairline-soft: #efefef; /* dividers inside the Recently played list */
   --color-placeholder: #f2f2f2; /* empty album-art square */
+  --color-panel: #f7f7f7; /* the home page's on-air panel */
   --color-link-underline: #b5b5b5;
   --color-accent: #e8590c; /* ONLY: logo centre square, "Live" dot, player-bar dot */
   --color-on-ink-muted: #b5b5b5; /* secondary text on the black player bar */
@@ -47,13 +48,14 @@
   --page-pad-x: 32px;
   --page-pad-bottom: 96px;
   --width-index: 1040px; /* stations list */
-  --width-station: 760px; /* station page */
+  --width-station: 880px; /* home, show, DJ and archive pages */
   --width-prose: 640px; /* About */
 
   /* Radius */
   --radius-art-sm: 3px; /* 40–44px covers */
   --radius-art: 4px; /* 56–64px covers */
   --radius-art-lg: 6px; /* 120px cover */
+  --radius-card: 12px; /* the on-air panel and show cards */
   --radius-pill: 999px;
 
   /* Sizes */
@@ -72,6 +74,7 @@
     --color-hairline: #2a2a2a;
     --color-hairline-soft: #222222;
     --color-placeholder: #1c1c1c;
+    --color-panel: #181818;
     --color-link-underline: #555555;
     --color-link-hover: #bdbdbd;
     --color-accent: #e8590c; /* unchanged */

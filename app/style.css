@@ -82,7 +82,7 @@ button {
 .page-dj {
   --width: var(--width-station);
 
-  gap: 56px;
+  gap: 48px;
 }
 
 .page-about {
@@ -462,6 +462,138 @@ img.cover {
   gap: 16px;
 }
 
+/* ── Home: the on-air panel, then the shows as cards ── */
+.page-home {
+  gap: 48px;
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 32px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-card);
+  background: var(--color-panel);
+}
+
+.hero-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.on-air-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-ink);
+}
+
+.on-air-label .time {
+  width: auto;
+  font: inherit;
+  color: var(--color-muted);
+}
+
+.until {
+  color: var(--color-muted);
+}
+
+/* stylelint-disable-next-line no-descending-specificity -- unrelated links */
+.hero .display a {
+  text-decoration: none;
+}
+
+.hero .off-air {
+  padding-top: 24px;
+  border-top: 1px solid var(--color-hairline);
+}
+
+.hero .np-block {
+  padding-top: 28px;
+  border-top: 1px solid var(--color-hairline);
+}
+
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+}
+
+.section-note {
+  font: var(--type-nav);
+  color: var(--color-muted);
+}
+
+/* Up to three shows in a row; four or more in two columns, read row by row
+   in the order they start, the odd one out across both. */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.cards:has(> :nth-child(4)) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cards:has(> :nth-child(4)) > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.card {
+  flex-flow: column nowrap;
+  align-items: stretch;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-card);
+
+  /* Break a long "ambient/neo-soul/…" only when it can't fit whole. */
+  overflow-wrap: break-word;
+}
+
+.station.card:hover {
+  border-color: var(--color-link-hover);
+}
+
+.card-on {
+  border-color: var(--color-ink);
+}
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.card .station-hours {
+  width: auto;
+}
+
+.card .station-info {
+  flex: 1 1 auto;
+}
+
+/* stylelint-disable-next-line no-descending-specificity -- unrelated links */
+.card .station-name {
+  font-size: 24px;
+}
+
+.card .station-archive {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-hairline);
+}
+
+.card:has(.station-name:focus-visible) {
+  outline-offset: 2px;
+}
+
 /* ── About: questions ── */
 .faq h3 {
   margin: 20px 0 4px;
@@ -469,40 +601,76 @@ img.cover {
   font-weight: 600;
 }
 
-/* ── Archive ── */
+/* ── Archive: on the archive page (a card a show) and a show's page ── */
 .archive-show {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+}
+
+.archive-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+}
+
+.archive-name {
+  font: var(--type-station-name);
+  font-size: 24px;
+  letter-spacing: -0.02em;
+}
+
+/* stylelint-disable-next-line no-descending-specificity -- unrelated links */
+.archive-name a {
+  text-decoration: none;
+}
+
+.archive-head .station-hours {
+  width: auto;
 }
 
 .archive-blocks {
   list-style: none;
   padding: 0;
-  border-top: 1px solid var(--color-ink);
+  border-top: 1px solid var(--color-hairline);
 }
 
 .archive-block {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px 20px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--color-hairline);
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-hairline-soft);
+}
+
+.archive-block:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
 }
 
 .archive-title {
-  flex: 1 1 140px;
+  flex: 1 1 auto;
   min-width: 0;
-  font: var(--type-station-name);
-  font-size: 22px;
-  letter-spacing: -0.02em;
+  font: var(--type-track);
+  font-weight: 500;
 }
 
 .archive-date,
 .archive-length {
+  flex: none;
   font: var(--type-time);
   color: var(--color-muted);
+}
+
+.archive-length {
+  width: 88px;
+  text-align: right;
+}
+
+.page-archive .archive-show + .archive-show {
+  margin-top: -24px;
 }
 
 .stream {
@@ -558,25 +726,37 @@ img.cover {
 .history li {
   display: flex;
   align-items: center;
-  gap: 4px 20px;
-  padding: 12px 0;
+  gap: 16px;
+  padding: 10px 0;
   border-bottom: 1px solid var(--color-hairline-soft);
 }
 
-.h-track {
-  flex: 1 1 260px;
+.h-text {
+  flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.h-track,
+.h-artist {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.h-track {
   font: var(--type-track);
 }
 
 .h-artist {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 45%;
+  font: var(--type-nav);
   color: var(--color-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.history .time {
+  width: auto;
+  text-align: right;
 }
 
 /* ── DJ page ── */
@@ -656,6 +836,24 @@ img.cover {
   flex: 1 1 240px;
   min-width: 0;
   color: var(--color-body);
+}
+
+/* A DJ's links: the name over its address. */
+.links dt {
+  width: 100%;
+  padding: 0;
+  font: var(--type-nav);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-ink);
+}
+
+.links dd {
+  flex-basis: 100%;
+}
+
+.links .url {
+  color: var(--color-muted);
 }
 
 /* ── Player bar: always fixed at the bottom, its contents in line with the index column ── */
@@ -786,8 +984,98 @@ img.cover {
     padding: 22px 0;
   }
 
+  .cards,
+  .cards:has(> :nth-child(4)) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  /* Compact cards: the last show's play button beside the show, its caption
+     left to the button's label. */
+  .station.card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "top top"
+      "info archive";
+    gap: 8px 16px;
+    padding: 18px;
+  }
+
+  .card-top {
+    grid-area: top;
+  }
+
+  .card .station-info {
+    grid-area: info;
+  }
+
+  .card .station-archive {
+    grid-area: archive;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .card .station-archive-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* Play button, then the title over its date and length. */
+  .archive-block {
+    display: grid;
+    grid-template-columns: var(--tap) auto minmax(0, 1fr);
+    grid-template-areas:
+      "play title title"
+      "play date length";
+    gap: 2px 12px;
+  }
+
+  .archive-block .play {
+    grid-area: play;
+  }
+
+  .archive-title {
+    grid-area: title;
+  }
+
+  .archive-date {
+    grid-area: date;
+  }
+
+  .archive-length {
+    grid-area: length;
+    width: auto;
+    text-align: left;
+  }
+
   .station-hours {
     width: 100%;
+  }
+
+  .hero {
+    margin-inline: -8px;
+    padding: 24px 20px;
+    width: calc(100% + 16px);
+  }
+
+  .hero .off-air {
+    padding-top: 24px;
+    border-top: 1px solid var(--color-hairline);
+  }
+
+  .hero .np-block {
+    gap: 20px;
+  }
+
+  .hero .cover-120 {
+    width: 88px;
+    height: 88px;
   }
 
   .station-name {
@@ -802,32 +1090,5 @@ img.cover {
   .station-credit {
     margin-top: 0;
     font-size: 13px;
-  }
-
-  .history li {
-    display: grid;
-    grid-template-columns: 40px minmax(0, 1fr) auto;
-    grid-template-areas:
-      "cover track time"
-      "cover artist time";
-    gap: 2px 16px;
-  }
-
-  .history .cover {
-    grid-area: cover;
-  }
-
-  .history .time {
-    grid-area: time;
-    width: auto;
-  }
-
-  .h-track {
-    grid-area: track;
-  }
-
-  .h-artist {
-    grid-area: artist;
-    max-width: none;
   }
 }

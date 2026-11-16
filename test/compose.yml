@@ -44,13 +44,16 @@ services:
   liquidsoap:
     # The tests put the show they need on air (radio.liq onair; test/helpers.ts),
     # and shrink the times: the complement's three hours to 30 s, a block's
-    # tail to 5 s, and the shortest archived block from five hours to 90 s
-    # (over the minute radio.liq takes to see an hours change).
+    # tail to 5 s, and the shortest archived block from five hours to 150 s
+    # (over the minute radio.liq takes to see an hours change, plus a track
+    # finishing before the next show starts), and the longest a show's last
+    # track can run past its hours from 20 min to 60 s (the tracks are short).
     environment:
       ONAIR_PORT: 7000
       COMPLEMENT_WINDOW: 30
       ARCHIVE_TAIL: 5
-      ARCHIVE_MIN_SECONDS: 90
+      ARCHIVE_MIN_SECONDS: 150
+      ARCHIVE_OVERRUN: 60
     volumes:
       - e2e-shows:/shows:ro
       - e2e-music:/music:ro

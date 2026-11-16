@@ -235,9 +235,14 @@ end
 
 # The archive: the program as broadcast (`radio`, the final bus, so anything
 # mixed into it is recorded too), one MP3 per show block, the same 256 kbps
-# as the stream. A block is its show's hours by the clock plus ARCHIVE_TAIL
-# seconds (default 60) of what follows: a 17-23 block runs to 23:01. A
-# block under five hours isn't archived, so give shows more than that (the
+# as the stream. A block follows the songs, not the clock: it starts with
+# its show's first track, as the crossfade into it starts (the song before it
+# fading out), and ends ARCHIVE_TAIL seconds (default 12, the crossfade's
+# length) after the next show's first track starts, as its own last track
+# finishes fading out. So a 17-23 show's block runs from its first track,
+# a little after 17:00 (the 16:00 show's last track plays to its end first),
+# to the end of its last track, a little after 23:00. A block
+# under five hours isn't archived, so give shows more than that (the
 # shortest, Drift, has six) for restarts and outages to fit in. The file is
 # /archive/recording/<show>-<YYYY-MM-DD>.mp3 (the date the block started)
 # while it's recorded; when it ends it moves to /archive/blocks/, which
@@ -264,15 +269,33 @@ archive_blocks = "/archive/blocks"
 archive_short = "/archive/short"
 archive_tracks = "/archive/tracks"
 archive_bytes_per_second = 32000.
-archive_tail = float_of_string(default=60., environment.get("ARCHIVE_TAIL"))
+archive_tail = float_of_string(default=12., environment.get("ARCHIVE_TAIL"))
 archive_min = float_of_string(default=18000., environment.get("ARCHIVE_MIN_SECONDS"))
+
+# The longest a show's last track can run past its hours (seconds; tracks
+# are at most 20 min, see autocue above). A show still "on air" after that
+# isn't playing (the next show has nothing to play, so it's silence): its
+# block ends, and the show whose hours it is records the silence instead.
+archive_overrun = float_of_string(default=1200., environment.get("ARCHIVE_OVERRUN"))
+
+# The show on air by its tracks, and when its latest track started ("" when
+# none has played since startup), and the show before it, and when it went
+# off (its block's tail). Tracks played by hand (onair) don't count.
+airing = ref(("", 0.))
+handover = ref(("", 0.))
 
 # A block's sidecar.
 def sidecar_path(name) =
   "#{archive_tracks}/#{name}.jsonl"
 end
 
-# The track playing now, for a block that opens mid-track.
+# The show a recording is for.
+def slug_of_block(f) =
+  m = r/^(.+)-\d{4}-\d{2}-\d{2}\.mp3$/.exec(path.basename(f))
+  list.assoc(default="", 1, m)
+end
+
+# The track playing now, for a block that opens mid-track (its first track).
 no_track = {title = "", artist = "", album = "", label = "", isrc = "", cover = ""}
 current_track = ref(no_track)
 
@@ -291,28 +314,53 @@ def sidecar_line(offset, t) =
   "#{json.stringify(compact=true, line)}\n"
 end
 
-# A track starts: add it to the sidecar of every block being recorded (one,
-# or two in a block's tail), at the file's length so far.
-def archive_track(play) =
-  t =
-    {
-      title = play.title,
-      artist = play.artist,
-      album = play.album,
-      label = play.label,
-      isrc = play.isrc,
-      cover = play.cover
-    }
+# A track's title, artist, album, label, ISRC and cover (pre-extracted by
+# scripts/import.sh), from its raw metadata (before the text recode below).
+def track_info(slug, m) =
+  def tag(~or_tag="", key) =
+    safe_recode(list.assoc(default=list.assoc(default="", or_tag, m), key, m))
+  end
+  track_stem = path.remove_extension(path.basename(list.assoc(default="", "filename", m)))
+  cover = "#{slug}/#{track_stem}.jpg"
+  {
+    title = tag("title"),
+    artist = tag("artist"),
+    album = tag("album"),
+    label = tag(or_tag="publisher", "label"),
+    isrc = tag(or_tag="tsrc", "isrc"),
+    cover = file.exists("/covers/#{cover}") ? cover : ""
+  }
+end
+
+# A show's track starts (as the crossfade into it starts): when it's another
+# show's than the last, that show's block ends (after its tail) and this
+# one's starts. Add the track, at the file's length so far, to the sidecar of
+# every block being recorded but one in its tail (whose last track is still
+# fading out). Synchronous, so a block that opens now starts with this track.
+def archive_track(slug, m, now) =
+  t = track_info(slug, m)
   current_track := t
+  if
+    onair() == ""
+  then
+    let (was, _) = airing()
+    if was != slug then handover := (was, now) end
+    airing := (slug, now)
+  end
+  let (ending, ended_at) = handover()
   list.iter(
     fun (f) ->
-      try
-        offset = float_of_int(file.size(f)) / archive_bytes_per_second
-        file.write(append=true, data=sidecar_line(offset, t), sidecar_path(slug_of(f)))
-      catch e do
-        log.severe(
-          "Archive: couldn't add a track to #{f}'s sidecar: #{e}"
-        )
+      if
+        slug_of_block(f) == slug or not (slug_of_block(f) == ending and now - ended_at < archive_tail)
+      then
+        try
+          offset = float_of_int(file.size(f)) / archive_bytes_per_second
+          file.write(append=true, data=sidecar_line(offset, t), sidecar_path(slug_of(f)))
+        catch e do
+          log.severe(
+            "Archive: couldn't add a track to #{f}'s sidecar: #{e}"
+          )
+        end
       end,
     file.ls(absolute=true, pattern="*.mp3", archive_recording)
   )
@@ -403,32 +451,28 @@ def show(f) =
         now = time()
         complement_played_now(slug, m, now)
         starts := list.prefix(10, (list.assoc(default="", "filename", m), now)::starts())
+        archive_track(slug, m, now)
       end
   )
 
-  # Per track (on the playlist: the crossfaded source doesn't mark every track),
-  # from the raw metadata before the text recode below: the play log (with the
-  # track's cover, pre-extracted by scripts/import.sh).
-  # Asynchronous, so the listener count's HTTP call never holds up the stream.
+  # Per track (on the playlist: the crossfaded source doesn't mark every
+  # track): the play log. Asynchronous, so the listener count's HTTP call
+  # never holds up the stream.
   tracks.on_track(
     synchronous=false,
     fun (m) ->
       begin
-        def tag(~or_tag="", key) =
-          safe_recode(list.assoc(default=list.assoc(default="", or_tag, m), key, m))
-        end
-        track_stem = path.remove_extension(path.basename(list.assoc(default="", "filename", m)))
-        cover = "#{slug}/#{track_stem}.jpg"
+        t = track_info(slug, m)
         play =
           {
             time = list.assoc(default=time(), list.assoc(default="", "filename", m), starts()),
             show = slug,
-            artist = tag("artist"),
-            title = tag("title"),
-            album = tag("album"),
-            label = tag(or_tag="publisher", "label"),
-            isrc = tag(or_tag="tsrc", "isrc"),
-            cover = if file.exists("/covers/#{cover}") then cover else "" end,
+            artist = t.artist,
+            title = t.title,
+            album = t.album,
+            label = t.label,
+            isrc = t.isrc,
+            cover = t.cover,
             listeners = listeners("stream")
           }
         file.write(
@@ -436,7 +480,6 @@ def show(f) =
           data="#{json.stringify(compact=true, play)}\n",
           "/plays/#{time.string('%Y-%m')}.jsonl"
         )
-        archive_track(play)
       end
   )
 
@@ -589,20 +632,29 @@ def ymd(t) =
   "#{t.year}-#{pad(t.month)}-#{pad(t.day)}"
 end
 
-# Whether a show's block is being recorded: in its hours, or in the tail.
+# Whether a show's block is being recorded. While a show is on air by its
+# tracks (airing: within its hours, or its last track running over them),
+# that show's, from its first track (its fade in) until ARCHIVE_TAIL s after
+# the next show's first track (its last track's fade out). Otherwise (after
+# a restart until a track starts, or silence), the show whose hours it is.
 def recording_on(slug) =
   fun () ->
     begin
-      hours = hours_of(slug)
-      let (_, stop) = hours
-      now = time.local()
-      within(now.hour, hours)
-      or (hours != (0, 0) and now.hour == stop mod 24 and float_of_int(now.min * 60 + now.sec) < archive_tail)
+      let (on, started) = airing()
+      hour = time.local().hour
+      if
+        on != "" and (within(hour, hours_of(on)) or time() - started < archive_overrun)
+      then
+        let (ending, ended_at) = handover()
+        on == slug or (ending == slug and time() - ended_at < archive_tail)
+      else
+        within(hour, hours_of(slug))
+      end
     end
 end
 
 # The block a show is recording: "<show>-<YYYY-MM-DD>", the date it started
-# (yesterday for 22-6 at 2:00, or in its tail at 6:00).
+# (yesterday for 22-6 at 2:00, or for its last track running over at 6:00).
 def block_name(slug) =
   let (start, _) = hours_of(slug)
   now = time.local()
@@ -641,12 +693,6 @@ def finish_block(f) =
       "Archive: couldn't move #{f} to #{dest}: #{e}"
     )
   end
-end
-
-# The show a recording is for.
-def slug_of_block(f) =
-  m = r/^(.+)-\d{4}-\d{2}-\d{2}\.mp3$/.exec(path.basename(f))
-  list.assoc(default="", 1, m)
 end
 
 # Whether a recording's block is over: its show isn't recording, or is

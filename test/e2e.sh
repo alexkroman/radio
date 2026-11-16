@@ -144,6 +144,15 @@ printf '%s\n' "$plays" | grep -qE "^[0-9]{4}-[0-9]{2}-[0-9]{2}	night-2026-11-14	
 dc exec -T icecast grep -q '"GET /stream HTTP' /var/log/icecast/access.log ||
   fail "the access log has no live stream requests to tell apart"
 
+# Back to the schedule: the specs leave the show they last needed on air
+# (test/helpers.ts onAir), and a block follows the show on air by its hours.
+dc exec -T caddy wget -q -O /dev/null --post-data= http://liquidsoap:7000/onair ||
+  fail "couldn't put the schedule back on air"
+# The show put on air by hand may play one more track (up to 48 s) as it
+# goes, which counts as on air for ARCHIVE_OVERRUN (60 s) from its start.
+# Wait that out, so the block recorded is the show whose hours it is.
+sleep 110
+
 step "the archive records the block on air at 256 kbps, into a growing file named for its show and date"
 wait_for test -n "$(recording)" || fail "nothing is being recorded"
 block=$(recording)
@@ -173,18 +182,21 @@ deploy_change "" "a music change" \
 
 step "a block boundary: the recording finishes its block, with its tracks, and starts the next, without a restart"
 # Swap the hours of the show recorded now and another, so the other's block
-# starts now.
+# starts with its first track: up to a minute for Liquidsoap to see the new
+# hours, then the track playing finishes, then the ended block's tail.
 show=${block%-*-*-*.mp3}
 other=default
 [ "$show" != default ] || other=edge
 deploy_change "" "a new block" "swap_hours $show $other"
-WAIT=90 wait_for finished "$block" || fail "$block wasn't moved to blocks/ when its block ended"
+WAIT=150 wait_for finished "$block" || fail "$block wasn't moved to blocks/ when its block ended"
 wait_for recording_not "$block" || fail "no new block is being recorded after $block"
 seconds=$(($(size "blocks/$block") / 32000))
 echo "  finished $block ($seconds s); now recording $(recording)"
 ended=$block
 block=$(recording)
 case $block in "$other"-*) ;; *) fail "recording $block, not $other's block" ;; esac
+# It starts with its show's first track, as the crossfade into it starts.
+[ "$(offsets "$block" | head -n 1 | cut -d. -f1)" = 0 ] || fail "$block doesn't start with a track"
 # Its sidecar: a line per track, in order, within the block.
 offsets "$ended" | sed 's/^/  track at /'
 [ "$(offsets "$ended" | wc -l)" -ge 2 ] || fail "$ended's sidecar has under two tracks"
@@ -193,11 +205,11 @@ offsets "$ended" | sort -n -c || fail "$ended's sidecar isn't in order"
 served "$ended" || fail "Icecast doesn't serve $ended"
 
 step "a block cut short isn't archived: it's kept from Icecast and the site"
-# Swap again before the new block reaches ARCHIVE_MIN_SECONDS (90).
+# Swap again before the new block reaches ARCHIVE_MIN_SECONDS (150).
 third=long
 [ "$show" != long ] || third=plain
 deploy_change "" "a short block" "swap_hours $other $third"
-WAIT=90 wait_for too_short "$block" || fail "$block, cut short, wasn't moved to short/"
+WAIT=150 wait_for too_short "$block" || fail "$block, cut short, wasn't moved to short/"
 ! finished "$block" || fail "$block, cut short, was archived"
 ! served "$block" || fail "Icecast serves $block, cut short"
 short=$block

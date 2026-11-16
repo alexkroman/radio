@@ -148,6 +148,10 @@ dc exec -T icecast grep -q '"GET /stream HTTP' /var/log/icecast/access.log ||
 # (test/helpers.ts onAir), and a block follows the show on air by its hours.
 dc exec -T caddy wget -q -O /dev/null --post-data= http://liquidsoap:7000/onair ||
   fail "couldn't put the schedule back on air"
+# The show put on air by hand may play one more track (up to 48 s) as it
+# goes, which counts as on air for ARCHIVE_OVERRUN (60 s) from its start.
+# Wait that out, so the block recorded is the show whose hours it is.
+sleep 110
 
 step "the archive records the block on air at 256 kbps, into a growing file named for its show and date"
 wait_for test -n "$(recording)" || fail "nothing is being recorded"

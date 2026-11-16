@@ -528,10 +528,20 @@ img.cover {
   color: var(--color-muted);
 }
 
+/* Up to three shows in a row; four or more in two columns, read row by row
+   in the order they start, the odd one out across both. */
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
+}
+
+.cards:has(> :nth-child(4)) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cards:has(> :nth-child(4)) > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 
 .card {
@@ -974,9 +984,46 @@ img.cover {
     padding: 22px 0;
   }
 
-  .station.card {
+  .cards,
+  .cards:has(> :nth-child(4)) {
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
+  }
+
+  /* Compact cards: the last show's play button beside the show, its caption
+     left to the button's label. */
+  .station.card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "top top"
+      "info archive";
+    gap: 8px 16px;
     padding: 18px;
+  }
+
+  .card-top {
+    grid-area: top;
+  }
+
+  .card .station-info {
+    grid-area: info;
+  }
+
+  .card .station-archive {
+    grid-area: archive;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .card .station-archive-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   /* Play button, then the title over its date and length. */

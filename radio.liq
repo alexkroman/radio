@@ -217,9 +217,8 @@ def complement_allows(slug, uri, m) =
 end
 
 # A track starts playing: it's played, no longer pending.
-def complement_played_now(slug, m) =
+def complement_played_now(slug, m, now) =
   c = complement_entry(list.assoc(default="", "filename", m), m)
-  now = time()
 
   # It's no longer pending, nor are this show's picks from before it: those
   # were skipped (they failed, or the playlist dropped them) and won't play.
@@ -319,6 +318,28 @@ def archive_track(play) =
   )
 end
 
+# A file's tags, read once per path (quickly: without autocue's measuring).
+# A show the complement holds back retries its candidates nonstop until it
+# can play one, so they mustn't each touch the disk.
+tag_cache = ref([])
+def file_tags(uri) =
+  cached = list.assoc(default=[("", "")], uri, tag_cache())
+  if
+    cached != [("", "")]
+  then
+    cached
+  else
+    m =
+      try
+        file.metadata(exclude=["autocue"], uri)
+      catch _ do
+        []
+      end
+    tag_cache := (uri, m)::tag_cache()
+    m
+  end
+end
+
 # A show's source.
 def show(f) =
   slug = slug_of(f)
@@ -335,12 +356,7 @@ def show(f) =
     # A candidate isn't resolved yet, so its tags are read from the file
     # (quickly: without autocue's measuring).
     uri = request.uri(r)
-    m =
-      try
-        file.metadata(exclude=["autocue"], uri)
-      catch _ do
-        []
-      end
+    m = file_tags(uri)
     artists = artists_of(list.assoc(default="", "artist", m))
     name = path.basename(uri)
     if
@@ -374,7 +390,21 @@ def show(f) =
   end
 
   tracks = playlist(mode="randomize", reload_mode="watch", check_next=next_ok, "/music/#{slug}")
-  tracks.on_track(synchronous=true, fun (m) -> complement_played_now(slug, m))
+
+  # When each track started, stamped as it starts: the complement counts by
+  # these, and the play log below (written asynchronously, after an HTTP
+  # call) uses the same times, so a check of the log agrees with what was
+  # enforced.
+  starts = ref([])
+  tracks.on_track(
+    synchronous=true,
+    fun (m) ->
+      begin
+        now = time()
+        complement_played_now(slug, m, now)
+        starts := list.prefix(10, (list.assoc(default="", "filename", m), now)::starts())
+      end
+  )
 
   # Per track (on the playlist: the crossfaded source doesn't mark every track),
   # from the raw metadata before the text recode below: the play log (with the
@@ -391,7 +421,7 @@ def show(f) =
         cover = "#{slug}/#{track_stem}.jpg"
         play =
           {
-            time = time(),
+            time = list.assoc(default=time(), list.assoc(default="", "filename", m), starts()),
             show = slug,
             artist = tag("artist"),
             title = tag("title"),

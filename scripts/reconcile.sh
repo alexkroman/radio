@@ -3,18 +3,19 @@
 # a listener. scripts/deploy.sh runs it on the server after every sync, and
 # test/e2e.sh after adding and removing a show. It compares what is running
 # with what is on disk, so a deploy cut short is caught up by the next one.
-#   - Icecast: `config.sh reload` rebuilds its config (a fallback mount per
-#     show) and has it re-read the config, keeping everyone connected.
-#   - Liquidsoap reads radio.liq and the list of shows once, at startup (one
-#     output per show; radio.liq writes the list to /tmp/shows): restart it
-#     when either differs from the files. radio.liq is a single-file bind
-#     mount, so the container still has the one it started with. Listeners
-#     hear their show's fallback meanwhile. A container `up` just created
-#     gets up to 30 s to write /tmp/shows first.
+#   - Icecast: `config.sh reload` rebuilds its config and has it re-read it,
+#     keeping everyone connected.
+#   - Liquidsoap reads radio.liq and the list of shows once, at startup
+#     (radio.liq writes the list to /tmp/shows): restart it when either
+#     differs from the files. radio.liq is a single-file bind mount, so the
+#     container still has the one it started with. Listeners hear the
+#     stream's silent fallback meanwhile. A container `up` just created gets
+#     up to 30 s to write /tmp/shows first.
 #   - Caddy reloads its config in place, keeping every connection (a no-op
 #     when it's unchanged).
-# Edits to a show and music need none of these: the app re-reads a show file
-# when it changes, and Liquidsoap watches the music folders.
+# Edits to a show (its hours included) and music need none of these: the app
+# re-reads a show file when it changes, Liquidsoap re-reads the hours every
+# minute and watches the music folders.
 # Run from the checkout. COMPOSE overrides the compose command (test/e2e.sh's
 # names its project and files).
 set -eu

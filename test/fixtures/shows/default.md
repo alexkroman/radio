@@ -1,4 +1,5 @@
 ---
+hours: 0-3
 title: Fixture Default
 djs:
   - name: Ana Ruiz

@@ -10,6 +10,8 @@ export const SITE_PASSWORD = process.env.SITE_PASSWORD ?? "";
 // For test.use(): a browser and `request` with no login cookie.
 export const LOGGED_OUT = { storageState: { cookies: [], origins: [] } };
 export const month = new Date().toISOString().slice(0, 7);
+// test/compose.yml's COMPLEMENT_WINDOW: the performance complement's three hours, in seconds.
+export const COMPLEMENT_WINDOW = 30;
 
 // Status, type and first ~16 KB of a (never-ending) stream.
 export function streamHead(path: string): Promise<{ status?: number; type?: string; bytes: number }> {
@@ -31,6 +33,69 @@ export function streamHead(path: string): Promise<{ status?: number; type?: stri
     req.on("error", reject);
     req.end();
   });
+}
+
+// The first `size` bytes of a response (a stream or a file).
+export function firstBytes(path: string, size = 65_536): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let got = 0;
+    const req = https(new URL(path, BASE), { rejectUnauthorized: false, timeout: 30_000 }, (res) => {
+      res.on("data", (c: Buffer) => {
+        chunks.push(c);
+        if ((got += c.length) >= size) {
+          req.destroy();
+          resolve(Buffer.concat(chunks).subarray(0, size));
+        }
+      });
+      res.on("end", () => resolve(Buffer.concat(chunks)));
+    });
+    req.on("timeout", () => req.destroy(new Error(`timeout reading ${path}`)));
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+// An MP3's format, from its first frame header (MPEG-1 Layer III) that a
+// second header follows where the first frame ends.
+const BITRATES = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
+const SAMPLE_RATES = [44_100, 48_000, 32_000];
+export function mp3Format(bytes: Buffer): { kbps: number; sampleRate: number; channels: number } | undefined {
+  const header = (i: number) => {
+    if (i + 4 > bytes.length || bytes[i] !== 0xff || (bytes[i + 1]! & 0xfe) !== 0xfa) return undefined;
+    const kbps = BITRATES[bytes[i + 2]! >> 4];
+    const sampleRate = SAMPLE_RATES[(bytes[i + 2]! >> 2) & 3];
+    if (!kbps || !sampleRate) return undefined;
+    const length = Math.floor((144_000 * kbps) / sampleRate) + ((bytes[i + 2]! >> 1) & 1);
+    return { kbps, sampleRate, channels: bytes[i + 3]! >> 6 === 3 ? 1 : 2, length };
+  };
+  for (let i = 0; i < bytes.length; i++) {
+    const h = header(i);
+    if (h && header(i + h.length)) return { kbps: h.kbps, sampleRate: h.sampleRate, channels: h.channels };
+  }
+  return undefined;
+}
+
+// A whole response: status, headers and body.
+export function get(path: string, headers: Record<string, string> = {}, method = "GET") {
+  return new Promise<{ status?: number; headers: Record<string, unknown>; body: Buffer }>(
+    (resolve, reject) => {
+      const req = https(
+        new URL(path, BASE),
+        { method, headers, rejectUnauthorized: false, timeout: 30_000 },
+        (res) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (c: Buffer) => chunks.push(c));
+          res.on("end", () =>
+            resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }),
+          );
+        },
+      );
+      req.on("timeout", () => req.destroy(new Error(`timeout reading ${path}`)));
+      req.on("error", reject);
+      req.end();
+    },
+  );
 }
 
 // Stay connected to a stream (discarding audio) until the returned function is called.
@@ -91,6 +156,14 @@ export async function loggedPlays(): Promise<Play[]> {
   });
 }
 
+// Put a show on air (radio.liq's onair, which test/compose.yml enables), and
+// wait for its first play: the track playing finishes first.
+export async function onAir(show: string, { wait = true } = {}) {
+  const res = await fetch("http://liquidsoap:7000/onair", { method: "POST", body: show });
+  if (!res.ok) throw new Error(`onair ${show}: ${res.status}`);
+  if (wait) await expect.poll(async () => (await loggedPlays()).at(-1)?.show, { timeout: 90_000 }).toBe(show);
+}
+
 // Reload until the now playing track matches (the show may not have logged it yet).
 export async function waitForTrack(page: Page, text: string | RegExp) {
   await expect(async () => {
@@ -106,4 +179,11 @@ export const player = (page: Page) =>
     const a = (window as unknown as { audio: HTMLAudioElement }).audio;
     return { src: a.getAttribute("src"), playing: !a.paused && a.readyState >= 3 };
   });
+// The lock screen's title, artist and album (navigator.mediaSession).
+export const lockScreen = (page: Page) =>
+  page.evaluate(() => {
+    const m = navigator.mediaSession.metadata;
+    return m && { title: m.title, artist: m.artist, album: m.album };
+  });
+
 export const playerState = async (page: Page) => ((await player(page)).playing ? "playing" : "stopped");

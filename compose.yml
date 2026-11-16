@@ -41,20 +41,22 @@ services:
       - -c
       - |
         set -e
-        chown -R 10001:10001 /data /logs /covers /plays
-        chmod -R u+rwX,g+rwX /logs /covers /plays /data
-        chmod g+s /logs /covers /plays
+        mkdir -p /archive/recording /archive/blocks /archive/short /archive/tracks
+        chown -R 10001:10001 /data /logs /covers /plays /archive
+        chmod -R u+rwX,g+rwX /logs /covers /plays /data /archive
+        chmod g+s /logs /covers /plays /archive /archive/recording /archive/blocks /archive/short /archive/tracks
     volumes:
       - caddy:/data
       - ./logs:/logs
       - ./covers:/covers
       - ./plays:/plays
+      - ./archive:/archive
     restart: "no"
 
-  # Serves the streams (one mount per show), with UTF-8 track metadata, extra
-  # buffering for slow connections and a silent fallback per show so listeners
-  # stay connected through a Liquidsoap restart: see icecast/config.sh, which
-  # also reloads the config for a new show without dropping anyone.
+  # Serves the stream (mount /stream), with UTF-8 track metadata, extra
+  # buffering for slow connections and a silent fallback so listeners stay
+  # connected through a Liquidsoap restart: see icecast/config.sh, which also
+  # reloads the config without dropping anyone.
   icecast:
     <<: [*hardening, *logging]
     group_add: ["10001"]
@@ -62,15 +64,18 @@ services:
     image: libretime/icecast:2.5.0
     command: ["sh", "-c", "sh /icecast/config.sh && exec icecast -c /tmp/icecast.xml"]
     environment:
+      # access.log's times, so scripts/archive-plays.sh counts local days.
+      TZ: ${TZ:-America/Los_Angeles}
       DOMAIN: ${DOMAIN:-localhost}
       ICECAST_SOURCE_PASSWORD: &password ${PASSWORD:?Set PASSWORD in .env}
       ICECAST_ADMIN_PASSWORD: *password
       ICECAST_RELAY_PASSWORD: *password
-      # Two per show: its Liquidsoap source and its silence fallback (the
-      # image's default is 2). Icecast logs an error at start unless the client
-      # limit below is more than twice this ("Client limit (200) is too small
-      # for given source limit (100)"), so keep MAX_LISTENERS over 80.
-      ICECAST_MAX_SOURCES: 40
+      # The Liquidsoap source and its silence fallback, plus a spare for a
+      # restarting Liquidsoap whose old connection lingers (the image's default
+      # is 2). Icecast logs an error at start unless the client limit below is
+      # more than twice this ("Client limit (200) is too small for given source
+      # limit (100)"), so keep MAX_LISTENERS over 8.
+      ICECAST_MAX_SOURCES: 4
       # Shown on Icecast's status pages (not public: Caddy only exposes the
       # streams). Unset, Icecast warns at every start.
       ICECAST_ADMIN_EMAIL: admin@${DOMAIN:-localhost}
@@ -81,13 +86,15 @@ services:
       ICECAST_MAX_CLIENTS: ${MAX_LISTENERS:-100}
     volumes:
       - ./logs:/var/log/icecast
-      - ./shows:/shows:ro
       - ./icecast:/icecast:ro
+      # Finished archive blocks, served at /archive/<file> (icecast/config.sh).
+      - ./archive:/archive:ro
     depends_on:
       init: { condition: service_completed_successfully }
 
-  # One 24/7 stream per show (radio.liq), sent to Icecast; writes the play log
-  # (plays/YYYY-MM.jsonl).
+  # The 24/7 stream, playing the shows on their schedule (radio.liq), sent to
+  # Icecast; writes the play log (plays/YYYY-MM.jsonl) and records each show
+  # block to archive/. TZ is the schedule's time zone (.env).
   liquidsoap:
     <<: [*hardening, *logging]
     group_add: ["10001"]
@@ -95,7 +102,7 @@ services:
     image: savonet/liquidsoap:v2.4.6
     command: ["/radio.liq"]
     environment:
-      TZ: ${TZ:-UTC}
+      TZ: ${TZ:-America/Los_Angeles}
       PASSWORD: *password
     volumes:
       - ./radio.liq:/radio.liq:ro
@@ -103,6 +110,7 @@ services:
       - ./music:/music:ro
       - ./covers:/covers:ro
       - ./plays:/plays
+      - ./archive:/archive
     depends_on:
       init: { condition: service_completed_successfully }
       icecast: { condition: service_started }
@@ -119,7 +127,8 @@ services:
     # a SIGKILL; with an init process it exits at once.
     init: true
     environment:
-      TZ: ${TZ:-UTC}
+      TZ: ${TZ:-America/Los_Angeles}
+      ARCHIVE_KEEP: ${ARCHIVE_KEEP:-1}
       SITE_TITLE: ${SITE_TITLE:-}
       CONTACT_EMAIL: ${CONTACT_EMAIL:-}
       SITE_PASSWORD: ${SITE_PASSWORD:-}
@@ -127,6 +136,27 @@ services:
       - ./shows:/shows:ro
       - ./covers:/covers:ro
       - ./plays:/plays:ro
+      - ./archive:/archive:ro
+      # Icecast's access logs: archive plays, for the reports (app/archive-plays.ts).
+      - ./logs:/logs:ro
+    depends_on:
+      init: { condition: service_completed_successfully }
+
+  # Deletes archive blocks before they've been up two weeks, all but the
+  # newest ARCHIVE_KEEP of each show, and blocks too short to archive
+  # (scripts/prune-archive.sh): at start, then every hour (nightly included),
+  # so a finished block's predecessor goes within the hour.
+  archive-prune:
+    <<: [*hardening, *logging]
+    user: "10001:10001"
+    restart: unless-stopped
+    image: busybox:1.38.0
+    command: ["sh", "-c", "while :; do sh /prune-archive.sh; sleep 3600; done"]
+    environment:
+      ARCHIVE_KEEP: ${ARCHIVE_KEEP:-1}
+    volumes:
+      - ./scripts/prune-archive.sh:/prune-archive.sh:ro
+      - ./archive:/archive
     depends_on:
       init: { condition: service_completed_successfully }
 

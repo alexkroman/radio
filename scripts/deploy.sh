@@ -19,6 +19,9 @@ if [ "$(git branch --show-current)" != main ] ||
   echo "  git checkout main && git pull" >&2
   exit 1
 fi
+# The shows' hours must cover every hour of the day exactly once: a gap would
+# be silence on air.
+node app/check-schedule.ts || exit 1
 # A show without its music folder would play nothing but silence.
 for show in shows/*.md; do
   slug=$(basename "$show" .md)
@@ -61,7 +64,7 @@ rs music covers shows "$HOST:radio/"
 # Then bring Icecast, Liquidsoap and Caddy up to date (scripts/reconcile.sh),
 # which drops no listener.
 $SSH "$HOST" 'chmod 600 radio/.env && cd radio &&
-  mkdir -p music plays logs covers &&
+  mkdir -p music plays logs covers archive &&
   BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose up -d --build --remove-orphans &&
   sh scripts/reconcile.sh'
 
@@ -69,4 +72,11 @@ $SSH "$HOST" 'chmod 600 radio/.env && cd radio &&
 # backup/plays/. Never deletes, and never touches the local plays/.
 mkdir -p backup/plays
 rsync -rt -e "$SSH" "$HOST:radio/plays/" backup/plays/
+# Likewise Icecast's access logs, where archive plays are counted
+# (scripts/archive-plays.sh backup/logs/access.log*).
+mkdir -p backup/logs
+rsync -rt -e "$SSH" --include='access.log*' --exclude='*' "$HOST:radio/logs/" backup/logs/
+# And the archive's track sidecars, which the reports read archive plays with.
+mkdir -p backup/archive/tracks
+rsync -rt -e "$SSH" "$HOST:radio/archive/tracks/" backup/archive/tracks/
 echo "Deployed to $IP"

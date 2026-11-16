@@ -1,10 +1,13 @@
 // End-to-end tests against the real stack (Caddy, Liquidsoap, the app) running
-// on test/fixtures. Run with `npm run e2e`; test/global-setup.ts logs in.
+// on test/fixtures. Run with `npm run e2e`; test/global-setup.ts logs in. The
+// fixture shows each have three hours of the day; a test that needs one on
+// the air puts it there (helpers.ts onAir).
 import { expect, test } from "@playwright/test";
 import {
   BASE,
   LOGGED_OUT,
   month,
+  onAir,
   player,
   playerState,
   SITE_PASSWORD,
@@ -12,34 +15,49 @@ import {
   waitForTrack,
 } from "./helpers.ts";
 
-test("each show is its own MP3 stream", async () => {
-  for (const show of ["default", "night"]) {
-    await expect(async () => {
-      expect(await streamHead(`/${show}/stream`)).toEqual({
-        status: 200,
-        type: "audio/mpeg",
-        bytes: expect.any(Number),
-      });
-    }).toPass({ timeout: 60_000 });
-  }
+test("the station is one MP3 stream", async () => {
+  await expect(async () => {
+    expect(await streamHead("/stream")).toEqual({
+      status: 200,
+      type: "audio/mpeg",
+      bytes: expect.any(Number),
+    });
+  }).toPass({ timeout: 60_000 });
 });
 
-test("home page lists every show with its description", async ({ page }) => {
+test("home page has what's on, what's next and the schedule", async ({ page }) => {
+  await onAir("night");
   await page.goto("/");
-  await expect(page.getByRole("link", { name: "Fixture Default" })).toHaveAttribute("href", "/default");
-  await expect(page.getByRole("link", { name: "Fixture Night" })).toHaveAttribute("href", "/night");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName("Mazes Radio, home");
+  await expect(page.locator("#on-air h2")).toHaveText("Fixture Night");
+  await expect(page.locator("#np .np-track")).toHaveText("Midnight");
+  // The show due now waits for Night's track to end if it isn't Night (the
+  // test put Night on air, whatever the hour).
+  await expect(page.locator("#next")).toContainText(/Up next: .+ (at \d|after this track)/);
+  await expect(page.getByRole("main").getByRole("button", { name: "Play Mazes Radio" })).toBeVisible();
+  const rows = page.locator("#schedule .station");
+  await expect(rows.locator(".station-name")).toHaveText([
+    "Fixture Default",
+    "Edge Cases",
+    "Empty",
+    "Long Titles",
+    "Fixture Night",
+    "Odd Characters",
+    "plain",
+    "Quiet",
+    "Complement",
+  ]);
+  await expect(rows.first().locator(".hours")).toHaveText(/^\d{1,2}:00 [AP]M–\d{1,2}:00 [AP]M$/);
+  await expect(page.locator("#schedule .on-air")).toHaveCount(1);
+  await expect(rows.filter({ has: page.locator(".on-air") }).locator(".station-name")).toHaveText(
+    "Fixture Night",
+  );
   await expect(page.locator(".station-desc", { hasText: "default" })).toBeVisible();
-  await expect(page.getByRole("main").getByRole("button", { name: "Play Fixture Night" })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName("Mazes Radio, all stations");
 });
 
-test("tapping anywhere on a station card opens it, but play plays in place", async ({ page }) => {
+test("tapping anywhere on a show in the schedule opens it", async ({ page }) => {
   await page.goto("/");
   const night = page.locator(".station", { has: page.locator('a[href="/night"]') });
-  await night.getByRole("button", { name: "Play Fixture Night" }).click();
-  await expect(night.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
-  await expect(page).toHaveURL(/\/$/);
-  await night.getByRole("button", { name: "Pause Fixture Night" }).click();
   // The card's link covers the description, so a real click there lands on it.
   await night.locator(".station-desc").click({ force: true });
   await expect(page).toHaveURL(/\/night$/);
@@ -66,16 +84,14 @@ test("a DJ page has their profile, shows and links", async ({ page }) => {
   await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
   const shows = page.locator(".dj-shows .station");
   await expect(shows.locator(".station-name")).toHaveText(["Fixture Default", "Fixture Night"]);
-  await expect(shows.locator(".credit, .station-num")).toHaveCount(0);
+  await expect(shows.locator(".hours")).toHaveCount(2);
+  await expect(shows.locator(".credit")).toHaveCount(0);
   await expect(page.locator(".site-header nav a[aria-current]")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "instagram.com/anaruiz" })).toHaveAttribute(
     "href",
     "https://instagram.com/anaruiz",
   );
   await expect(page.locator(".streams dt")).toHaveText(["Instagram"]);
-  await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
-  await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
-  await page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" }).click();
 
   // Just a name: no photo, bio or links.
   await page.goto("/djs/zoe-nandu");
@@ -84,20 +100,25 @@ test("a DJ page has their profile, shows and links", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Elsewhere" })).toHaveCount(0);
 });
 
-test("manifesto lists every stream", async ({ page }) => {
-  await page.goto("/manifesto");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Manifesto");
-  await expect(page.getByRole("link", { name: /\/night\/stream$/ })).toHaveAttribute("href", "/night/stream");
+test("the About page has the stream", async ({ page }) => {
+  await page.goto("/about");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("About");
+  await expect(page.getByRole("link", { name: /\/stream$/ })).toHaveAttribute("href", "/stream");
   await expect(page.locator(".streams")).toContainText("MP3 · 256 kbps");
 });
 
-test("show page shows its own now playing and history", async ({ page }) => {
+test("a show on air has its track; one off air, when it's next on", async ({ page }) => {
+  await onAir("night");
   await page.goto("/night");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Fixture Night");
+  await expect(page.locator(".title-block")).toContainText(/Daily \d{1,2}:00 [AP]M–\d{1,2}:00 [AP]M/);
   await waitForTrack(page, "Midnight");
   await expect(page.locator("#np .np-artist")).toHaveText("Gamma");
-  await expect(page.getByRole("link", { name: /\/night\/stream$/ })).toHaveAttribute("href", "/night/stream");
 
+  await onAir("default");
+  await page.goto("/night");
+  await expect(page.locator("#np")).toContainText(/Off air\. Next on at \d{1,2}:00 [AP]M\./);
+  await expect(page.locator("#history")).toContainText("Midnight");
   await page.goto("/default");
   await waitForTrack(page, /First Light|Second Wind/);
   await expect(page.locator("main")).not.toContainText("Midnight");
@@ -110,29 +131,31 @@ test("show page shows its own now playing and history", async ({ page }) => {
   await expect(page.locator("main")).not.toContainText("&amp;");
 });
 
-test("now playing refreshes itself", async ({ page }) => {
-  const problems: string[] = [];
-  page.on("console", (m) => m.type() === "error" && problems.push(m.text()));
-  await page.goto("/default");
-  const latest = () =>
-    page
-      .locator("#history time")
-      .first()
-      .getAttribute("datetime", { timeout: 1000 })
-      .catch(() => null);
-  const before = await latest();
-  await expect.poll(latest, { timeout: 60_000 }).not.toBe(before);
-  expect(problems).toEqual([]);
+test("the home page follows the show on air without a reload", async ({ page }) => {
+  await onAir("night");
+  await page.goto("/");
+  await page.evaluate(() => ((window as unknown as { loaded: boolean }).loaded = true));
+  await expect(page.locator("#on-air h2")).toHaveText("Fixture Night");
+  await onAir("default");
+  await expect(page.locator("#on-air h2")).toHaveText("Fixture Default");
+  await expect(page.locator("#np .np-track")).toHaveText(/First Light|Second Wind/);
+  await expect(page.locator("#schedule .on-air")).toHaveCount(1);
+  await expect(
+    page.locator("#schedule .station", { has: page.locator(".on-air") }).locator(".station-name"),
+  ).toHaveText("Fixture Default");
+  // Swapped in by the poll, not a page load.
+  expect(await page.evaluate(() => (window as unknown as { loaded?: boolean }).loaded)).toBe(true);
 });
 
 test("home page now playing and cover follow the track without a reload", async ({ page }) => {
   // The default fixture plays two 20 s tracks, each with its own cover, in
   // random order: with only two artists, artist separation gives up and the
   // same track can repeat several times, so allow a few minutes for a change.
-  test.setTimeout(300_000);
+  test.setTimeout(360_000);
+  await onAir("default");
   await page.goto("/");
   await page.evaluate(() => ((window as unknown as { loaded: boolean }).loaded = true));
-  const np = page.locator("#np-default");
+  const np = page.locator("#np");
   const shown = async () => ({
     track: await np
       .locator(".np-track")
@@ -158,10 +181,12 @@ test("home page now playing and cover follow the track without a reload", async 
   expect(await page.evaluate(() => (window as unknown as { loaded?: boolean }).loaded)).toBe(true);
 });
 
-test("cover art of the current track is served", async ({ request }) => {
+test("cover art of the track on air is served", async ({ request }) => {
+  await onAir("night");
   await expect(async () => {
-    const { cover } = (await (await request.get("/now.json")).json()).night;
-    const res = await request.get(cover);
+    const now = await (await request.get("/now.json")).json();
+    expect(now).toMatchObject({ title: "Fixture Night", track: "Midnight" });
+    const res = await request.get(now.cover);
     expect(res.status()).toBe(200);
     expect(res.headers()["content-type"]).toBe("image/jpeg");
   }).toPass();
@@ -176,10 +201,6 @@ test("app.js and app.css are revalidated on every load", async ({ request }) => 
   }
 });
 
-test("an unknown show has no stream", async () => {
-  expect((await streamHead("/nope/stream")).status).toBe(404);
-});
-
 test("security headers are set and the server banner is stripped", async ({ request }) => {
   const headers = (await request.get("/")).headers();
   expect(headers["content-security-policy"]).toContain("default-src 'self'");
@@ -188,7 +209,7 @@ test("security headers are set and the server banner is stripped", async ({ requ
 });
 
 test("SoundExchange report counts plays from every show with file tags", async ({ page, request }) => {
-  await page.goto("/manifesto");
+  await page.goto("/about");
   await page.getByRole("link", { name: "reports", exact: true }).click();
   await expect(page.locator(`a[href="/reports/${month}"]`)).toBeVisible();
   await expect(async () => {
@@ -214,37 +235,33 @@ test("player plays the stream using only self-hosted assets", async ({ page }) =
   page.on("pageerror", (e) => problems.push(e.message));
   page.on("request", (r) => !r.url().startsWith(BASE) && problems.push(`external request: ${r.url()}`));
   const state = () => playerState(page);
-  await page.goto("/night");
-  await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
-  await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
-  await expect(page.locator("[data-status=night]")).toHaveText("Listening · Live");
+  const main = page.getByRole("main");
+  await page.goto("/");
+  await main.getByRole("button", { name: "Play Mazes Radio" }).click();
+  await expect(main.getByRole("button", { name: "Pause Mazes Radio" })).toBeVisible();
+  await expect(page.locator("[data-status]")).toHaveText("Listening · Live");
   await expect.poll(state).toBe("playing");
   await expect(page.locator("#np img")).toBeVisible();
 
-  // Browsing keeps it playing, and the list shows which station is on.
-  await page.getByRole("link", { name: "Manifesto", exact: true }).click();
-  await expect(page).toHaveURL(/\/manifesto$/);
-  await expect(page).toHaveTitle(/^Manifesto/);
-  await page.getByRole("link", { name: "Stations", exact: true }).click();
-  await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
-  await expect(page.getByRole("main").getByRole("button", { name: "Play Fixture Default" })).toBeVisible();
+  // Browsing keeps it playing, and every play button shows it.
+  await page.getByRole("link", { name: "About", exact: true }).click();
+  await expect(page).toHaveURL(/\/about$/);
+  await expect(page).toHaveTitle(/^About/);
+  await page.getByRole("link", { name: "Schedule", exact: true }).click();
+  await expect(main.getByRole("button", { name: "Pause Mazes Radio" })).toBeVisible();
   expect(await state()).toBe("playing");
-
-  // Starting another station stops this one.
-  await page.getByRole("main").getByRole("button", { name: "Play Fixture Default" }).click();
-  await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Default" })).toBeVisible();
-  await expect(page.getByRole("main").getByRole("button", { name: "Play Fixture Night" })).toBeVisible();
-  await expect.poll(state).toBe("playing");
-  await page.getByRole("main").getByRole("button", { name: "Pause Fixture Default" }).click();
-  await expect(page.getByRole("main").getByRole("button", { name: "Play Fixture Default" })).toBeVisible();
+  await main.getByRole("button", { name: "Pause Mazes Radio" }).click();
+  await expect(main.getByRole("button", { name: "Play Mazes Radio" })).toBeVisible();
+  await expect.poll(state).toBe("stopped");
   expect(problems).toEqual([]);
 });
 
 // iOS allows play() only in a tap, and with an AirPlay speaker picked, a
-// switch that didn't simply point the audio element at the new stream and play
-// it there left the speaker silent. The element stays the phone's (AirPlay
+// player that didn't simply point the audio element at the stream and play it
+// there left the speaker silent. The element stays the phone's (AirPlay
 // carries the phone's output), and the track comes from now.json.
-test("switching shows plays the new stream in the tap, on the phone's own output", async ({ page }) => {
+test("play plays the stream in the tap, on the phone's own output", async ({ page }) => {
+  await onAir("night");
   await page.addInitScript(() => {
     const w = window as unknown as { inTap: boolean; plays: boolean[] };
     w.plays = [];
@@ -261,62 +278,48 @@ test("switching shows plays the new stream in the tap, on the phone's own output
       const a = (window as unknown as { audio: HTMLAudioElement }).audio;
       return { disabled: a.disableRemotePlayback, airplay: a.getAttribute("x-webkit-airplay") };
     });
-  const main = page.getByRole("main");
   await page.goto("/");
-  await main.getByRole("button", { name: "Play Fixture Default" }).click();
-  await expect.poll(() => player(page)).toEqual({ src: "/default/stream", playing: true });
-  await main.getByRole("button", { name: "Play Fixture Night" }).click();
-  await expect.poll(() => player(page)).toEqual({ src: "/night/stream", playing: true });
-  await expect(main.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
-  expect(await page.evaluate(() => (window as unknown as { plays: boolean[] }).plays)).toEqual([true, true]);
+  await page.getByRole("main").getByRole("button", { name: "Play Mazes Radio" }).click();
+  await expect.poll(() => player(page)).toEqual({ src: "/stream", playing: true });
+  expect(await page.evaluate(() => (window as unknown as { plays: boolean[] }).plays)).toEqual([true]);
   expect(await remote()).toEqual({ disabled: true, airplay: "deny" });
-  // The lock screen's track, and the bar's off the station's page.
-  const { track } = (await (await page.request.get("/now.json")).json()).night;
+  // The lock screen's track, artist and album, and the bar's on another page.
+  const { track, artist, album } = await (await page.request.get("/now.json")).json();
   await expect.poll(() => page.evaluate(() => navigator.mediaSession.metadata?.title)).toBe(track);
-  await page.getByRole("link", { name: "Manifesto" }).first().click();
-  await expect(page).toHaveURL(/\/manifesto$/);
+  expect(
+    await page.evaluate(() => [
+      navigator.mediaSession.metadata?.artist,
+      navigator.mediaSession.metadata?.album,
+    ]),
+  ).toEqual([artist, album]);
+  await page.getByRole("link", { name: "About" }).first().click();
+  await expect(page).toHaveURL(/\/about$/);
   await expect(page.locator("#bar-track")).toContainText(track);
   // Pausing drops the connection.
-  await page.locator("#player").getByRole("button", { name: "Pause Fixture Night" }).click();
+  await page.locator("#player").getByRole("button", { name: "Pause Mazes Radio" }).click();
   await expect.poll(() => player(page)).toEqual({ src: null, playing: false });
 });
 
 test("pausing and playing again at once keeps playing", async ({ page }) => {
   const state = () => playerState(page);
-  await page.goto("/night");
-  await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
+  await page.goto("/");
+  await page.getByRole("main").getByRole("button", { name: "Play Mazes Radio" }).click();
   await expect.poll(state).toBe("playing");
   // Two clicks in one task.
   await page.evaluate(() => {
-    const b = document.querySelector<HTMLButtonElement>("button[data-play=night]")!;
+    const b = document.querySelector<HTMLButtonElement>("main button[data-play]")!;
     b.click();
     b.click();
   });
-  await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("button", { name: "Pause Mazes Radio" })).toBeVisible();
   await expect.poll(state).toBe("playing");
   await page.waitForTimeout(2000);
   expect(await state()).toBe("playing");
-  await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("button", { name: "Pause Mazes Radio" })).toBeVisible();
 });
 
-test("pausing one station and playing another at once plays the other", async ({ page }) => {
-  const state = () => playerState(page);
-  await page.goto("/");
-  await page.getByRole("main").getByRole("button", { name: "Play Fixture Default" }).click();
-  await expect.poll(state).toBe("playing");
-  await page.evaluate(() => {
-    document.querySelector<HTMLButtonElement>("button[data-play=default]")!.click();
-    document.querySelector<HTMLButtonElement>("button[data-play=night]")!.click();
-  });
-  await expect.poll(state).toBe("playing");
-  await page.waitForTimeout(2000);
-  expect(await state()).toBe("playing");
-  await expect(page.getByRole("main").getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
-});
-
-test("a refresh still in flight when you leave a station page isn't swapped into the next", async ({
-  page,
-}) => {
+test("a refresh still in flight when you leave a show page isn't swapped into the next", async ({ page }) => {
+  await onAir("night");
   let release!: () => void;
   const held = new Promise<void>((r) => (release = r));
   let polled!: () => void;
@@ -330,15 +333,15 @@ test("a refresh still in flight when you leave a station page isn't swapped into
   await page.goto("/night");
   await page.locator("#poll").evaluate((el) => el.dispatchEvent(new Event("refresh")));
   await requested;
-  await page.getByRole("link", { name: "Stations", exact: true }).click();
+  await page.getByRole("link", { name: "Schedule", exact: true }).click();
   await page.getByRole("link", { name: "Fixture Default" }).click();
-  await expect(page.locator("#np")).toHaveAttribute("data-np", "default");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Fixture Default");
   const done = page.waitForEvent("requestfinished", (r) => r.url().endsWith("/night")).catch(() => {});
   release();
   await Promise.race([done, page.waitForTimeout(3000)]);
   await page.waitForTimeout(500); // htmx swaps and settles within ~20 ms of the response
   // Checked once: the default page's own refresh would soon put it right again.
-  expect(await page.locator("#np").getAttribute("data-np")).toBe("default");
+  expect(await page.locator("#np").textContent()).toContain("Off air");
   expect(await page.locator("#history").textContent()).not.toContain("Midnight");
 });
 
@@ -349,36 +352,37 @@ for (const [name, viewport] of [
   test.describe(() => {
     test.use({ viewport });
     test(`the player bar always shows (${name})`, async ({ page }) => {
+      await onAir("night");
       await page.goto("/");
       const bar = page.getByRole("region", { name: "Player" });
-      // Paused, with the page's first station, before anything plays.
-      await expect(bar).toBeVisible();
-      await expect(bar.getByRole("button", { name: /^Play / })).toBeVisible();
-      await page.getByRole("main").getByRole("button", { name: "Play Fixture Night" }).click();
+      // Paused, with the show on air, before anything plays.
       await expect(bar).toBeVisible();
       await expect(bar).toContainText("Fixture Night · Live");
       await expect(bar).toContainText("Midnight · Gamma");
       await expect(bar.getByRole("img", { name: "Cover art: Midnight, Gamma" })).toBeVisible();
+      await expect(bar.getByRole("button", { name: "Play Mazes Radio" })).toBeVisible();
+      await page.getByRole("main").getByRole("button", { name: "Play Mazes Radio" }).click();
+      await expect(bar.getByRole("button", { name: "Pause Mazes Radio" })).toBeVisible();
       // It (and the stream) stays through navigation.
-      await page.getByRole("link", { name: "Manifesto" }).click();
-      await expect(page).toHaveURL(/\/manifesto$/);
+      await page.getByRole("link", { name: "About" }).click();
+      await expect(page).toHaveURL(/\/about$/);
       await expect(bar).toContainText("Fixture Night · Live");
-      await bar.getByRole("button", { name: "Pause Fixture Night" }).click();
-      // It stays, paused, with the same station, and plays it again.
+      await bar.getByRole("button", { name: "Pause Mazes Radio" }).click();
+      // It stays, paused, and plays again.
       await expect(bar).toBeVisible();
       await expect(bar).toContainText("Fixture Night · Live");
-      await bar.getByRole("button", { name: "Play Fixture Night" }).click();
-      await expect(bar.getByRole("button", { name: "Pause Fixture Night" })).toBeVisible();
+      await bar.getByRole("button", { name: "Play Mazes Radio" }).click();
+      await expect(bar.getByRole("button", { name: "Pause Mazes Radio" })).toBeVisible();
     });
   });
 
 test.describe(() => {
   test.use({ permissions: ["clipboard-read", "clipboard-write"] });
   test("the stream URL can be copied", async ({ page }) => {
-    await page.goto("/night");
+    await page.goto("/");
     await page.getByRole("button", { name: "Copy" }).click();
     await expect(page.getByRole("button", { name: "Copied" })).toBeVisible();
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${BASE}/night/stream`);
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${BASE}/stream`);
     await expect(page.getByRole("button", { name: "Copy" })).toBeVisible();
   });
 });
@@ -398,7 +402,7 @@ test.describe("logged out", () => {
     }
   });
 
-  test("only the app and the show streams are reachable", async ({ request }) => {
+  test("only the app and the stream are reachable", async ({ request }) => {
     const paths = [
       "/status-json.xsl",
       "/status.xsl",
@@ -406,22 +410,23 @@ test.describe("logged out", () => {
       "/admin/stats",
       "/admin/listmounts",
       "/admin/metadata",
+      "/fallback.mp3",
       "/default.md",
-      "/night/../status-json.xsl",
+      "/stream/../status-json.xsl",
       "/style.css",
     ];
     for (const path of paths) {
-      const res = await request.get(path);
+      const res = await request.get(path, { maxRedirects: 0 });
       expect([401, 404], `${path} → ${res.status()}`).toContain(res.status());
       expect(await res.text()).not.toMatch(/icecast/i);
     }
   });
 
-  test("pages need a login; streams and assets don't", async ({ page, request }) => {
+  test("pages need a login; the stream and assets don't", async ({ page, request }) => {
     expect((await request.get("/night")).status()).toBe(401);
     expect((await request.get("/now.json")).status()).toBe(401);
     expect((await request.get("/assets/app.css")).status()).toBe(200);
-    expect((await streamHead("/night/stream")).status).toBe(200);
+    expect((await streamHead("/stream")).status).toBe(200);
 
     await page.goto("/night");
     await page.getByPlaceholder("Password").fill("wrong");

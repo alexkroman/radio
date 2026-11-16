@@ -1,5 +1,6 @@
 ---
 title: Frequency
+hours: 6-17
 djs:
   - name: Alex
     links:

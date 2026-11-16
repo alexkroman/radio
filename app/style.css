@@ -85,7 +85,7 @@ button {
   gap: 56px;
 }
 
-.page-manifesto {
+.page-about {
   --width: var(--width-prose);
 }
 
@@ -287,13 +287,6 @@ img.cover {
   border-bottom: 1px solid var(--color-hairline);
 }
 
-.station-num {
-  flex: none;
-  width: 40px;
-  font: var(--type-time);
-  color: var(--color-muted);
-}
-
 .station-info {
   flex: 1 1 220px;
   min-width: 0;
@@ -329,7 +322,6 @@ img.cover {
   outline-offset: 2px;
 }
 
-.station .play,
 .station-desc :any-link,
 .station-credit :any-link {
   position: relative;
@@ -343,24 +335,43 @@ img.cover {
   color: var(--color-muted);
 }
 
-.station-np {
-  flex: 1 1 280px;
-  min-width: 0;
+/* A show's hours ("6:00 AM–5:00 PM"): in the schedule's first column. */
+.hours .time {
+  width: auto;
+}
+
+.station-hours {
+  flex: none;
+  width: 150px;
+  font: var(--type-time);
+  color: var(--color-muted);
+}
+
+/* A show's last archived block, playable from the schedule (above the
+   card's link). */
+.station-archive {
+  position: relative;
+  z-index: 1;
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
-.np-lines {
-  min-width: 0;
+.station-archive-text {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  font: var(--type-small);
+  gap: 2px;
+  font: var(--type-time);
+  color: var(--color-muted);
 }
 
-.np-lines .np-artist {
-  color: var(--color-muted);
+.on-air {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-ink);
 }
 
 /* ── DJ credit: "with A & B" ── */
@@ -368,9 +379,10 @@ img.cover {
   color: var(--color-muted);
 }
 
-/* Underlined links: DJ credits and body text. */
+/* Underlined links: DJ credits, up next and body text. */
 /* stylelint-disable no-descending-specificity -- unrelated links */
 .credit a,
+.next a,
 .prose p a {
   text-decoration: underline;
   text-decoration-thickness: 1px;
@@ -435,6 +447,61 @@ img.cover {
 
 .np-text .np-artist {
   font: var(--type-subtitle);
+  color: var(--color-muted);
+}
+
+.next {
+  margin-block: 0;
+  font: var(--type-small);
+  color: var(--color-muted);
+}
+
+.schedule {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── About: questions ── */
+.faq h3 {
+  margin: 20px 0 4px;
+  font: var(--type-track);
+  font-weight: 600;
+}
+
+/* ── Archive ── */
+.archive-show {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.archive-blocks {
+  list-style: none;
+  padding: 0;
+  border-top: 1px solid var(--color-ink);
+}
+
+.archive-block {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.archive-title {
+  flex: 1 1 140px;
+  min-width: 0;
+  font: var(--type-station-name);
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+.archive-date,
+.archive-length {
+  font: var(--type-time);
   color: var(--color-muted);
 }
 
@@ -540,7 +607,7 @@ img.cover {
   gap: 16px;
 }
 
-/* ── Manifesto ── */
+/* ── About ── */
 .lead {
   font: var(--type-lead);
   letter-spacing: -0.01em;
@@ -715,21 +782,12 @@ img.cover {
   }
 
   .station {
-    display: grid;
-    grid-template-columns: 64px minmax(0, 1fr) var(--tap);
-    grid-template-areas:
-      "cover info play"
-      "cover np play";
     gap: 4px 16px;
     padding: 22px 0;
   }
 
-  .station-num {
-    display: none;
-  }
-
-  .station-info {
-    grid-area: info;
+  .station-hours {
+    width: 100%;
   }
 
   .station-name {
@@ -737,39 +795,13 @@ img.cover {
   }
 
   .station-desc,
-  .station-desc *,
-  .np-lines {
+  .station-desc * {
     font-size: 14px;
   }
 
   .station-credit {
     margin-top: 0;
     font-size: 13px;
-  }
-
-  .station-np {
-    display: contents;
-  }
-
-  .station-np .cover {
-    grid-area: cover;
-    width: 64px;
-    height: 64px;
-  }
-
-  .np-lines {
-    grid-area: np;
-    display: block;
-    margin-top: 6px;
-    color: var(--color-muted);
-  }
-
-  .np-lines .np-artist::before {
-    content: " · ";
-  }
-
-  .play {
-    grid-area: play;
   }
 
   .history li {

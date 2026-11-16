@@ -1,4 +1,5 @@
 ---
+hours: 12-15
 title: Fixture Night
 djs:
   - Ana Ruiz

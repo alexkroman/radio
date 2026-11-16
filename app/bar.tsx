@@ -1,11 +1,24 @@
 /** @jsxImportSource hono/jsx/dom */
 // The fixed player bar, rendered in the browser with hono/jsx/dom
 // into #player (outside the swapped page, so it and the audio survive
-// navigation). app/client.ts sets what it shows with setBar(); it always shows,
-// with the last station played (at first, the site's first show), paused.
+// navigation). app/client.ts sets what it shows with setBar(): the show and
+// track on air, or an archive block and the track playing in it; it always
+// shows, paused until played. It has no seek bar or download: the stream
+// plays from where it is, and blocks from the beginning.
 import { render, useLayoutEffect, useRef, useState } from "hono/jsx/dom";
 
-export type BarState = { title: string; track: string; artist: string; cover: string; playing: boolean };
+// station: what the button plays (the site's name, or an archive block's
+// title); title: the show on air, or the block; live: not an archive block.
+export type BarState = {
+  station: string;
+  title: string;
+  live: boolean;
+  track: string;
+  artist: string;
+  album: string;
+  cover: string;
+  playing: boolean;
+};
 
 // What the bar shows, and its setter once it has rendered (one bar per page).
 let state: BarState | undefined;
@@ -43,7 +56,8 @@ function Bar({ onToggle }: { onToggle: () => void }) {
   const [s, set] = useState(state);
   setState = set;
   if (!s) return null;
-  const parts = [s.track, s.artist].filter(Boolean);
+  // Title, artist and album: the statutory license has us show all three.
+  const parts = [s.track, s.artist, s.album].filter(Boolean);
   return (
     <div id="bar" role="region" aria-label="Player">
       {s.cover ? (
@@ -55,13 +69,13 @@ function Bar({ onToggle }: { onToggle: () => void }) {
         <span id="bar-track">{parts.join(" · ")}</span>
         <span class="bar-status">
           {s.playing && <span class="dot" aria-hidden="true" />}
-          <span>{`${s.title} · Live`}</span>
+          <span>{`${s.title} · ${s.live ? "Live" : "Archive"}`}</span>
         </span>
       </div>
       <button
         type="button"
         class="play play-bar"
-        aria-label={`${s.playing ? "Pause" : "Play"} ${s.title}`}
+        aria-label={`${s.playing ? "Pause" : "Play"} ${s.station}`}
         onClick={onToggle}
       >
         {/* ui.tsx PauseIcon and PlayIcon (server JSX, so not shared). */}

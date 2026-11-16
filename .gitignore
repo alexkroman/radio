@@ -13,6 +13,7 @@ test-results/
 playwright-report/
 plays/*
 !plays/.gitkeep
+/archive/
 scripts/beets/library*.db
 *.bak
 /backup/

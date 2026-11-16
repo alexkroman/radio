@@ -1,19 +1,23 @@
 // Edge cases: odd titles and show files, missing music, traversal,
 // listener counting. Fixtures: test/fixtures/{shows,music}/{edge,plain,empty,quiet}.
 import { expect, test } from "@playwright/test";
-import { listen, loggedPlays, performances, streamHead, waitForTrack } from "./helpers.ts";
+import { archivePerformances } from "../app/archive-plays.ts";
+import { listen, loggedPlays, month, onAir, performances, streamHead, waitForTrack } from "./helpers.ts";
 
 test("titles with unicode, pipes and HTML show exactly as tagged", async ({ page }) => {
+  await onAir("edge");
   await page.goto("/edge");
   await waitForTrack(page, "Café | Olé <b>");
-  await expect(page.locator("#np .np-artist")).toHaveText("Zoë Ñandú");
+  // With its album, which the license requires along with title and artist.
+  await expect(page.locator("#np .np-artist")).toHaveText("Zoë Ñandú · Édition | Spéciale");
   await expect(page.locator("main b")).toHaveCount(0);
 });
 
 test('cover art with a unicode or "&" file name is served', async ({ request }) => {
   expect((await request.get("/covers/default/Beta%20&%20Band-%20Second%20Wind.jpg")).status()).toBe(200);
+  await onAir("edge");
   await expect(async () => {
-    const { cover } = (await (await request.get("/now.json")).json()).edge;
+    const { cover } = await (await request.get("/now.json")).json();
     expect(cover).toBe("/covers/edge/Zo%C3%AB%20%C3%91and%C3%BA-%20Caf%C3%A9%20_%20Ol%C3%A9%20_b_.jpg");
     const res = await request.get(cover);
     expect(res.status()).toBe(200);
@@ -22,7 +26,7 @@ test('cover art with a unicode or "&" file name is served', async ({ request }) 
 });
 
 test("an unchanged page or asset is 304 through Caddy's compression", async ({ request }) => {
-  for (const path of ["/manifesto", "/assets/app.js"]) {
+  for (const path of ["/about", "/assets/app.js"]) {
     const headers = { "accept-encoding": "gzip" };
     const res = await request.get(path, { headers });
     expect(res.headers()["content-encoding"], path).toBe("gzip");
@@ -38,15 +42,24 @@ test("report keeps unicode and the whole title when it contains a pipe", async (
 });
 
 test("a track without cover art shows the placeholder", async ({ page, request }) => {
+  await onAir("plain");
   await page.goto("/plain");
   await waitForTrack(page, "Untitled Thing");
-  expect((await (await request.get("/now.json")).json()).plain.cover).toBe("");
+  expect((await (await request.get("/now.json")).json()).cover).toBe("");
   await expect(page.locator("#np img")).toHaveCount(0);
   await expect(page.locator("#np .cover-ph")).toBeVisible();
 });
 
-test("a show with no music folder still streams and renders", async ({ page }) => {
-  expect(await streamHead("/empty/stream")).toEqual({
+test("a show with no music folder plays silence and renders", async ({ page }) => {
+  await onAir("empty", { wait: false });
+  // The track playing finishes; then nothing more is played.
+  const quiet = async () => {
+    const seen = (await loggedPlays()).length;
+    await new Promise((r) => setTimeout(r, 25_000));
+    return (await loggedPlays()).length === seen;
+  };
+  await expect.poll(quiet, { timeout: 120_000, intervals: [0] }).toBe(true);
+  expect(await streamHead("/stream")).toEqual({
     status: 200,
     type: "audio/mpeg",
     bytes: expect.any(Number),
@@ -54,11 +67,13 @@ test("a show with no music folder still streams and renders", async ({ page }) =
   await page.goto("/empty");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Empty");
   await expect(page.locator("#np .np-track")).toHaveCount(0);
+  await expect(page.locator("#history")).toContainText("Nothing played yet.");
 });
 
 test("a track is skipped after 10 s of silence", async () => {
   // Hush- Gap is 4 s of tone, 40 s of silence, 4 s of tone, alone on its show:
   // played through, it restarts every ~47 s.
+  await onAir("quiet");
   await expect
     .poll(
       async () => {
@@ -88,8 +103,9 @@ test("encoded and dotted paths don't leak files", async ({ request }) => {
 });
 
 test("the report counts every listener connected when a track starts", async ({ request }) => {
+  await onAir("night");
   const before = await performances(request, "GAMMA", "MIDNIGHT");
-  const stops = [listen("/night/stream"), listen("/night/stream"), listen("/night/stream")];
+  const stops = [listen("/stream"), listen("/stream"), listen("/stream")];
   // Midnight (20 s) repeats on the night show; wait for it to be logged again.
   await expect
     .poll(() => performances(request, "GAMMA", "MIDNIGHT"), { timeout: 60_000 })
@@ -97,12 +113,15 @@ test("the report counts every listener connected when a track starts", async ({ 
   stops.forEach((stop) => stop());
 });
 
-test("the report matches the play log", async ({ request }) => {
+test("the report matches the play log and the archive plays", async ({ request }) => {
   await expect(async () => {
-    const expected = (await loggedPlays())
-      .filter((p) => p.show === "night" && p.title === "Midnight")
+    const live = (await loggedPlays())
+      .filter((p) => p.title === "Midnight")
       .reduce((n, p) => n + Math.max(p.listeners, 1), 0);
-    expect(expected).toBeGreaterThan(0);
+    // test/archive.spec.ts played the night blocks, the first of which starts with Midnight.
+    const archived = (await archivePerformances(month)).filter((t) => t.title === "Midnight").length;
+    expect(archived).toBeGreaterThan(0);
+    const expected = live + archived;
     expect(await performances(request, "GAMMA", "MIDNIGHT")).toBe(expected);
   }).toPass();
 });

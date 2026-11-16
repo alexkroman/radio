@@ -1,4 +1,5 @@
 ---
+hours: 6-9
 title: Empty
 ---
 

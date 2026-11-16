@@ -1,9 +1,9 @@
 // The app in-process (app.request), on test/fixtures/shows and a play log
 // written here; env from vitest.config.ts.
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, truncate, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeAll, describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test, vi } from "vitest";
 import type { Play } from "./plays.ts";
 
 const now = Math.floor(Date.now() / 1000);
@@ -47,6 +47,75 @@ beforeAll(async () => {
   process.env.PLAYS_DIR = dir;
   month = (await import("./plays.ts")).monthOf(new Date());
   await writeFile(join(dir, `${month}.jsonl`), PLAYS.map((p) => JSON.stringify(p)).join("\n") + "\n");
+  // Archive blocks (sparse files: only their size matters). 256 kbps is
+  // 32,000 bytes a second; archived programs are at least 5 hours.
+  const archive = await mkdtemp(join(tmpdir(), "archive-"));
+  process.env.ARCHIVE_DIR = archive;
+  process.env.ARCHIVE_KEEP = "2";
+  for (const d of ["blocks", "recording", "tracks"]) await mkdir(join(archive, d));
+  const HOUR = 3600 * 32_000;
+  const block = async (name: string, bytes: number, ageMs = 0) => {
+    const f = join(archive, name);
+    await writeFile(f, "");
+    await truncate(f, bytes);
+    const at = new Date(Date.now() - ageMs);
+    await utimes(f, at, at);
+  };
+  // radio.liq puts only blocks of 5 hours or more in blocks/; odd's finished last.
+  const earlier = 3600 * 1000;
+  await block("blocks/night-2026-11-14.mp3", 5 * HOUR + 60 * 32_000, earlier);
+  await block("blocks/night-2026-11-13.mp3", 5 * HOUR, earlier);
+  await block("blocks/night-2026-11-12.mp3", 5 * HOUR, earlier); // third: ARCHIVE_KEEP is 2
+  await block("blocks/odd-2026-11-15.mp3", 6 * HOUR);
+  await block("blocks/default-2026-11-14.mp3", 11 * HOUR, earlier);
+  await block("blocks/edge-2026-11-02.mp3", 8 * HOUR, (14 * 24 - 2) * 3600 * 1000); // up two weeks less two hours
+  await block("blocks/nope-2026-11-14.mp3", 5 * HOUR); // not a show
+  await writeFile(join(archive, "tracks", "default-2026-11-10.jsonl"), ""); // a block gone since: default's first
+  await block("blocks/notes.txt", 10);
+  await block("recording/long-2026-11-15.mp3", 6 * HOUR); // still recording
+  const sidecar = (name: string, tracks: object[]) =>
+    writeFile(
+      join(archive, "tracks", `${name}.jsonl`),
+      tracks.map((t) => JSON.stringify(t)).join("\n") + "\n",
+    );
+  const tags = { label: "Label", isrc: "US1234567890" };
+  await sidecar("night-2026-11-14", [
+    { offset: 0, title: "Midnight", artist: "Gamma", album: "Album", cover: "", ...tags },
+    {
+      offset: 10.2,
+      title: "Second Wind",
+      artist: "Beta & Band",
+      album: "Album",
+      cover: "default/Beta & Band- Second Wind.jpg",
+      ...tags,
+    },
+  ]);
+  await sidecar("odd-2026-11-15", [
+    { offset: 0, title: "Track A", artist: "Odd One", album: "", cover: "", label: "", isrc: "" },
+    { offset: 9000, title: "Track B", artist: "Odd One", album: "", cover: "", label: "", isrc: "" },
+    { offset: 9001, title: "Track C", artist: "Odd One", album: "", cover: "", label: "", isrc: "" },
+  ]);
+  // Icecast's access log: archive plays (the time connected last), and what isn't one.
+  const logs = await mkdtemp(join(tmpdir(), "logs-"));
+  process.env.LOGS_DIR = logs;
+  const [y, m] = month.split("-");
+  const mon = "JanFebMarAprMayJunJulAugSepOctNovDec".slice((Number(m) - 1) * 3, Number(m) * 3);
+  const line = (path: string, status = 200, seconds = 0, method = "GET", date = `01/${mon}/${y}`) =>
+    `10.0.0.1 - - [${date}:12:00:00 -0800] "${method} ${path} HTTP/1.1" ${status} 1000 "-" "Mozilla/5.0 (X)" ${seconds}`;
+  await writeFile(
+    join(logs, "access.log"),
+    [
+      line("/archive/night-2026-11-14.mp3"), // reaches both tracks (30 minutes' allowance)
+      line("/archive/odd-2026-11-15.mp3", 200, 7200), // reaches 9000 s: Track A and B
+      line("/archive/odd-2026-11-15.mp3", 416),
+      line("/archive/odd-2026-11-15.mp3", 405, 0, "HEAD"),
+      line("/stream", 200, 3600),
+      // Left on the 1st after 21 hours: started last month, so not counted.
+      line("/archive/odd-2026-11-15.mp3", 200, 21 * 3600),
+      line("/archive/night-2026-11-14.mp3", 200, 0, "GET", "01/Jan/2001"),
+    ].join("\n") + "\n",
+  );
+  await writeFile(join(logs, "error.log"), line("/archive/night-2026-11-14.mp3") + "\n");
   ({ app } = await import("./server.tsx"));
   const res = await login({ password: "unit-site", next: "/" });
   cookie = res.headers.get("set-cookie")!.split(";")[0]!;
@@ -109,21 +178,50 @@ describe("site login", () => {
 });
 
 describe("pages", () => {
-  test("the stations list shows each show's latest play", async () => {
+  test("the home page has the show and track on air, the schedule and the station's history", async () => {
     const res = await page("/");
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("Fixture Default");
+    // On air: the newest play's show.
+    expect(html).toMatch(/<h2 class="display"><a href="\/night">Fixture Night<\/a>/);
+    expect(html).toMatch(/np-track">Midnight/);
+    expect(html).toContain('href="/stream"');
+    // Every show, in the order they start, the one on air marked.
+    const order = [...html.matchAll(/class="station-name" href="\/([a-z-]+)"/g)].map((m) => m[1]);
+    expect(order).toEqual([
+      "default",
+      "edge",
+      "empty",
+      "long",
+      "night",
+      "odd",
+      "plain",
+      "quiet",
+      "complement",
+    ]);
+    expect(html.match(/class="label on-air"/g)).toHaveLength(1);
     expect(html).toContain("Second Wind");
-    expect(html).toContain("Midnight");
-    expect(html).toContain('<div id="player" data-slug="default" data-title="Fixture Default"></div>');
+    expect(html).toContain('<div id="player" data-title="Mazes Radio"></div>');
   });
 
-  test("a station page shows its now playing and history", async () => {
-    const html = await (await page("/default")).text();
-    expect(html).toMatch(/np-track">Second Wind/);
-    expect(html).toContain("First Light");
-    expect(html).not.toContain("Midnight");
+  test("a show page has its hours, and its track only while on air", async () => {
+    // At 18:00 (UTC, the tests' TZ) today: default's hours (0-3) aren't due,
+    // so its page says when it's next on. (Night stays on air: the newest play.)
+    const today = new Date();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 18));
+    const off = await (await page("/default")).text().finally(() => vi.useRealTimers());
+    expect(off).toMatch(
+      /Daily <span class="hours"><time class="time" datetime="[^"]+">12:00 AM<\/time>–<time class="time" datetime="[^"]+">3:00 AM</,
+    );
+    expect(off).toContain("Off air. Next on at");
+    expect(off).not.toContain('class="np-track"');
+    expect(off).toContain("Second Wind");
+    expect(off).toContain("First Light");
+    expect(off).not.toContain("Midnight");
+    const on = await (await page("/night")).text();
+    expect(on).toMatch(/np-track">Midnight/);
+    expect(on).not.toContain("Off air");
   });
 
   test("a DJ page lists their shows", async () => {
@@ -149,21 +247,20 @@ describe("pages", () => {
       expect((await page(path)).status, path).toBe(404);
   });
 
-  test("now.json has each station's current track", async () => {
-    const now = await (await page("/now.json")).json();
-    expect(now.default).toEqual({
-      track: "Second Wind",
-      artist: "Beta & Band",
-      cover: "/covers/default/Beta%20&%20Band-%20Second%20Wind.jpg",
+  test("now.json has the track on air and its show", async () => {
+    expect(await (await page("/now.json")).json()).toEqual({
+      title: "Fixture Night",
+      track: "Midnight",
+      artist: "Gamma",
+      album: "Album",
+      cover: "",
     });
+  });
+
+  test("covers are served, cached for an hour", async () => {
     const art = await page("/covers/default/Beta%20&%20Band-%20Second%20Wind.jpg");
     expect(art.status).toBe(200);
     expect(art.headers.get("cache-control")).toBe("public, max-age=3600");
-    expect(now.night).toEqual({
-      track: "Midnight",
-      artist: "Gamma",
-      cover: "",
-    });
   });
 
   test("an unchanged page is 304 to a request with its ETag", async () => {
@@ -177,21 +274,127 @@ describe("pages", () => {
   });
 });
 
-describe("manifesto", () => {
-  test("is linked from the site, and the old /about redirects to it", async () => {
-    expect(await (await page("/")).text()).toContain('href="/manifesto"');
-    expect((await page("/manifesto")).status).toBe(200);
-    expect(await (await page("/manifesto")).text()).toContain('href="https://github.com/alexkroman/radio"');
-    const old = await page("/about");
-    expect(old.status).toBe(301);
-    expect(old.headers.get("location")).toBe("/manifesto");
+describe("archive", () => {
+  test("lists each show's blocks up under two weeks, newest ARCHIVE_KEEP first, numbered by day", async () => {
+    const html = await (await page("/archive")).text();
+    const rows = [...html.matchAll(/data-play="([^"]+)" data-title="([^"]+)"/g)].map((m) => [m[1], m[2]]);
+    // Numbered from each show's first day with a block (or a sidecar of one).
+    expect(rows).toEqual([
+      ["/archive/default-2026-11-14.mp3", "Fixture Default #5"],
+      ["/archive/edge-2026-11-02.mp3", "Edge Cases #1"],
+      ["/archive/night-2026-11-14.mp3", "Fixture Night #3"],
+      ["/archive/night-2026-11-13.mp3", "Fixture Night #2"],
+      ["/archive/odd-2026-11-15.mp3", "Odd Characters #1"],
+    ]);
+    expect(html).toContain("Sat, Nov 14");
+    expect(html).toContain("5 h 1 min");
+    expect(html).toContain("6 h 0 min");
+    expect(html).toContain('aria-current="page">Archive');
+  });
+
+  test("a block's button plays the show's earlier blocks after it", async () => {
+    const html = await (await page("/archive")).text();
+    const then = /data-play="\/archive\/night-2026-11-14\.mp3"[^>]*data-then="([^"]+)"/.exec(html)?.[1];
+    expect(JSON.parse(then!.replaceAll("&quot;", '"'))).toEqual([
+      { src: "/archive/night-2026-11-13.mp3", title: "Fixture Night #2" },
+    ]);
+    expect(html).not.toMatch(/data-play="\/archive\/night-2026-11-13\.mp3"[^>]*data-then/);
+  });
+
+  test("offers no downloads and names no tracks", async () => {
+    const html = await (await page("/archive")).text();
+    expect(html).not.toMatch(/href="[^"]*\.mp3"/);
+    expect(html).not.toContain("download");
+    expect(html).not.toContain("<audio");
+    for (const track of ["Midnight", "Second Wind", "Track A"]) expect(html).not.toContain(track);
+  });
+
+  test("a block's now.json has only the track playing at t, with title, artist and album", async () => {
+    const at = async (t: string) => (await page(`/archive/night-2026-11-14/now.json?t=${t}`)).json();
+    // With when it ends (the next track's offset), none for the last.
+    expect(await at("0")).toEqual({
+      track: "Midnight",
+      artist: "Gamma",
+      album: "Album",
+      cover: "",
+      until: 10.2,
+    });
+    expect(await at("10")).toMatchObject({ track: "Midnight", until: 10.2 });
+    expect(await at("11")).toEqual({
+      track: "Second Wind",
+      artist: "Beta & Band",
+      album: "Album",
+      cover: "/covers/default/Beta%20&%20Band-%20Second%20Wind.jpg",
+    });
+    for (const t of ["-1", "x", ""])
+      expect((await page(`/archive/night-2026-11-14/now.json?t=${t}`)).status).toBe(400);
+    // Not for a block that can't be played.
+    for (const name of ["long-2026-11-15", "nope-2026-11-14", "night-2026-11-10"])
+      expect((await page(`/archive/${name}/now.json?t=0`)).status, name).toBe(404);
+    expect((await req("/archive/night-2026-11-14/now.json?t=0")).status).toBe(401);
+  });
+
+  test("the schedule plays each show's last archived show, then its earlier ones", async () => {
+    const html = await (await page("/")).text();
+    const rows = html.split('class="station"').slice(1);
+    const row = (slug: string) => rows.find((r) => r.includes(`href="/${slug}"`))!;
+    expect(row("night")).toMatch(
+      /data-play="\/archive\/night-2026-11-14\.mp3" data-title="Fixture Night #3"/,
+    );
+    expect(row("night")).toContain("night-2026-11-13.mp3"); // next, in data-then
+    expect(row("night")).toContain("#3 · Sat, Nov 14");
+    expect(row("odd")).toMatch(/data-play="\/archive\/odd-2026-11-15\.mp3" data-title="Odd Characters #1"/);
+    expect(row("quiet")).not.toContain("data-play"); // nothing archived
+    expect(html).not.toContain("Track A");
+  });
+
+  test("while a show waits for the last one's track to end, it's up next, after this track", async () => {
+    // Night is on air (the newest play); whichever show's hours it is now is due.
+    const html = await (await page("/")).text();
+    const hour = new Date().getUTCHours();
+    if (hour >= 12 && hour < 15) return expect(html).toMatch(/Up next: <a[^>]*>[^<]+<\/a> at </);
+    expect(html).toMatch(/Up next: <a[^>]*>[^<]+<\/a> after this track/);
+    const due = /Up next: <a href="\/([a-z-]+)"/.exec(html)![1]!;
+    expect(await (await page(`/${due}`)).text()).toContain("Starting after this track.");
+  });
+
+  test("needs the site password, like every page", async () => {
+    expect((await req("/archive")).status).toBe(401);
+  });
+});
+
+describe("about", () => {
+  test("is linked from the site", async () => {
+    expect(await (await page("/")).text()).toContain('href="/about"');
+    expect((await page("/about")).status).toBe(200);
+    expect(await (await page("/about")).text()).toContain('href="https://github.com/alexkroman/radio"');
+  });
+
+  test("links each statute the station plays under, and answers questions about them", async () => {
+    const html = await (await page("/about")).text();
+    for (const url of [
+      "https://www.law.cornell.edu/uscode/text/17/114#d_2",
+      "https://www.law.cornell.edu/uscode/text/17/114#j_13",
+      "https://www.law.cornell.edu/uscode/text/17/114#d_2_C_ii",
+      "https://www.law.cornell.edu/uscode/text/17/114#d_2_C_iii",
+      "https://www.law.cornell.edu/uscode/text/17/114#d_2_C_vi",
+      "https://www.law.cornell.edu/uscode/text/17/114#d_2_C_ix",
+      "https://www.law.cornell.edu/uscode/text/17/114#g_2",
+      "https://www.law.cornell.edu/uscode/text/17/112#e",
+      "https://www.law.cornell.edu/cfr/text/37/part-380",
+      "https://www.law.cornell.edu/cfr/text/37/part-370",
+    ])
+      expect(html).toContain(`href="${url}"`);
+    expect(html).toContain("The archive");
+    expect(html).toContain("<h3>Why does a show&#39;s page list what&#39;s played");
+    expect(html).toContain('href="/archive"');
   });
 });
 
 describe("reports", () => {
-  test("are linked from the manifesto, not the nav, and list this month", async () => {
+  test("are linked from the About page, not the nav, and list this month", async () => {
     expect(await (await page("/")).text()).not.toContain('href="/reports"');
-    expect(await (await page("/manifesto")).text()).toContain('href="/reports"');
+    expect(await (await page("/about")).text()).toContain('href="/reports"');
     const res = await page("/reports");
     expect(res.status).toBe(200);
     expect(await res.text()).toContain(`href="/reports/${month}"`);
@@ -202,7 +405,7 @@ describe("reports", () => {
     expect((await req(`/reports/${month}`)).status).toBe(401);
   });
 
-  test("the SoundExchange report counts each play's listeners (at least 1)", async () => {
+  test("the SoundExchange report counts each live play's listeners (at least 1) and each track archive plays reached", async () => {
     const res = await page(`/reports/${month}`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-disposition")).toMatch(/^attachment; filename="MAZESRADIO01/);
@@ -210,8 +413,10 @@ describe("reports", () => {
     expect(rows[0]).toMatch(/^\^NAME_OF_SERVICE\^\|/);
     expect(rows.slice(1)).toEqual([
       "^MAZES RADIO^|^A^|^ALPHA ARTIST^|^FIRST LIGHT^|^US1234567890^|^ALBUM^|^LABEL^|3",
-      "^MAZES RADIO^|^A^|^GAMMA^|^MIDNIGHT^|^US1234567890^|^ALBUM^|^LABEL^|2",
-      "^MAZES RADIO^|^A^|^BETA & BAND^|^SECOND WIND^|^US1234567890^|^ALBUM^|^LABEL^|1",
+      "^MAZES RADIO^|^A^|^GAMMA^|^MIDNIGHT^|^US1234567890^|^ALBUM^|^LABEL^|3",
+      "^MAZES RADIO^|^A^|^BETA & BAND^|^SECOND WIND^|^US1234567890^|^ALBUM^|^LABEL^|2",
+      "^MAZES RADIO^|^A^|^ODD ONE^|^TRACK A^|^^|^^|^^|1",
+      "^MAZES RADIO^|^A^|^ODD ONE^|^TRACK B^|^^|^^|^^|1",
     ]);
   });
 

@@ -77,6 +77,15 @@ repos:
         files: ^(app/|test/fixtures/|vitest\.config\.ts$|package)
         pass_filenames: false
 
+      # The shows' hours cover every hour of the day exactly once (also run
+      # by scripts/deploy.sh).
+      - id: schedule
+        name: schedule covers 24 hours
+        language: system
+        entry: node app/check-schedule.ts
+        files: ^(shows/|app/(check-schedule|schedule|shows)\.ts$)
+        pass_filenames: false
+
       - id: stylelint
         name: stylelint
         language: system

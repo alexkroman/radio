@@ -1,6 +1,6 @@
 // Shared page parts for the public site (DESIGN: a printed radio listing).
-import type { Play } from "./plays.ts";
-import type { DjRef, Show } from "./shows.ts";
+import type { Play, Track } from "./plays.ts";
+import type { DjRef } from "./shows.ts";
 
 export const SITE_TITLE = process.env.SITE_TITLE || "Mazes Radio";
 
@@ -26,14 +26,14 @@ const LogoMark = () => (
 );
 
 export const Lockup = () => (
-  <a href="/" class="lockup" aria-label={`${SITE_TITLE}, all stations`}>
+  <a href="/" class="lockup" aria-label={`${SITE_TITLE}, home`}>
     <LogoMark />
     <span class="wordmark">{SITE_TITLE.toLowerCase()}</span>
   </a>
 );
 
-// `home`: the stations list, where the lockup is the page's <h1>.
-export const SiteHeader = ({ current, home }: { current?: "stations" | "manifesto"; home?: boolean }) => (
+// `home`: the home page, where the lockup is the page's <h1>.
+export const SiteHeader = ({ current, home }: { current?: "home" | "archive" | "about"; home?: boolean }) => (
   <header class="site-header">
     {home ? (
       <h1>
@@ -43,11 +43,14 @@ export const SiteHeader = ({ current, home }: { current?: "stations" | "manifest
       <Lockup />
     )}
     <nav aria-label="Main">
-      <a href="/" aria-current={current === "stations" ? "page" : undefined}>
-        Stations
+      <a href="/" aria-current={current === "home" ? "page" : undefined}>
+        Schedule
       </a>
-      <a href="/manifesto" aria-current={current === "manifesto" ? "page" : undefined}>
-        Manifesto
+      <a href="/archive" aria-current={current === "archive" ? "page" : undefined}>
+        Archive
+      </a>
+      <a href="/about" aria-current={current === "about" ? "page" : undefined}>
+        About
       </a>
     </nav>
   </header>
@@ -66,15 +69,28 @@ const PauseIcon = ({ size }: { size: number }) => (
   </svg>
 );
 
-// The client (app/client.ts) finds these by data-play and shows the pause
-// state on every button for the station that's playing.
-export const PlayButton = ({ show, large }: { show: Show; large?: boolean }) => (
+// Plays the stream (whatever is on air), or an archive block (src, with its
+// title, and the blocks to play after it: the show's earlier ones, newest
+// first). The client (app/client.ts) finds these by data-play and shows the
+// pause state on every one for what's playing.
+export const PlayButton = ({
+  large,
+  src = "/stream",
+  title = SITE_TITLE,
+  then,
+}: {
+  large?: boolean;
+  src?: string;
+  title?: string;
+  then?: { src: string; title: string }[];
+}) => (
   <button
     type="button"
     class={large ? "play play-lg" : "play"}
-    data-play={show.slug}
-    data-title={show.title}
-    aria-label={`Play ${show.title}`}
+    data-play={src}
+    data-title={title}
+    data-then={then?.length ? JSON.stringify(then) : undefined}
+    aria-label={`Play ${title}`}
   >
     <PlayIcon size={large ? 20 : 14} d={large ? "M4.5 2.5v9l7.5-4.5z" : "M4 2.5v9l7.5-4.5z"} />
     <PauseIcon size={large ? 20 : 14} />
@@ -110,16 +126,20 @@ export const Cover = ({ play, size, labelled }: { play?: Play; size: string; lab
     <span class={`cover ${size} cover-ph`} aria-hidden="true" />
   );
 
-// A station's current track as the player bar shows it (client.ts `Track`),
-// in /now.json.
-export const nowTrack = (play?: Play) => ({
-  track: play?.title ?? "",
-  artist: play?.artist ?? "",
-  cover: play?.cover ? coverUrl(play.cover) : "",
+// A track as the player shows it (client.ts `Track`): live in /now.json, and
+// in an archive block's now.json.
+export const trackJson = (t?: Track) => ({
+  track: t?.title ?? "",
+  artist: t?.artist ?? "",
+  album: t?.album ?? "",
+  cover: t?.cover ? coverUrl(t.cover) : "",
 });
 
-// Re-fetches the page on "refresh" (sent by client.ts when a station shown
-// here, by data-np, changes track) and swaps in just the elements with these ids.
+// The track on air and its show's title, in /now.json.
+export const nowTrack = (play: Play | undefined, title: string) => ({ title, ...trackJson(play) });
+
+// Re-fetches the page on "refresh" (sent by client.ts when the track on air
+// changes) and swaps in just the elements with these ids.
 export const Poll = ({ path, ids }: { path: string; ids: string[] }) => (
   <div
     id="poll"
@@ -134,8 +154,8 @@ export const Poll = ({ path, ids }: { path: string; ids: string[] }) => (
   />
 );
 
-export const Time = ({ seconds }: { seconds: number }) => {
-  const d = new Date(seconds * 1000);
+// A time of day, in the listener's time zone once client.ts has run.
+export const Time = ({ at: d }: { at: Date }) => {
   return (
     <time class="time" datetime={d.toISOString()}>
       {d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}

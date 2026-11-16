@@ -242,8 +242,8 @@ end
 # finishes fading out. So a 17-23 show's block runs from its first track,
 # a little after 17:00 (the 16:00 show's last track plays to its end first),
 # to the end of its last track, a little after 23:00. A block
-# under five hours isn't archived, so give shows more than that (the
-# shortest, Drift, has six) for restarts and outages to fit in. The file is
+# under five hours isn't archived, so give shows more than that (every
+# show has six) for restarts and outages to fit in. The file is
 # /archive/recording/<show>-<YYYY-MM-DD>.mp3 (the date the block started)
 # while it's recorded; when it ends it moves to /archive/blocks/, which
 # Icecast serves and the app lists (/archive), if it's at least

@@ -1,6 +1,6 @@
 ---
 title: Gloaming
-hours: 23-7
+hours: 1-7
 djs:
   - name: Alex
 ---

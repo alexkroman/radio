@@ -418,8 +418,8 @@ describe("about", () => {
       "https://www.law.cornell.edu/cfr/text/37/part-370",
     ])
       expect(html).toContain(`href="${url}"`);
-    expect(html).toContain("The archive");
-    expect(html).toContain("<h3>Why does a show&#39;s page list what&#39;s played");
+    expect(html).toContain("Every show, kept so you can hear it again");
+    expect(html).toContain("<h3>Why does a show&#39;s page list what has played on air");
   });
 });
 

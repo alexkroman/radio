@@ -47,16 +47,6 @@
   --type-url: 400 14px/1.4 var(--font-mono); /* stream URLs */
   --type-wordmark: 700 18px/1 var(--font-mono); /* "mazes radio", lowercase, tracking -0.03em */
 
-  /* The day strip on the home page: the hours shaded night to noon (sky-0 to sky-5). */
-  --sky-0: #161616;
-  --sky-1: #3a3a3a;
-  --sky-2: #767676;
-  --sky-3: #a9a9a9;
-  --sky-4: #cdcdcd;
-  --sky-5: #e2e2e2;
-  --sky-ink-dark: #ffffff; /* labels on sky-0 to sky-2 */
-  --sky-ink-light: #111111; /* labels on sky-3 to sky-5 */
-
   /* Layout */
   --page-pad-top: 72px;
   --page-pad-x: 32px;
@@ -96,13 +86,5 @@
     --color-surface-border: #2a2a2a;
     --color-on-fill: #111111;
     --art-outline: rgb(255 255 255 / 8%);
-    --sky-0: #050505;
-    --sky-1: #1a1a1a;
-    --sky-2: #2c2c2c;
-    --sky-3: #474747;
-    --sky-4: #626262;
-    --sky-5: #7c7c7c;
-    --sky-ink-dark: #f2f2f2;
-    --sky-ink-light: #f2f2f2;
   }
 }

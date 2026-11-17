@@ -28,8 +28,8 @@ cp "$here/silence.mp3" "$web/fallback.mp3"
 # and moves each to /archive/blocks when it ends), served as files at
 # /archive/<show>-<date>.mp3: each request is its own connection, logged in
 # access.log (scripts/archive-plays.sh counts them). Caddy passes only
-# GET /archive/<show>-<YYYY-MM-DD>.mp3, without Range, so every play starts at
-# the beginning. The recording in progress isn't reachable.
+# GET /archive/<show>-<YYYY-MM-DD>.mp3 (with Range, so a dropped player
+# resumes). The recording in progress isn't reachable.
 ln -sfn /archive/blocks "$web/archive"
 mounts='<mount type="normal"><mount-name>/stream</mount-name><fallback-mount>/fallback.mp3</fallback-mount><fallback-override>all</fallback-override></mount>'
 # Access logs: kept when rotated (logarchive: access.log.<date> at 10 MB,

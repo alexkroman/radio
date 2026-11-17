@@ -26,8 +26,8 @@ const session = navigator.mediaSession;
 // The station's name (#player's data; app.js is deferred, so the page is there).
 const station = document.getElementById("player")!.dataset.title!;
 // What the player plays: the live stream, or an archive block (/archive/...,
-// played from the beginning; `then`, the show's earlier blocks, play after
-// it). Set by a tap.
+// played from the beginning, or where it was paused; `then`, the show's
+// earlier blocks, play after it). Set by a tap.
 type Source = { src: string; title: string; then?: Source[] };
 const LIVE: Source = { src: "/stream", title: station };
 let source = LIVE;
@@ -52,6 +52,10 @@ let blockFetched = false;
 let lockKey = "";
 // When a dropped stream stops being retried (0: not retrying).
 let retryUntil = 0;
+// How far into the archive block the player last was, and where it picks up
+// again after a drop or a pause (0: from the beginning).
+let blockAt = 0;
+let resumeAt = 0;
 
 function localTimes() {
   document.querySelectorAll("time[datetime]").forEach((el) => {
@@ -98,7 +102,7 @@ function sync() {
 }
 
 // While an archive block plays: the track playing in it, by how far in the
-// player is (it plays from the beginning, without seeking), fetched when it
+// player is (it plays on from where it starts, without seeking), fetched when it
 // starts and again when that track ends. Only that track: the block's track
 // list is never fetched.
 let blockFetching = false;
@@ -147,6 +151,8 @@ function playSource() {
 }
 
 function start(to: Source) {
+  // The block it was on, paused: where it was. Anything else: the beginning.
+  blockAt = resumeAt = !live() && to.src === source.src ? blockAt : 0;
   source = to;
   blockTrack = NO_TRACK;
   blockFetched = false;
@@ -179,18 +185,27 @@ function backToLive() {
   source = LIVE;
   stop();
 }
-// The live stream dropped (a server restart, a network change): reconnect for
-// up to two minutes. iOS allows play() on an element a tap has started. An
-// archive block that fails isn't restarted, which would start it over: the
-// player goes back to the live stream, paused.
+// The stream dropped (a server restart, a network change): reconnect for up
+// to two minutes. iOS allows play() on an element a tap has started. An
+// archive block picks up where it was (the server takes ranges; the browser
+// resumes a short blip that way itself); given up on, it goes back to the
+// live stream, paused.
 function dropped() {
   if (!playing) return;
-  if (!live()) return backToLive();
   retryUntil ||= Date.now() + 120_000;
-  if (Date.now() > retryUntil) return stop();
-  setTimeout(() => playing && live() && retryUntil && playSource(), 3000);
+  if (Date.now() > retryUntil) return live() ? stop() : backToLive();
+  if (!live()) resumeAt ||= blockAt;
+  const src = source.src;
+  setTimeout(() => playing && source.src === src && retryUntil && playSource(), 3000);
 }
 audio.addEventListener("error", dropped);
+audio.addEventListener("timeupdate", () => {
+  if (!live() && !retryUntil && audio.currentTime > 0) blockAt = audio.currentTime;
+});
+audio.addEventListener("loadedmetadata", () => {
+  if (!live() && resumeAt) audio.currentTime = resumeAt;
+  resumeAt = 0;
+});
 // An archive block that ends goes on to the show's block before it (iOS
 // allows play() on an element a tap has started); after the last, back to
 // live, paused. The live stream ending is a drop.

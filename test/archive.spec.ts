@@ -2,10 +2,10 @@
 // the overlay's seed service adds two finished ones of the night show,
 // night-2026-11-14.mp3 and night-2026-11-13.mp3, 14 s each at 256 kbps,
 // untagged, with their track sidecars), Icecast serves them through Caddy,
-// and the site's player plays them from the beginning, showing each track
-// while it plays, then the show's block before. test/e2e.sh checks the
+// and the site's player plays them from the beginning (picking up where it was
+// if it drops or is paused), showing each track while it plays, then the show's block before. test/e2e.sh checks the
 // recording itself, the play counts and the retention.
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { get, LOGGED_OUT, lockScreen, player } from "./helpers.ts";
 
 const BLOCK = "/archive/night-2026-11-14.mp3";
@@ -32,19 +32,18 @@ test("the archive lists each show's blocks, without track names or downloads", a
     await expect(page.locator("main")).not.toContainText(name);
 });
 
-test("a block is served from the beginning only, as a stream with no length", async () => {
+test("a block is served whole, or from a range, so a dropped player resumes", async () => {
   const whole = await get(BLOCK);
   expect(whole.status).toBe(200);
   expect(whole.headers["content-type"]).toBe("audio/mpeg");
-  expect(whole.headers["content-length"]).toBeUndefined();
-  expect(whole.headers["accept-ranges"]).toBeUndefined();
   expect(whole.headers["content-disposition"]).toBeUndefined();
   expect(whole.headers["server"]).toBeUndefined();
   expect(whole.body.length).toBe(BYTES);
-  // A range request gets the whole file, from the start.
+  // A range request (how a browser resumes) gets the rest of the file.
   const ranged = await get(BLOCK, { Range: "bytes=100000-" });
-  expect(ranged.status).toBe(200);
-  expect(ranged.body.equals(whole.body)).toBe(true);
+  expect(ranged.status).toBe(206);
+  expect(ranged.headers["content-range"]).toBe(`bytes 100000-${BYTES - 1}/${BYTES}`);
+  expect(ranged.body.equals(whole.body.subarray(100000))).toBe(true);
   // Only GET reaches the file; anything else under /archive is the app's.
   expect([401, 404]).toContain((await get(BLOCK, {}, "HEAD")).status);
   expect((await get("/archive/night-2026-11-10.mp3")).status).toBe(404);
@@ -122,6 +121,64 @@ test("the player plays a block with each track as it plays, then the show's bloc
   expect(await player(page)).toEqual({ src: null, playing: false });
   await bar.getByRole("button", { name: "Play Mazes Radio" }).click();
   await expect.poll(() => player(page)).toEqual({ src: "/stream", playing: true });
+});
+
+type W = { audio: HTMLAudioElement; after?: number[] };
+// Play the block to 4 s in, then interrupt it (`how`), and return where it
+// plays from after: each time it reports once it's loading again.
+async function interrupted(page: Page, how: () => Promise<unknown>) {
+  await page.goto("/archive");
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: `Play ${TITLE}` })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as W).audio.currentTime), { timeout: 20_000 })
+    .toBeGreaterThanOrEqual(4);
+  await page.evaluate(() => {
+    const w = window as unknown as W;
+    w.audio.addEventListener(
+      "loadstart",
+      () => {
+        w.after = [];
+        w.audio.addEventListener(
+          "timeupdate",
+          () => w.audio.currentTime > 0 && w.after!.push(w.audio.currentTime),
+        );
+      },
+      { once: true },
+    );
+  });
+  await how();
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as W).after?.length ?? 0), { timeout: 15_000 })
+    .toBeGreaterThan(2);
+  return page.evaluate(() => (window as unknown as W).after!);
+}
+
+test("a block that drops picks up where it was, not from the beginning", async ({ page }) => {
+  // A network error: the player reconnects (in 3 s) and goes back to where it was.
+  const after = await interrupted(page, () =>
+    page.evaluate(() => (window as unknown as W).audio.dispatchEvent(new Event("error"))),
+  );
+  expect(Math.min(...after)).toBeGreaterThanOrEqual(4);
+  expect(await player(page)).toEqual({ src: BLOCK, playing: true });
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: `Pause ${TITLE}` })
+    .click();
+});
+
+test("a block paused and played again picks up where it was", async ({ page }) => {
+  const main = page.getByRole("main");
+  const after = await interrupted(page, async () => {
+    await main.getByRole("button", { name: `Pause ${TITLE}` }).click();
+    await expect.poll(() => player(page)).toEqual({ src: null, playing: false });
+    await main.getByRole("button", { name: `Play ${TITLE}` }).click();
+  });
+  expect(Math.min(...after)).toBeGreaterThanOrEqual(4);
+  expect(await player(page)).toEqual({ src: BLOCK, playing: true });
+  await main.getByRole("button", { name: `Pause ${TITLE}` }).click();
 });
 
 test("the schedule plays each show's last archived show", async ({ page }) => {

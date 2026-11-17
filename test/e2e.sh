@@ -26,9 +26,10 @@ dc up -d --no-build caddy liquidsoap archive-prune
 dc run --rm --no-deps e2e npx playwright test "$@"
 
 # Deploys disturb no listener. With a listener playing the stream through
-# Caddy (as players do, test/listen.ts), run a deploy's server side (`compose
-# up`, then scripts/reconcile.sh) for each kind of change, and check that it
-# stays connected without a pause in the audio longer than MAX_GAP_MS
+# Caddy (as players do, test/listen.ts), and another an archive block, run a
+# deploy's server side (`compose up`, then scripts/reconcile.sh) for each kind
+# of change, and check that each stays connected without a pause in the audio
+# longer than MAX_GAP_MS
 # (Icecast's burst gives a player ~10 s of audio in hand), and that only what
 # had to restart did. Icecast's silent fallback holds the listener while
 # Liquidsoap restarts (icecast/config.sh).
@@ -56,18 +57,20 @@ listeners() {
 has_listeners() { [ "$(listeners)" = "$1" ]; }
 # The stream has $1 listeners; a listener moved to the fallback never comes back.
 expect() { wait_for has_listeners "$1" || fail "after $2, the stream has $(listeners) listeners, not $1"; }
-# A listener on /stream through Caddy, in the background (radio-e2e-listen).
-listen() { dc run -d --no-deps --name radio-e2e-listen e2e node test/listen.ts >/dev/null; }
-# Stop the listener and check its log: never dropped, no pause over MAX_GAP_MS.
+# A listener through Caddy, in the background (radio-e2e-listen$1): on
+# /stream, or with $2, on that archive block.
+listen() { dc run -d --no-deps --name "radio-e2e-listen${1:-}" e2e node test/listen.ts ${2:+"$2"} >/dev/null; }
+# Stop a listener ($1 as for listen) and check its log: never dropped, no
+# pause over MAX_GAP_MS.
 heard() {
-  local log longest
-  docker stop radio-e2e-listen >/dev/null
-  log=$(docker logs radio-e2e-listen)
-  docker rm radio-e2e-listen >/dev/null
+  local log longest name=radio-e2e-listen${1:-}
+  docker stop "$name" >/dev/null
+  log=$(docker logs "$name")
+  docker rm "$name" >/dev/null
   printf '%s\n' "$log" | sed "s|^|  |"
   longest=$(printf '%s\n' "$log" | sed -n 's/.* longest gap \([0-9]*\) ms$/\1/p')
-  [ -n "$longest" ] || fail "the listener was dropped"
-  [ "$longest" -le "$MAX_GAP_MS" ] || fail "the listener heard a ${longest} ms pause"
+  [ -n "$longest" ] || fail "the listener${1:+ on $2} was dropped"
+  [ "$longest" -le "$MAX_GAP_MS" ] || fail "the listener${1:+ on $2} heard a ${longest} ms pause"
 }
 # Change the shows or music volumes (as a deploy's sync does).
 edit_files() { dc run --rm --no-deps -T seed sh -c "$1"; }
@@ -166,6 +169,14 @@ echo "  $rate bytes a second"
 
 listen
 expect 1 "connecting"
+# An archive listener, on a block long enough to outlast the deploys (the
+# fixture block 120 times over, 28 minutes; MP3 frames just concatenate).
+# zz isn't a show; the retention step below prunes it, mid-play, as the hourly
+# prune would: Icecast keeps sending the file it has open.
+LONG=zz-2026-11-11.mp3
+edit_files "for _ in \$(seq 120); do cat /archive/blocks/night-2026-11-14.mp3; done >/archive/blocks/$LONG &&
+  chmod a+r /archive/blocks/$LONG"
+listen -archive "/archive/$LONG"
 
 step "nothing changed: nothing restarts"
 deploy_change "" "nothing" :
@@ -245,4 +256,6 @@ deploy_change liquidsoap "a removed show" "edit_files 'rm /shows/night.md'" rest
 
 step "what the listener heard"
 heard
-step "the listener stayed connected, without a pause over ${MAX_GAP_MS} ms, through every deploy"
+step "what the archive listener heard"
+heard -archive "$LONG"
+step "the listeners stayed connected, without a pause over ${MAX_GAP_MS} ms, through every deploy"

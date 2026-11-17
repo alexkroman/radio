@@ -25,7 +25,7 @@ test("the station is one MP3 stream", async () => {
   }).toPass({ timeout: 60_000 });
 });
 
-test("home page has what's on and the schedule", async ({ page }) => {
+test("home page has what's on", async ({ page }) => {
   await onAir("night");
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName("Mazes Radio, home");
@@ -33,35 +33,12 @@ test("home page has what's on and the schedule", async ({ page }) => {
   await expect(page.locator("#np .np-track")).toHaveText("Midnight");
   await expect(page.locator("#on-air .credit")).toHaveText("with Ana Ruiz, Ben Cho & Zoë Ñandú");
   await expect(page.getByRole("main").getByRole("button", { name: "Play Mazes Radio" })).toBeVisible();
-  const rows = page.locator("#schedule .station");
-  // The show on air first, then the rest by when they're next on.
-  await expect(rows).toHaveCount(9);
-  await expect(rows.first().locator(".station-name")).toHaveText("Fixture Night");
-  await expect(rows.locator(".play")).toHaveCount(0);
-  await expect(rows.first().locator(".hours")).toHaveText(/^\d{1,2}:00 [AP]M–\d{1,2}:00 [AP]M$/);
-  await expect(page.locator("#schedule .on-air")).toHaveCount(1);
-  await expect(rows.filter({ has: page.locator(".on-air") }).locator(".station-name")).toHaveText(
-    "Fixture Night",
-  );
-  await expect(page.locator(".station-desc", { hasText: "default" })).toBeVisible();
-  // The DJs are on the show's page, not in the schedule.
-  await expect(rows.locator(".credit")).toHaveCount(0);
+  // No list of shows: the latest episodes stand for them.
+  await expect(page.locator("#schedule")).toHaveCount(0);
   await expect(page.locator("footer").getByRole("link", { name: /\/stream$/ })).toHaveAttribute(
     "href",
     "/stream",
   );
-});
-
-test("tapping anywhere on a show in the schedule opens it", async ({ page }) => {
-  await page.goto("/");
-  const night = page.locator("#schedule .station", { has: page.locator('a[href="/night"]') });
-  const desc = night.locator(".station-desc");
-  // Mid-screen, clear of the fixed player bar (the latest episodes above
-  // push the shows below the fold).
-  await desc.evaluate((el) => el.scrollIntoView({ block: "center" }));
-  // The card's link covers the description, so a real click there lands on it.
-  await desc.click({ force: true });
-  await expect(page).toHaveURL(/\/night$/);
 });
 
 test("shows credit their DJs, each linked to a DJ page", async ({ page }) => {
@@ -144,10 +121,6 @@ test("the home page follows the show on air without a reload", async ({ page }) 
   await onAir("default");
   await expect(page.locator("#on-air h2")).toHaveText("Fixture Default");
   await expect(page.locator("#np .np-track")).toHaveText(/First Light|Second Wind/);
-  await expect(page.locator("#schedule .on-air")).toHaveCount(1);
-  await expect(
-    page.locator("#schedule .station", { has: page.locator(".on-air") }).locator(".station-name"),
-  ).toHaveText("Fixture Default");
   // Swapped in by the poll, not a page load.
   expect(await page.evaluate(() => (window as unknown as { loaded?: boolean }).loaded)).toBe(true);
 });
@@ -337,8 +310,9 @@ test("a refresh still in flight when you leave a show page isn't swapped into th
   await page.goto("/night");
   await page.locator("#poll").evaluate((el) => el.dispatchEvent(new Event("refresh")));
   await requested;
-  await page.getByRole("link", { name: "Mazes Radio, home" }).click();
-  await page.getByRole("link", { name: "Fixture Default", exact: true }).click();
+  // To another show's page by way of a DJ of both.
+  await page.locator(".title-block .credit").getByRole("link", { name: "Ana Ruiz" }).click();
+  await page.locator(".dj-shows").getByRole("link", { name: "Fixture Default", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Fixture Default");
   const done = page.waitForEvent("requestfinished", (r) => r.url().endsWith("/night")).catch(() => {});
   release();

@@ -195,7 +195,7 @@ describe("site login", () => {
 });
 
 describe("pages", () => {
-  test("the home page has the show and track on air, the schedule and the station's history", async () => {
+  test("the home page has the show and track on air and the station's history", async () => {
     const res = await page("/");
     expect(res.status).toBe(200);
     const html = await res.text();
@@ -203,16 +203,6 @@ describe("pages", () => {
     expect(html).toMatch(/<h2 class="display"><a href="\/night">Fixture Night<\/a>/);
     expect(html).toMatch(/np-track">Midnight/);
     expect(html).toContain('href="/stream"');
-    // Every show, the one on air first (marked), then by when they're next
-    // on, without play buttons.
-    const shows = html.slice(html.indexOf('id="schedule"'), html.indexOf('id="history"'));
-    const order = [...shows.matchAll(/class="station-name" href="\/([a-z-]+)"/g)].map((m) => m[1]);
-    const byStart = ["default", "edge", "empty", "long", "night", "odd", "plain", "quiet", "complement"];
-    const first = byStart.indexOf(showAt(await getShows(), new Date())!.slug);
-    const rest = [...byStart.slice(first), ...byStart.slice(0, first)].filter((s) => s !== "night");
-    expect(order).toEqual(["night", ...rest]);
-    expect(shows.match(/class="label on-air"/g)).toHaveLength(1);
-    expect(shows).not.toContain("data-play");
     expect(html).toContain("Second Wind");
     expect(html).toContain('<div id="player" data-title="Mazes Radio"></div>');
   });
@@ -313,13 +303,20 @@ describe("archive", () => {
     expect(await (await page("/")).text()).not.toContain('href="/archive"');
   });
 
-  test("a block's button plays the show's earlier blocks after it", async () => {
-    const html = await (await page("/night")).text();
-    const then = /data-play="\/archive\/night-2026-11-14\.mp3"[^>]*data-then="([^"]+)"/.exec(html)?.[1];
-    expect(JSON.parse(then!.replaceAll("&quot;", '"'))).toEqual([
-      { src: "/archive/night-2026-11-13.mp3", title: "Fixture Night #2" },
-    ]);
-    expect(html).not.toMatch(/data-play="\/archive\/night-2026-11-13\.mp3"[^>]*data-then/);
+  test("a block's button plays the show's earlier blocks after it, newest first", async () => {
+    const then = (html: string) =>
+      JSON.parse(
+        /data-play="\/archive\/night-2026-11-14\.mp3"[^>]*data-then="([^"]+)"/
+          .exec(html)![1]!
+          .replaceAll("&quot;", '"'),
+      ) as unknown;
+    const earlier = [{ src: "/archive/night-2026-11-13.mp3", title: "Fixture Night #2" }];
+    const show = await (await page("/night")).text();
+    expect(then(show)).toEqual(earlier);
+    // The last has nothing after it: the player goes back to live.
+    expect(show).not.toMatch(/data-play="\/archive\/night-2026-11-13\.mp3"[^>]*data-then/);
+    // The home page's latest episode goes on the same way.
+    expect(then(await (await page("/")).text())).toEqual(earlier);
   });
 
   test("offers no downloads and names no tracks", async () => {
@@ -357,7 +354,7 @@ describe("archive", () => {
 
   test("the home page lists each show's latest episode, newest first", async () => {
     const html = await (await page("/")).text();
-    const list = html.slice(html.indexOf('id="episodes"'), html.indexOf('id="schedule"'));
+    const list = html.slice(html.indexOf('id="episodes"'), html.indexOf('id="history"'));
     expect(list).toContain("Latest episodes");
     const plays = [...list.matchAll(/data-play="(\/archive\/[^"]+)" data-title="([^"]+)"/g)].map((m) => [
       m[1],
@@ -371,6 +368,9 @@ describe("archive", () => {
       ["/archive/edge-2026-11-02.mp3", "Edge Cases #1"],
     ]);
     expect(list).toContain('href="/night"');
+    expect(list).toContain("A one-track night show.");
+    // No list of shows: the latest episodes stand for them.
+    expect(html).not.toContain('id="schedule"');
     expect(html).not.toContain("Track A");
   });
 

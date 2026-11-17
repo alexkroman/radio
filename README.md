@@ -141,10 +141,9 @@ Set `SITE_PASSWORD` in `.env` to put the show pages behind a login form; the str
 pipx install python-openstackclient   # once
 . ./openrc.sh                         # from the OVHcloud control panel: Public Cloud → Users & Roles → download OpenStack RC, region US-WEST-OR-1
 scripts/deploy.sh                     # run again after any change to redeploy
-scripts/deploy.sh media               # after scripts/import.sh or editing shows: copy just music/, covers/, shows/
 ```
 
-Both check the schedule first, mirror your `music/`, `covers/` and `shows/` to the server, so files you delete locally go from the server too, and restart Liquidsoap when a show was added or removed, without dropping listeners. Set `IP=<server address>` to run it without the OpenStack CLI or `openrc.sh`.
+It checks the schedule first, mirrors your `music/`, `covers/` and `shows/` to the server, so files you delete locally go from the server too, and restarts Liquidsoap when a show was added or removed, without dropping listeners. The order keeps the station from ever needing something that isn't there yet: new covers, then new music; then the code, with the images pulled and built while the old containers run; then the shows, with the new containers started and Liquidsoap restarted right after; and only then are deleted music and covers removed, once nothing plays them. Set `IP=<server address>` to run it without the OpenStack CLI or `openrc.sh`.
 
 Every run also copies the server's play log to `backup/plays/` on your computer (it's the only record for SoundExchange reports), so deploy or sync now and then. The server installs security updates by itself and, when one needs it, reboots at 11:00 UTC (3–4 am Pacific); Docker brings the station back up.
 

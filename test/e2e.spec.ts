@@ -54,9 +54,13 @@ test("home page has what's on and the schedule", async ({ page }) => {
 
 test("tapping anywhere on a show in the schedule opens it", async ({ page }) => {
   await page.goto("/");
-  const night = page.locator(".station", { has: page.locator('a[href="/night"]') });
+  const night = page.locator("#schedule .station", { has: page.locator('a[href="/night"]') });
+  const desc = night.locator(".station-desc");
+  // Mid-screen, clear of the fixed player bar (the latest episodes above
+  // push the shows below the fold).
+  await desc.evaluate((el) => el.scrollIntoView({ block: "center" }));
   // The card's link covers the description, so a real click there lands on it.
-  await night.locator(".station-desc").click({ force: true });
+  await desc.click({ force: true });
   await expect(page).toHaveURL(/\/night$/);
 });
 

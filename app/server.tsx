@@ -375,19 +375,20 @@ app.get("/", async (c) => {
           <NowPlaying play={play} status={false} />
         </div>
       </section>
+      <LatestEpisodes shows={shows} blocks={blocks} />
       <section id="schedule" class="schedule" aria-labelledby="schedule-heading">
         <h2 id="schedule-heading" class="section-label">
-          Today
+          Shows
         </h2>
         <div class="rows">
-          {scheduled(shows).map((s) => (
-            <ShowRow show={s} now={now} onAir={s.slug === show?.slug} blocks={blocks.get(s.slug)} />
+          {byNextSlot(shows, now, show).map((s) => (
+            <ShowRow show={s} now={now} onAir={s.slug === show?.slug} />
           ))}
         </div>
       </section>
       <History plays={recent.slice(1)} />
       <StreamUrl host={c.req.header("host") ?? ""} />
-      <Poll path="/" ids={["on-air", "np", "schedule", "history"]} />
+      <Poll path="/" ids={["on-air", "np", "episodes", "schedule", "history"]} />
     </main>,
   );
 });
@@ -416,6 +417,48 @@ const BlockButton = ({
     episode={episode ? day(blocks[i]!.date).replace(/^\w+, /, "") : undefined}
   />
 );
+
+// The scheduled shows by when they're next on air, the one on air first.
+const byNextSlot = (shows: Show[], now: Date, on?: Show) =>
+  scheduled(shows)
+    .map((s) => ({ s, at: s === on ? -Infinity : nextSlot(s, now)!.start.getTime() }))
+    .sort((a, b) => a.at - b.at)
+    .map(({ s }) => s);
+
+// Each show's latest archived block, newest first: its play button to the
+// left of the show's name (linked to its page), then its date and length.
+const LatestEpisodes = ({ shows, blocks }: { shows: Show[]; blocks: Map<string, Block[]> }) => {
+  const latest = scheduled(shows)
+    .filter((s) => blocks.get(s.slug)?.length)
+    .sort((a, b) => blocks.get(b.slug)![0]!.date.localeCompare(blocks.get(a.slug)![0]!.date));
+  return (
+    <section id="episodes" class="episodes" aria-labelledby="episodes-heading">
+      <h2 id="episodes-heading" class="section-label">
+        Latest episodes
+      </h2>
+      {latest.length === 0 ? (
+        <p class="muted">No episodes yet.</p>
+      ) : (
+        <ol class="archive-blocks">
+          {latest.map((show) => {
+            const list = blocks.get(show.slug)!;
+            return (
+              <li class="archive-block episode">
+                <BlockButton show={show} blocks={list} i={0} />
+                <a class="archive-title" href={`/${show.slug}`}>
+                  {show.title}
+                  <span class="episode-number">{` #${list[0]!.number}`}</span>
+                </a>
+                <span class="archive-date">{day(list[0]!.date)}</span>
+                <span class="archive-length">{duration(list[0]!.seconds)}</span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </section>
+  );
+};
 
 // A block in a list: its play button, title, date and length.
 const BlockRow = ({ show, blocks, i }: { show: Show; blocks: Block[]; i: number }) => (

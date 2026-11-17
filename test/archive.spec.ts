@@ -187,29 +187,28 @@ test("a block paused and played again picks up where it was", async ({ page }) =
   await main.getByRole("button", { name: `Pause ${TITLE}` }).click();
 });
 
-test("the schedule plays each show's last episode, and the bar goes back to live", async ({ page }) => {
+test("the home page plays each show's latest episode, and the page's play button goes back to live", async ({
+  page,
+}) => {
   await onAir("default");
   await page.goto("/");
-  const night = page.locator("#schedule .station", { has: page.locator('a[href="/night"]') });
-  const pill = night.locator(".pill");
-  await expect(pill).toHaveText("Last episode · Nov 14", { useInnerText: true });
-  await expect(night).not.toContainText("Midnight");
-  // Only shows with an archived block, off air, have one.
-  await expect(page.locator("#schedule .pill")).toHaveCount(1);
-  // It plays in place, above the row's link.
+  const night = page.locator("#episodes .episode", { has: page.locator('a[href="/night"]') });
+  await expect(night).toHaveCount(1);
+  await expect(night.locator(".archive-title")).toHaveText(TITLE);
+  await expect(night.locator(".archive-date")).toHaveText("Sat, Nov 14");
+  await expect(night.locator(".archive-title")).toHaveAttribute("href", "/night");
+  // The shows below have no play buttons.
+  await expect(page.locator("#schedule .play")).toHaveCount(0);
   await night.getByRole("button", { name: `Play ${TITLE}` }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect.poll(() => player(page)).toEqual({ src: BLOCK, playing: true });
-  await expect(pill).toHaveText("Playing last episode", { useInnerText: true });
   await expect(page.locator("#bar-track")).toHaveText("Midnight · Gamma");
   await night.getByRole("button", { name: `Pause ${TITLE}` }).click();
   await expect.poll(() => player(page)).toEqual({ src: null, playing: false });
-  await expect(pill).toHaveText("Paused · Nov 14", { useInnerText: true });
-  // Live again, from the page's play button: the stream, playing; the pill as it was.
+  // Live again, from the page's play button.
   const bar = page.getByRole("region", { name: "Player" });
   await page.getByRole("main").getByRole("button", { name: "Play Mazes Radio" }).first().click();
   await expect.poll(() => player(page)).toEqual({ src: "/stream", playing: true });
-  await expect(pill).toHaveText("Last episode · Nov 14", { useInnerText: true });
   await bar.getByRole("button", { name: "Pause Mazes Radio" }).click();
 });
 test.describe("logged out", () => {

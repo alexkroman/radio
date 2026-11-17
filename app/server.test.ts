@@ -203,20 +203,16 @@ describe("pages", () => {
     expect(html).toMatch(/<h2 class="display"><a href="\/night">Fixture Night<\/a>/);
     expect(html).toMatch(/np-track">Midnight/);
     expect(html).toContain('href="/stream"');
-    // Every show, in the order they start, the one on air marked.
-    const order = [...html.matchAll(/class="station-name" href="\/([a-z-]+)"/g)].map((m) => m[1]);
-    expect(order).toEqual([
-      "default",
-      "edge",
-      "empty",
-      "long",
-      "night",
-      "odd",
-      "plain",
-      "quiet",
-      "complement",
-    ]);
-    expect(html.match(/class="label on-air"/g)).toHaveLength(1);
+    // Every show, the one on air first (marked), then by when they're next
+    // on, without play buttons.
+    const shows = html.slice(html.indexOf('id="schedule"'), html.indexOf('id="history"'));
+    const order = [...shows.matchAll(/class="station-name" href="\/([a-z-]+)"/g)].map((m) => m[1]);
+    const byStart = ["default", "edge", "empty", "long", "night", "odd", "plain", "quiet", "complement"];
+    const first = byStart.indexOf(showAt(await getShows(), new Date())!.slug);
+    const rest = [...byStart.slice(first), ...byStart.slice(0, first)].filter((s) => s !== "night");
+    expect(order).toEqual(["night", ...rest]);
+    expect(shows.match(/class="label on-air"/g)).toHaveLength(1);
+    expect(shows).not.toContain("data-play");
     expect(html).toContain("Second Wind");
     expect(html).toContain('<div id="player" data-title="Mazes Radio"></div>');
   });
@@ -359,20 +355,22 @@ describe("archive", () => {
     expect((await req("/archive/night-2026-11-14/now.json?t=0")).status).toBe(401);
   });
 
-  test("the schedule plays each show's last archived show, unless it's on air", async () => {
+  test("the home page lists each show's latest episode, newest first", async () => {
     const html = await (await page("/")).text();
-    const rows = html.split('<article class="station').slice(1);
-    const row = (slug: string) => rows.find((r) => r.includes(`href="/${slug}"`))!;
-    // Night is on air: "On air", not its last episode.
-    expect(row("night")).toContain('class="label on-air"');
-    expect(row("night")).not.toContain("data-play");
-    expect(row("default")).toMatch(
-      /data-play="\/archive\/default-2026-11-14\.mp3" data-title="Fixture Default #5"/,
-    );
-    expect(row("default")).toContain("Last episode</span>");
-    expect(row("default")).toContain(" · Nov 14");
-    expect(row("odd")).toMatch(/data-play="\/archive\/odd-2026-11-15\.mp3" data-title="Odd Characters #1"/);
-    expect(row("quiet")).not.toContain("data-play"); // nothing archived
+    const list = html.slice(html.indexOf('id="episodes"'), html.indexOf('id="schedule"'));
+    expect(list).toContain("Latest episodes");
+    const plays = [...list.matchAll(/data-play="(\/archive\/[^"]+)" data-title="([^"]+)"/g)].map((m) => [
+      m[1],
+      m[2],
+    ]);
+    // One a show (the on-air show's too), newest first; none for quiet (nothing archived).
+    expect(plays).toEqual([
+      ["/archive/odd-2026-11-15.mp3", "Odd Characters #1"],
+      ["/archive/default-2026-11-14.mp3", "Fixture Default #5"],
+      ["/archive/night-2026-11-14.mp3", "Fixture Night #3"],
+      ["/archive/edge-2026-11-02.mp3", "Edge Cases #1"],
+    ]);
+    expect(list).toContain('href="/night"');
     expect(html).not.toContain("Track A");
   });
 

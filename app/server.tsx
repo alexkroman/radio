@@ -167,10 +167,54 @@ const Until = ({ show, now }: { show: Show; now: Date }) => {
   const slot = nextSlot(show, now);
   return slot && slot.start <= now ? (
     <span class="until">
-      {" · until "}
+      {" until "}
       <Time at={slot.end} />
     </span>
   ) : null;
+};
+
+// The day as a strip of its 24 hours, from the first show's start, each
+// shaded by how light it is outside (sky-0, midnight, to sky-5, noon), with
+// each show named at its first hour and a needle at now (the hour's quarter).
+// Hour cells and classes rather than widths in style attributes: the CSP
+// allows no inline styles.
+const DayStrip = ({ shows, onAir, now }: { shows: Show[]; onAir?: Show; now: Date }) => {
+  const listed = scheduled(shows);
+  if (listed.length === 0) return null;
+  const origin = listed[0]!.hours![0];
+  const sky = (h: number) => Math.round(((1 - Math.cos((2 * Math.PI * (h + 0.5)) / 24)) / 2) * 5);
+  const nowCell = (now.getHours() - origin + 24) % 24;
+  return (
+    <nav id="day" class="day" aria-label="Today's shows">
+      {Array.from({ length: 24 }, (_, i) => {
+        const h = (origin + i) % 24;
+        const show = showAt(listed, new Date(now.getFullYear(), now.getMonth(), now.getDate(), h));
+        const starts = show && show.hours![0] === h ? show : undefined;
+        const slot = starts && nextSlot(starts, now);
+        // The show's length in hours: its label is that wide, and no wider.
+        const len = starts && slot ? Math.round((slot.end.getTime() - slot.start.getTime()) / 3_600_000) : 0;
+        const cls = [
+          "day-hour",
+          `sky-${sky(h)}`,
+          starts && "day-start",
+          show && show.slug === onAir?.slug && "day-on",
+        ].filter(Boolean);
+        return (
+          <span class={cls.join(" ")}>
+            {i === nowCell && (
+              <span class={`day-now q${Math.floor(now.getMinutes() / 15)}`} aria-hidden="true" />
+            )}
+            {starts && (
+              <a class={`day-show len-${len}`} href={`/${starts.slug}`}>
+                <span class="day-name">{starts.title}</span>
+                {slot && <Time at={slot.start} />}
+              </a>
+            )}
+          </span>
+        );
+      })}
+    </nav>
+  );
 };
 
 // A show as a card, with its hours, mood and DJs (`credit`: not on a DJ's
@@ -212,7 +256,7 @@ const ShowCard = ({
       <span class="station-archive">
         <BlockButton show={show} blocks={blocks} i={0} />
         <span class="station-archive-text">
-          <span class="label">Last show</span>
+          <span class="label">Latest episode</span>
           <span>{`#${blocks[0].number} · ${day(blocks[0].date)} · ${hours(blocks[0].seconds)}`}</span>
         </span>
       </span>
@@ -384,6 +428,7 @@ app.get("/", async (c) => {
         <div id="np">
           <NowPlaying play={play} />
         </div>
+        <DayStrip shows={shows} onAir={show} now={now} />
         <p id="next" class="next">
           {next && (
             <>
@@ -402,9 +447,9 @@ app.get("/", async (c) => {
       <section id="schedule" class="schedule" aria-labelledby="schedule-heading">
         <div class="section-head">
           <h2 id="schedule-heading" class="label">
-            Shows
+            Schedule
           </h2>
-          <p class="section-note">Not your mood? Play a show's last broadcast from the start.</p>
+          <p class="section-note">Not your mood? Play any show's latest episode from the start.</p>
         </div>
         <div class="cards">
           {scheduled(shows).map((s) => (
@@ -414,7 +459,7 @@ app.get("/", async (c) => {
       </section>
       <History plays={recent.slice(1)} />
       <StreamUrl host={c.req.header("host") ?? ""} />
-      <Poll path="/" ids={["on-air", "np", "next", "schedule", "history"]} />
+      <Poll path="/" ids={["on-air", "np", "day", "next", "schedule", "history"]} />
     </main>,
   );
 });
@@ -456,11 +501,12 @@ app.get("/archive", async (c) => {
       <header class="title-block">
         <h1 class="display">Archive</h1>
         <p class="subtitle">
-          Recent shows as broadcast, for up to two weeks. Each plays from the start, then the show before it.
+          Every show's episodes from the past two weeks, as broadcast. Each plays from the start, then the
+          episode before it.
         </p>
       </header>
       {listed.length === 0 ? (
-        <p class="muted">Nothing recorded yet.</p>
+        <p class="muted">Nothing here yet. A show's episode appears once it has finished airing.</p>
       ) : (
         listed.map((show) => (
           <section class="archive-show card" aria-labelledby={`archive-${show.slug}`}>
@@ -643,7 +689,7 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
         <h2 id="about-listen" class="label">
           Listening
         </h2>
-        <p>Press play, or open the stream URL in a radio app or VLC.</p>
+        <p>Press play on any page, or open the stream address in a radio app or VLC.</p>
         <dl class="streams">
           <div>
             <dt class="label">Stream</dt>
@@ -737,9 +783,9 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
         <section class="archive-show" aria-labelledby="show-archive">
           <div class="section-head">
             <h2 id="show-archive" class="label">
-              Recent shows
+              Past episodes
             </h2>
-            <p class="section-note">As broadcast, from the start.</p>
+            <p class="section-note">Each plays from the start, as broadcast.</p>
           </div>
           <ol class="archive-blocks">
             {blocks.map((_, i) => (
@@ -766,7 +812,6 @@ app.get(`/djs/:dj{${SLUG}}`, async (c) => {
       <section class="profile" aria-label="Profile">
         {dj.photo && <img class="cover photo" src={`/djs/${dj.slug}/photo`} alt={`Photo of ${dj.name}`} />}
         <div class="profile-text">
-          <span class="label">DJ</span>
           <h1 class="display">{dj.name}</h1>
           {dj.tagline && <p class="subtitle">{dj.tagline}</p>}
         </div>

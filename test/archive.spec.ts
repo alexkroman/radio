@@ -127,7 +127,7 @@ test("the player plays a block with each track as it plays, then the show's bloc
 test("the schedule plays each show's last archived show", async ({ page }) => {
   await page.goto("/");
   const night = page.locator("#schedule .station", { has: page.locator('a[href="/night"]') });
-  await expect(night.locator(".station-archive")).toContainText("Last show");
+  await expect(night.locator(".station-archive")).toContainText("Latest episode");
   await expect(night.locator(".station-archive")).toContainText("#2 · Sat, Nov 14");
   await expect(night).not.toContainText("Midnight");
   // Only shows with an archived block have one.

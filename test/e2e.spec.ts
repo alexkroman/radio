@@ -115,9 +115,14 @@ test("a show on air has its track; one off air, when it's next on", async ({ pag
   await waitForTrack(page, "Midnight");
   await expect(page.locator("#np .np-artist")).toHaveText("Gamma");
 
+  // Off air: when it's next on, or, during its own hours (12-15 in the
+  // stack's time zone) with another show put on air by hand, that it starts
+  // after this track. app/server.test.ts pins each wording at a set time.
   await onAir("default");
   await page.goto("/night");
-  await expect(page.locator("#np")).toContainText(/Off air\. Next on at \d{1,2}:00 [AP]M\./);
+  await expect(page.locator("#np")).toContainText(
+    /Off air\. Next on at \d{1,2}:00 [AP]M\.|Starting after this track\./,
+  );
   await expect(page.locator("#history")).toContainText("Midnight");
   await page.goto("/default");
   await waitForTrack(page, /First Light|Second Wind/);
@@ -239,7 +244,7 @@ test("player plays the stream using only self-hosted assets", async ({ page }) =
   await page.goto("/");
   await main.getByRole("button", { name: "Play Mazes Radio" }).click();
   await expect(main.getByRole("button", { name: "Pause Mazes Radio" })).toBeVisible();
-  await expect(page.locator("[data-status]")).toHaveText("Listening · Live");
+  await expect(page.locator("[data-status]")).toHaveText("Listening live");
   await expect.poll(state).toBe("playing");
   await expect(page.locator("#np img")).toBeVisible();
 
@@ -334,7 +339,7 @@ test("a refresh still in flight when you leave a show page isn't swapped into th
   await page.locator("#poll").evaluate((el) => el.dispatchEvent(new Event("refresh")));
   await requested;
   await page.getByRole("link", { name: "Schedule", exact: true }).click();
-  await page.getByRole("link", { name: "Fixture Default" }).click();
+  await page.getByRole("link", { name: "Fixture Default", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Fixture Default");
   const done = page.waitForEvent("requestfinished", (r) => r.url().endsWith("/night")).catch(() => {});
   release();

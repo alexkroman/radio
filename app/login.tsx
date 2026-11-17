@@ -25,7 +25,7 @@ const Login = ({ next, error }: { next: string; error?: boolean }) => (
         required
       />
       <button type="submit">Enter</button>
-      {error && <p class="error">Wrong password</p>}
+      {error && <p class="error">Wrong password. Try again.</p>}
     </form>
   </main>
 );
@@ -42,7 +42,7 @@ export const throttle = createMiddleware(async (c, next) => {
   let times = attempts.get(ip);
   if (!times) attempts.set(ip, (times = []));
   while (times.length && now - times[0]! >= WINDOW) times.shift();
-  if (times.length >= 10) return c.text("Too many attempts, try again later", 429);
+  if (times.length >= 10) return c.text("Too many wrong passwords. Try again in 15 minutes.", 429);
   const attempt = c.req.method === "POST";
   if (attempt) times.push(now);
   try {

@@ -1,12 +1,10 @@
 // Browser code for the site, bundled by esbuild into /assets/app.js (+ app.css).
 // One audio element for the whole site; links swap only <main> (hx-boost), so
 // the station keeps playing while you browse.
-// Inter and JetBrains Mono, self-hosted (bundled into app.css + font files).
-import "@fontsource/inter/400.css";
-import "@fontsource/inter/500.css";
-import "@fontsource/inter/600.css";
+// Archivo (variable, with its width axis) and JetBrains Mono (the wordmark and stream address), self-hosted (bundled into app.css + font files).
+import "@fontsource-variable/archivo/wdth.css";
+import "@fontsource-variable/archivo/wdth-italic.css";
 import "@fontsource/jetbrains-mono/400.css";
-import "@fontsource/jetbrains-mono/500.css";
 import "@fontsource/jetbrains-mono/700.css";
 import "./tokens.css";
 import "./style.css";
@@ -70,7 +68,7 @@ function sync() {
     b.setAttribute("aria-label", `${on ? "Pause" : "Play"} ${b.dataset.title}`);
   });
   document.querySelectorAll<HTMLElement>("[data-status]").forEach((el) => {
-    el.textContent = playing && live() ? "Listening · Live" : "Live";
+    el.textContent = playing && live() ? "Listening live" : "Live";
   });
   document.body.classList.toggle("playing", playing);
   const track: Track = live() ? now : blockTrack;

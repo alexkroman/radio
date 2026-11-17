@@ -352,8 +352,8 @@ describe("archive", () => {
     const html = await (await page("/night")).text();
     const plays = [...html.matchAll(/data-play="(\/archive\/[^"]+)"/g)].map((m) => m[1]);
     expect(plays).toEqual(["/archive/night-2026-11-14.mp3", "/archive/night-2026-11-13.mp3"]);
-    expect(html).toContain("Recent shows");
-    expect(await (await page("/quiet")).text()).not.toContain("Recent shows");
+    expect(html).toContain("Past episodes");
+    expect(await (await page("/quiet")).text()).not.toContain("Past episodes");
   });
 
   test("while a show waits for the last one's track to end, it's up next, after this track", async () => {

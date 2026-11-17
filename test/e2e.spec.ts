@@ -310,8 +310,9 @@ test("a refresh still in flight when you leave a show page isn't swapped into th
   await page.goto("/night");
   await page.locator("#poll").evaluate((el) => el.dispatchEvent(new Event("refresh")));
   await requested;
-  await page.getByRole("link", { name: "Mazes Radio, home" }).click();
-  await page.getByRole("link", { name: "Fixture Default", exact: true }).click();
+  // To another show's page by way of a DJ of both.
+  await page.locator(".title-block .credit").getByRole("link", { name: "Ana Ruiz" }).click();
+  await page.locator(".dj-shows").getByRole("link", { name: "Fixture Default", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Fixture Default");
   const done = page.waitForEvent("requestfinished", (r) => r.url().endsWith("/night")).catch(() => {});
   release();

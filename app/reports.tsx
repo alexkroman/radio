@@ -57,7 +57,8 @@ reports.get("/", (c) => {
       <SiteHeader />
       <h1 class="display">Reports</h1>
       <p class="lead">
-        Monthly SoundExchange Reports of Use: every song played on every station, with its listener count.
+        Our monthly Reports of Use for SoundExchange: every song the station played, live or from the archive,
+        and how many people heard it.
       </p>
       <table class="reports-table">
         {months.map((m) => (

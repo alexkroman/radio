@@ -12,7 +12,6 @@
   --color-hairline: #e6e6e6; /* row dividers, outlined secondary buttons */
   --color-hairline-soft: #efefef; /* dividers inside the Recently played list */
   --color-placeholder: #f2f2f2; /* empty album-art square */
-  --color-panel: #f7f7f7; /* the home page's on-air panel */
   --color-link-underline: #b5b5b5;
   --color-accent: #e8590c; /* ONLY: logo centre square, "Live" dot, player-bar dot */
   --color-on-ink-muted: #b5b5b5; /* secondary text on the black player bar */
@@ -25,23 +24,38 @@
 
   color-scheme: light dark;
 
-  /* Type families */
-  --font-sans: Inter, system-ui, -apple-system, sans-serif;
+  /* Type families. One family, Archivo, at two widths: condensed (font-stretch
+     68%) for show names and page titles, like station signage; normal for
+     everything else. Mono only for the wordmark and the stream address. */
+  --font-sans: "Archivo Variable", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --stretch-display: 68%;
+  --stretch-heading: 82%;
 
-  /* Type scale (size / weight / tracking / line-height) */
-  --type-display: 600 56px/1 var(--font-sans); /* page titles: station name, "About" — tracking -0.03em */
-  --type-station-name: 600 28px/1.2 var(--font-sans); /* station name in list, now-playing title — tracking -0.02em */
-  --type-lead: 400 22px/1.45 var(--font-sans); /* About lead paragraph — tracking -0.01em */
-  --type-subtitle: 400 18px/1.4 var(--font-sans); /* station description on station page, artist under now playing */
+  /* Type scale (size / weight / line-height); set with font-stretch where noted */
+  --type-display: 800 88px/0.92 var(--font-sans); /* page titles, the show on air — condensed */
+  --type-heading: 650 22px/1.2 var(--font-sans); /* section headings — semi-condensed */
+  --type-station-name: 700 30px/1.1 var(--font-sans); /* show names in lists, now-playing title — condensed */
+  --type-lead: 400 22px/1.45 var(--font-sans); /* About lead paragraph */
+  --type-subtitle: 400 18px/1.45 var(--font-sans); /* show description, artist under now playing */
   --type-body: 400 17px/1.65 var(--font-sans); /* About paragraphs */
-  --type-track: 400 16px/1.4 var(--font-sans); /* track titles in Recently played */
-  --type-small: 400 15px/1.4 var(--font-sans); /* descriptions & now playing in list */
-  --type-nav: 400 14px/1.4 var(--font-sans);
-  --type-label: 400 12px/1.4 var(--font-mono); /* section labels — UPPERCASE, tracking 0.08em, muted */
-  --type-time: 400 13px/1.4 var(--font-mono); /* times, station numbers — muted */
+  --type-track: 500 16px/1.35 var(--font-sans); /* track titles in Recently played */
+  --type-small: 400 15px/1.45 var(--font-sans); /* descriptions */
+  --type-nav: 400 15px/1.4 var(--font-sans);
+  --type-label: 500 13px/1.4 var(--font-sans); /* small status labels: On air, Live, Last show — sentence case */
+  --type-time: 400 14px/1.4 var(--font-sans); /* times, numbers — tabular figures */
   --type-url: 400 14px/1.4 var(--font-mono); /* stream URLs */
   --type-wordmark: 700 18px/1 var(--font-mono); /* "mazes radio", lowercase, tracking -0.03em */
+
+  /* The day strip on the home page: the hours shaded night to noon (sky-0 to sky-5). */
+  --sky-0: #161616;
+  --sky-1: #3a3a3a;
+  --sky-2: #767676;
+  --sky-3: #a9a9a9;
+  --sky-4: #cdcdcd;
+  --sky-5: #e2e2e2;
+  --sky-ink-dark: #ffffff; /* labels on sky-0 to sky-2 */
+  --sky-ink-light: #111111; /* labels on sky-3 to sky-5 */
 
   /* Layout */
   --page-pad-top: 72px;
@@ -55,7 +69,6 @@
   --radius-art-sm: 3px; /* 40–44px covers */
   --radius-art: 4px; /* 56–64px covers */
   --radius-art-lg: 6px; /* 120px cover */
-  --radius-card: 12px; /* the on-air panel and show cards */
   --radius-pill: 999px;
 
   /* Sizes */
@@ -74,7 +87,6 @@
     --color-hairline: #2a2a2a;
     --color-hairline-soft: #222222;
     --color-placeholder: #1c1c1c;
-    --color-panel: #181818;
     --color-link-underline: #555555;
     --color-link-hover: #bdbdbd;
     --color-accent: #e8590c; /* unchanged */
@@ -84,5 +96,13 @@
     --color-surface-border: #2a2a2a;
     --color-on-fill: #111111;
     --art-outline: rgb(255 255 255 / 8%);
+    --sky-0: #050505;
+    --sky-1: #1a1a1a;
+    --sky-2: #2c2c2c;
+    --sky-3: #474747;
+    --sky-4: #626262;
+    --sky-5: #7c7c7c;
+    --sky-ink-dark: #f2f2f2;
+    --sky-ink-light: #f2f2f2;
   }
 }

@@ -173,50 +173,6 @@ const Until = ({ show, now }: { show: Show; now: Date }) => {
   ) : null;
 };
 
-// The day as a strip of its 24 hours, from the first show's start, each
-// shaded by how light it is outside (sky-0, midnight, to sky-5, noon), with
-// each show named at its first hour and a needle at now (the hour's quarter).
-// Hour cells and classes rather than widths in style attributes: the CSP
-// allows no inline styles.
-const DayStrip = ({ shows, onAir, now }: { shows: Show[]; onAir?: Show; now: Date }) => {
-  const listed = scheduled(shows);
-  if (listed.length === 0) return null;
-  const origin = listed[0]!.hours![0];
-  const sky = (h: number) => Math.round(((1 - Math.cos((2 * Math.PI * (h + 0.5)) / 24)) / 2) * 5);
-  const nowCell = (now.getHours() - origin + 24) % 24;
-  return (
-    <nav id="day" class="day" aria-label="Today's shows">
-      {Array.from({ length: 24 }, (_, i) => {
-        const h = (origin + i) % 24;
-        const show = showAt(listed, new Date(now.getFullYear(), now.getMonth(), now.getDate(), h));
-        const starts = show && show.hours![0] === h ? show : undefined;
-        const slot = starts && nextSlot(starts, now);
-        // The show's length in hours: its label is that wide, and no wider.
-        const len = starts && slot ? Math.round((slot.end.getTime() - slot.start.getTime()) / 3_600_000) : 0;
-        const cls = [
-          "day-hour",
-          `sky-${sky(h)}`,
-          starts && "day-start",
-          show && show.slug === onAir?.slug && "day-on",
-        ].filter(Boolean);
-        return (
-          <span class={cls.join(" ")}>
-            {i === nowCell && (
-              <span class={`day-now q${Math.floor(now.getMinutes() / 15)}`} aria-hidden="true" />
-            )}
-            {starts && (
-              <a class={`day-show len-${len}`} href={`/${starts.slug}`}>
-                <span class="day-name">{starts.title}</span>
-                {slot && <Time at={slot.start} />}
-              </a>
-            )}
-          </span>
-        );
-      })}
-    </nav>
-  );
-};
-
 // A show as a card, with its hours, mood and DJs (`credit`: not on a DJ's
 // page, whose subject they are), and its last archived block, so a listener
 // can pick another show to suit the mood.
@@ -428,7 +384,6 @@ app.get("/", async (c) => {
         <div id="np">
           <NowPlaying play={play} />
         </div>
-        <DayStrip shows={shows} onAir={show} now={now} />
         <p id="next" class="next">
           {next && (
             <>
@@ -459,7 +414,7 @@ app.get("/", async (c) => {
       </section>
       <History plays={recent.slice(1)} />
       <StreamUrl host={c.req.header("host") ?? ""} />
-      <Poll path="/" ids={["on-air", "np", "day", "next", "schedule", "history"]} />
+      <Poll path="/" ids={["on-air", "np", "next", "schedule", "history"]} />
     </main>,
   );
 });

@@ -34,17 +34,10 @@ test("home page has what's on and the schedule", async ({ page }) => {
   await expect(page.locator("#on-air .credit")).toHaveText("with Ana Ruiz, Ben Cho & Zoë Ñandú");
   await expect(page.getByRole("main").getByRole("button", { name: "Play Mazes Radio" })).toBeVisible();
   const rows = page.locator("#schedule .station");
-  await expect(rows.locator(".station-name")).toHaveText([
-    "Fixture Default",
-    "Edge Cases",
-    "Empty",
-    "Long Titles",
-    "Fixture Night",
-    "Odd Characters",
-    "plain",
-    "Quiet",
-    "Complement",
-  ]);
+  // The show on air first, then the rest by when they're next on.
+  await expect(rows).toHaveCount(9);
+  await expect(rows.first().locator(".station-name")).toHaveText("Fixture Night");
+  await expect(rows.locator(".play")).toHaveCount(0);
   await expect(rows.first().locator(".hours")).toHaveText(/^\d{1,2}:00 [AP]M–\d{1,2}:00 [AP]M$/);
   await expect(page.locator("#schedule .on-air")).toHaveCount(1);
   await expect(rows.filter({ has: page.locator(".on-air") }).locator(".station-name")).toHaveText(

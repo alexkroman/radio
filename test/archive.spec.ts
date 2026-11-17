@@ -1,4 +1,4 @@
-// The archive: /archive lists recorded show blocks (radio.liq records them;
+// The archive: a show's page lists its recorded blocks (radio.liq records them;
 // the overlay's seed service adds two finished ones of the night show,
 // night-2026-11-14.mp3 and night-2026-11-13.mp3, 14 s each at 256 kbps,
 // untagged, with their track sidecars), Icecast serves them through Caddy,
@@ -14,13 +14,16 @@ const TITLE = "Fixture Night #2";
 const EARLIER_TITLE = "Fixture Night #1";
 const BYTES = 448_888;
 
-test("the archive lists each show's blocks, without track names or downloads", async ({ page }) => {
+test("a show's page lists its blocks, without track names or downloads, and there's no archive page", async ({
+  page,
+}) => {
+  await onAir("default");
   await page.goto("/");
-  await page.getByRole("link", { name: "Archive", exact: true }).click();
-  await expect(page).toHaveURL(/\/archive$/);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Archive");
-  const night = page.locator(".archive-show", { has: page.getByRole("heading", { name: "Fixture Night" }) });
-  const blocks = night.locator(".archive-block");
+  await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link")).toHaveText(["About"]);
+  await page.locator('#schedule a[href="/night"]').first().click();
+  await expect(page).toHaveURL(/\/night$/);
+  const past = page.locator(".archive-show", { has: page.getByRole("heading", { name: "Past episodes" }) });
+  const blocks = past.locator(".archive-block");
   // Numbered (the blocks have no names of their own), with their dates.
   await expect(blocks.locator(".archive-title")).toHaveText([TITLE, EARLIER_TITLE]);
   await expect(blocks.locator(".archive-date")).toHaveText(["Sat, Nov 14", "Fri, Nov 13"]);
@@ -29,7 +32,8 @@ test("the archive lists each show's blocks, without track names or downloads", a
   // No file links, download attributes or media controls; no tracks.
   await expect(page.locator('a[href$=".mp3"], [download], audio, video')).toHaveCount(0);
   for (const name of ["Midnight", "Second Wind", "First Light", "Gamma"])
-    await expect(page.locator("main")).not.toContainText(name);
+    await expect(past).not.toContainText(name);
+  expect((await page.request.get("/archive")).status()).toBe(404);
 });
 
 test("a block is served whole, or from a range, so a dropped player resumes", async () => {
@@ -79,7 +83,7 @@ test("a block's now.json has only the track playing at a time into it", async ({
 test("the player plays a block with each track as it plays, then the show's block before, then stops", async ({
   page,
 }) => {
-  await page.goto("/archive");
+  await page.goto("/night");
   const main = page.getByRole("main");
   const bar = page.getByRole("region", { name: "Player" });
   await main.getByRole("button", { name: `Play ${TITLE}` }).click();
@@ -127,7 +131,7 @@ type W = { audio: HTMLAudioElement; after?: number[] };
 // Play the block to 4 s in, then interrupt it (`how`), and return where it
 // plays from after: each time it reports once it's loading again.
 async function interrupted(page: Page, how: () => Promise<unknown>) {
-  await page.goto("/archive");
+  await page.goto("/night");
   await page
     .getByRole("main")
     .getByRole("button", { name: `Play ${TITLE}` })
@@ -209,10 +213,9 @@ test("the schedule plays each show's last episode, and the bar goes back to live
 });
 test.describe("logged out", () => {
   test.use(LOGGED_OUT);
-  test("the archive page needs a login; its blocks play without one, like the stream", async ({
+  test("a block's now.json needs a login; its blocks play without one, like the stream", async ({
     request,
   }) => {
-    expect((await request.get("/archive")).status()).toBe(401);
     expect((await request.get("/archive/night-2026-11-14/now.json?t=0")).status()).toBe(401);
     const res = await request.get(BLOCK);
     expect(res.status()).toBe(200);

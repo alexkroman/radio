@@ -96,7 +96,7 @@ Liquidsoap records the program as broadcast (the final mix, after the limiter) a
 
 Each block has a sidecar, `archive/tracks/<show>-<YYYY-MM-DD>.jsonl`: a line per track with its offset in the file and its tags. The player uses it to show each track's title, artist and album while it plays, never before (the block's `now.json?t=<seconds>` answers with the one track playing then, and when it ends, so the player asks again only then), and the reports use it to count archive plays per track. Sidecars are kept after their blocks; deploys back them up to `backup/archive/tracks/`.
 
-`/archive` lists each show's blocks, newest first, numbered (Frequency #12: the days since the show's first block) with date and length, and the home page has the latest. They play in the site's player from the beginning, then the show's block before, with no seek bar and no download. Icecast serves the files at `/archive/<show>-<date>.mp3` (Caddy passes only GET there). Range requests work, so a player that drops (a blip, a network change) picks up where it was instead of starting over: the browser resumes a short blip itself, and the site's player retries a longer drop for two minutes at the same point. Paused (a tap, a call, the lock screen) and played again, a block also picks up where it was.
+A show's page lists its blocks, newest first, numbered (Frequency #12: the days since the show's first block) with date and length, and the home page's schedule offers each show's latest. There's no archive page of its own. They play in the site's player from the beginning, then the show's block before, with no seek bar and no download. Icecast serves the files at `/archive/<show>-<date>.mp3` (Caddy passes only GET there). Range requests work, so a player that drops (a blip, a network change) picks up where it was instead of starting over: the browser resumes a short blip itself, and the site's player retries a longer drop for two minutes at the same point. Paused (a tap, a call, the lock screen) and played again, a block also picks up where it was.
 
 Retention: the `archive-prune` service runs `scripts/prune-archive.sh` at start and every hour (so nightly too). It deletes blocks before they've been up two weeks (at 14 days less an hour), then all but the newest `ARCHIVE_KEEP` (`.env`, default 1) of each show, and anything in `archive/short/`. An hour is ~115 MB, so the default keeps ~2.8 GB of finished blocks, plus up to ~1.3 GB being recorded.
 
@@ -122,14 +122,13 @@ Not in code: filing the Notice of Use with the Copyright Office, paying SoundExc
 
 ## Where things are
 
-| URL                          | What's there                                  |
-| ---------------------------- | --------------------------------------------- |
-| `https://localhost/`         | What's on air, the player, schedule           |
-| `https://localhost/<slug>`   | A show's hours, now playing (on air), history |
-| `https://localhost/stream`   | The stream for apps and VLC                   |
-| `https://localhost/archive`  | Recorded show blocks, newest first            |
-| `https://localhost/djs/<dj>` | A DJ's profile and shows                      |
-| `https://localhost/reports`  | Monthly SoundExchange reports                 |
+| URL                          | What's there                                        |
+| ---------------------------- | --------------------------------------------------- |
+| `https://localhost/`         | What's on air, the player, schedule                 |
+| `https://localhost/<slug>`   | A show's hours, now playing, past episodes, history |
+| `https://localhost/stream`   | The stream for apps and VLC                         |
+| `https://localhost/djs/<dj>` | A DJ's profile and shows                            |
+| `https://localhost/reports`  | Monthly SoundExchange reports                       |
 
 Set `SITE_PASSWORD` in `.env` to put the show pages behind a login form; the stream stays public so apps can play it. After 10 wrong passwords from one address, logins are refused for 15 minutes. Nothing else is public.
 

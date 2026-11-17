@@ -33,7 +33,7 @@ export const Lockup = () => (
 );
 
 // `home`: the home page, where the lockup is the page's <h1>.
-export const SiteHeader = ({ current, home }: { current?: "archive" | "about"; home?: boolean }) => (
+export const SiteHeader = ({ current, home }: { current?: "about"; home?: boolean }) => (
   <header class="site-header">
     {home ? (
       <h1>
@@ -44,9 +44,6 @@ export const SiteHeader = ({ current, home }: { current?: "archive" | "about"; h
     )}
     {/* The schedule is the home page, so the lockup is its link. */}
     <nav aria-label="Main">
-      <a href="/archive" aria-current={current === "archive" ? "page" : undefined}>
-        Archive
-      </a>
       <a href="/about" aria-current={current === "about" ? "page" : undefined}>
         About
       </a>

@@ -292,25 +292,33 @@ describe("pages", () => {
 });
 
 describe("archive", () => {
-  test("lists each show's blocks up under two weeks, newest ARCHIVE_KEEP first, numbered by day", async () => {
-    const html = await (await page("/archive")).text();
-    const rows = [...html.matchAll(/data-play="([^"]+)" data-title="([^"]+)"/g)].map((m) => [m[1], m[2]]);
+  test("a show's page lists its blocks up under two weeks, newest ARCHIVE_KEEP first, numbered by day", async () => {
+    const rows = async (slug: string) =>
+      [
+        ...(await (await page(`/${slug}`)).text()).matchAll(
+          /data-play="(\/archive\/[^"]+)" data-title="([^"]+)"/g,
+        ),
+      ].map((m) => [m[1], m[2]]);
     // Numbered from each show's first day with a block (or a sidecar of one).
-    expect(rows).toEqual([
-      ["/archive/default-2026-11-14.mp3", "Fixture Default #5"],
-      ["/archive/edge-2026-11-02.mp3", "Edge Cases #1"],
+    expect(await rows("default")).toEqual([["/archive/default-2026-11-14.mp3", "Fixture Default #5"]]);
+    expect(await rows("edge")).toEqual([["/archive/edge-2026-11-02.mp3", "Edge Cases #1"]]);
+    expect(await rows("night")).toEqual([
       ["/archive/night-2026-11-14.mp3", "Fixture Night #3"],
       ["/archive/night-2026-11-13.mp3", "Fixture Night #2"],
-      ["/archive/odd-2026-11-15.mp3", "Odd Characters #1"],
     ]);
-    expect(html).toContain("Sat, Nov 14");
-    expect(html).toContain("5 h 1 min");
-    expect(html).toContain("6 h 0 min");
-    expect(html).toContain('aria-current="page">Archive');
+    expect(await rows("odd")).toEqual([["/archive/odd-2026-11-15.mp3", "Odd Characters #1"]]);
+    const night = await (await page("/night")).text();
+    expect(night).toContain("Sat, Nov 14");
+    expect(night).toContain("5 h 1 min");
+  });
+
+  test("has no page of its own, and isn't in the nav", async () => {
+    expect((await page("/archive")).status).toBe(404);
+    expect(await (await page("/")).text()).not.toContain('href="/archive"');
   });
 
   test("a block's button plays the show's earlier blocks after it", async () => {
-    const html = await (await page("/archive")).text();
+    const html = await (await page("/night")).text();
     const then = /data-play="\/archive\/night-2026-11-14\.mp3"[^>]*data-then="([^"]+)"/.exec(html)?.[1];
     expect(JSON.parse(then!.replaceAll("&quot;", '"'))).toEqual([
       { src: "/archive/night-2026-11-13.mp3", title: "Fixture Night #2" },
@@ -319,7 +327,7 @@ describe("archive", () => {
   });
 
   test("offers no downloads and names no tracks", async () => {
-    const html = await (await page("/archive")).text();
+    const html = await (await page("/odd")).text();
     expect(html).not.toMatch(/href="[^"]*\.mp3"/);
     expect(html).not.toContain("download");
     expect(html).not.toContain("<audio");
@@ -384,7 +392,7 @@ describe("archive", () => {
   });
 
   test("needs the site password, like every page", async () => {
-    expect((await req("/archive")).status).toBe(401);
+    expect((await req("/archive/night-2026-11-14/now.json?t=0")).status).toBe(401);
   });
 });
 
@@ -414,7 +422,6 @@ describe("about", () => {
       expect(html).toContain(`href="${url}"`);
     expect(html).toContain("The archive");
     expect(html).toContain("<h3>Why does a show&#39;s page list what&#39;s played");
-    expect(html).toContain('href="/archive"');
   });
 });
 

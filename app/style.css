@@ -655,33 +655,11 @@ img.cover {
   font-weight: 600;
 }
 
-/* ── Archive: on the archive page (a card a show) and a show's page ── */
+/* ── Archive: a show's past episodes, on its page ── */
 .archive-show {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.archive-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 4px 16px;
-}
-
-.archive-name {
-  font: var(--type-station-name);
-  font-stretch: var(--stretch-display);
-}
-
-/* stylelint-disable-next-line no-descending-specificity -- unrelated links */
-.archive-name a {
-  text-decoration: none;
-}
-
-.archive-head .station-hours {
-  width: auto;
 }
 
 .archive-blocks {
@@ -721,11 +699,6 @@ img.cover {
 .archive-length {
   width: 88px;
   text-align: right;
-}
-
-.page-archive .archive-show {
-  padding-top: 20px;
-  border-top: 2px solid var(--color-ink);
 }
 
 .history {

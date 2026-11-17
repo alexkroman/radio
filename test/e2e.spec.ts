@@ -25,15 +25,13 @@ test("the station is one MP3 stream", async () => {
   }).toPass({ timeout: 60_000 });
 });
 
-test("home page has what's on, what's next and the schedule", async ({ page }) => {
+test("home page has what's on and the schedule", async ({ page }) => {
   await onAir("night");
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName("Mazes Radio, home");
   await expect(page.locator("#on-air h2")).toHaveText("Fixture Night");
   await expect(page.locator("#np .np-track")).toHaveText("Midnight");
-  // The show due now waits for Night's track to end if it isn't Night (the
-  // test put Night on air, whatever the hour).
-  await expect(page.locator("#next")).toContainText(/Up next: .+ (at \d|after this track)/);
+  await expect(page.locator("#on-air .credit")).toHaveText("with Ana Ruiz, Ben Cho & Zoë Ñandú");
   await expect(page.getByRole("main").getByRole("button", { name: "Play Mazes Radio" })).toBeVisible();
   const rows = page.locator("#schedule .station");
   await expect(rows.locator(".station-name")).toHaveText([
@@ -53,6 +51,12 @@ test("home page has what's on, what's next and the schedule", async ({ page }) =
     "Fixture Night",
   );
   await expect(page.locator(".station-desc", { hasText: "default" })).toBeVisible();
+  // The DJs are on the show's page, not in the schedule.
+  await expect(rows.locator(".credit")).toHaveCount(0);
+  await expect(page.locator("footer").getByRole("link", { name: /\/stream$/ })).toHaveAttribute(
+    "href",
+    "/stream",
+  );
 });
 
 test("tapping anywhere on a show in the schedule opens it", async ({ page }) => {
@@ -64,12 +68,11 @@ test("tapping anywhere on a show in the schedule opens it", async ({ page }) => 
 });
 
 test("shows credit their DJs, each linked to a DJ page", async ({ page }) => {
-  await page.goto("/");
-  const night = page.locator(".station", { has: page.locator('a[href="/night"]') });
-  await expect(night.locator(".credit")).toHaveText("with Ana Ruiz, Ben Cho & Zoë Ñandú");
-  await expect(night.getByRole("link", { name: "Zoë Ñandú" })).toHaveAttribute("href", "/djs/zoe-nandu");
-  // The credit's links sit above the card's link.
-  await night.getByRole("link", { name: "Ben Cho" }).click();
+  await page.goto("/night");
+  const credit = page.locator(".title-block .credit");
+  await expect(credit).toHaveText("with Ana Ruiz, Ben Cho & Zoë Ñandú");
+  await expect(credit.getByRole("link", { name: "Zoë Ñandú" })).toHaveAttribute("href", "/djs/zoe-nandu");
+  await credit.getByRole("link", { name: "Ben Cho" }).click();
   await expect(page).toHaveURL(/\/djs\/ben-cho$/);
   await page.goto("/default");
   await expect(page.locator(".title-block .credit")).toHaveText("with Ana Ruiz & Ben Cho");
@@ -244,7 +247,6 @@ test("player plays the stream using only self-hosted assets", async ({ page }) =
   await page.goto("/");
   await main.getByRole("button", { name: "Play Mazes Radio" }).click();
   await expect(main.getByRole("button", { name: "Pause Mazes Radio" })).toBeVisible();
-  await expect(page.locator("[data-status]")).toHaveText("Listening live");
   await expect.poll(state).toBe("playing");
   await expect(page.locator("#np img")).toBeVisible();
 
@@ -252,7 +254,7 @@ test("player plays the stream using only self-hosted assets", async ({ page }) =
   await page.getByRole("link", { name: "About", exact: true }).click();
   await expect(page).toHaveURL(/\/about$/);
   await expect(page).toHaveTitle(/^About/);
-  await page.getByRole("link", { name: "Schedule", exact: true }).click();
+  await page.getByRole("link", { name: "Mazes Radio, home" }).click();
   await expect(main.getByRole("button", { name: "Pause Mazes Radio" })).toBeVisible();
   expect(await state()).toBe("playing");
   await main.getByRole("button", { name: "Pause Mazes Radio" }).click();
@@ -338,7 +340,7 @@ test("a refresh still in flight when you leave a show page isn't swapped into th
   await page.goto("/night");
   await page.locator("#poll").evaluate((el) => el.dispatchEvent(new Event("refresh")));
   await requested;
-  await page.getByRole("link", { name: "Schedule", exact: true }).click();
+  await page.getByRole("link", { name: "Mazes Radio, home" }).click();
   await page.getByRole("link", { name: "Fixture Default", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Fixture Default");
   const done = page.waitForEvent("requestfinished", (r) => r.url().endsWith("/night")).catch(() => {});
@@ -380,17 +382,6 @@ for (const [name, viewport] of [
       await expect(bar.getByRole("button", { name: "Pause Mazes Radio" })).toBeVisible();
     });
   });
-
-test.describe(() => {
-  test.use({ permissions: ["clipboard-read", "clipboard-write"] });
-  test("the stream URL can be copied", async ({ page }) => {
-    await page.goto("/");
-    await page.getByRole("button", { name: "Copy" }).click();
-    await expect(page.getByRole("button", { name: "Copied" })).toBeVisible();
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${BASE}/stream`);
-    await expect(page.getByRole("button", { name: "Copy" })).toBeVisible();
-  });
-});
 
 test.describe("logged out", () => {
   test.use(LOGGED_OUT);

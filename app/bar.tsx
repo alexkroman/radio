@@ -4,7 +4,8 @@
 // navigation). app/client.ts sets what it shows with setBar(): the show and
 // track on air, or an archive block and the track playing in it; it always
 // shows, paused until played. It has no seek bar or download: the stream
-// plays from where it is, and blocks from the beginning.
+// plays from where it is, and blocks from the beginning. On a block, it
+// offers "Back to live".
 import { render, useLayoutEffect, useRef, useState } from "hono/jsx/dom";
 
 // station: what the button plays (the site's name, or an archive block's
@@ -52,7 +53,7 @@ function Cover({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-function Bar({ onToggle }: { onToggle: () => void }) {
+function Bar({ onToggle, onLive }: { onToggle: () => void; onLive: () => void }) {
   const [s, set] = useState(state);
   setState = set;
   if (!s) return null;
@@ -68,10 +69,24 @@ function Bar({ onToggle }: { onToggle: () => void }) {
       <div class="bar-text">
         <span id="bar-track">{parts.join(" · ")}</span>
         <span class="bar-status">
-          {s.playing && <span class="dot" aria-hidden="true" />}
+          {s.live ? (
+            s.playing && <span class="dot" aria-hidden="true" />
+          ) : (
+            // Replay: an archive block, from its start.
+            <svg width={10} height={10} viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="3" />
+              <path d="M20 4v6h-6" fill="none" stroke="currentColor" stroke-width="3" />
+            </svg>
+          )}
           <span>{`${s.title} · ${s.live ? "Live" : "Archive"}`}</span>
         </span>
       </div>
+      {!s.live && (
+        <button type="button" class="back-live" onClick={onLive}>
+          <span class="dot" aria-hidden="true" />
+          Back to live
+        </button>
+      )}
       <button
         type="button"
         class="play play-bar"
@@ -94,6 +109,6 @@ function Bar({ onToggle }: { onToggle: () => void }) {
   );
 }
 
-export function mountBar(el: HTMLElement, onToggle: () => void) {
-  render(<Bar onToggle={onToggle} />, el);
+export function mountBar(el: HTMLElement, onToggle: () => void, onLive: () => void) {
+  render(<Bar onToggle={onToggle} onLive={onLive} />, el);
 }

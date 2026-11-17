@@ -13,22 +13,23 @@
   --color-hairline-soft: #efefef; /* dividers inside the Recently played list */
   --color-placeholder: #f2f2f2; /* empty album-art square */
   --color-link-underline: #b5b5b5;
-  --color-accent: #e8590c; /* ONLY: logo centre square, "Live" dot, player-bar dot */
+  --color-accent: #e8743b; /* ONLY: logo centre square, "Live" dot, player-bar dot */
   --color-on-ink-muted: #b5b5b5; /* secondary text on the black player bar */
   --color-link-hover: #555555;
   --color-surface: #111111; /* mobile player bar background */
   --color-surface-text: #ffffff;
   --color-surface-border: transparent;
+  --color-surface-outline: #4a4a4a; /* outlined buttons on the player bar */
+  --color-outline: #b5b5b5; /* outlined pill buttons ("Last episode") */
   --color-on-fill: #ffffff; /* icon on a filled (--color-ink) play button */
   --art-outline: transparent; /* hairline around album covers */
 
   color-scheme: light dark;
 
-  /* Type families. One family, Archivo, at two widths: condensed (font-stretch
-     68%) for show names and page titles, like station signage; normal for
-     everything else. Mono only for the wordmark and the stream address. */
+  /* Type family: one, Archivo, at two widths: condensed (font-stretch 68%)
+     for show names and page titles, like station signage; normal for
+     everything else, the wordmark and the stream address included. */
   --font-sans: "Archivo Variable", system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --stretch-display: 68%;
   --stretch-heading: 82%;
 
@@ -44,8 +45,9 @@
   --type-nav: 400 15px/1.4 var(--font-sans);
   --type-label: 500 13px/1.4 var(--font-sans); /* small status labels: On air, Live, Last show — sentence case */
   --type-time: 400 14px/1.4 var(--font-sans); /* times, numbers — tabular figures */
-  --type-url: 400 14px/1.4 var(--font-mono); /* stream URLs */
-  --type-wordmark: 700 18px/1 var(--font-mono); /* "mazes radio", lowercase, tracking -0.03em */
+  --type-url: 400 14px/1.4 var(--font-sans); /* stream URLs */
+  --type-wordmark: 600 17px/1 var(--font-sans); /* "mazes radio", lowercase, tracking 0.01em */
+  --type-section: 600 13px/1.4 var(--font-sans); /* home section labels (Today, Just played): caps, tracking 0.08em */
 
   /* Layout */
   --page-pad-top: 72px;
@@ -62,6 +64,7 @@
 
   /* Sizes */
   --tap: 44px; /* minimum touch target; small play buttons */
+  --col-time: 136px; /* the times column of the schedule and Just played */
   --play-lg: 72px; /* station page play button */
 }
 
@@ -72,17 +75,18 @@
     --color-bg: #111111;
     --color-ink: #f2f2f2; /* not pure white, to reduce glare */
     --color-body: #c8c8c8;
-    --color-muted: #8f8f8f; /* 5.8:1 on #111111 */
+    --color-muted: #a3a3a3; /* 7.6:1 on #111111 */
     --color-hairline: #2a2a2a;
     --color-hairline-soft: #222222;
     --color-placeholder: #1c1c1c;
     --color-link-underline: #555555;
     --color-link-hover: #bdbdbd;
-    --color-accent: #e8590c; /* unchanged */
-    --color-on-ink-muted: #8f8f8f;
-    --color-surface: #1c1c1c; /* player bar is a raised dark surface, NOT inverted */
+    --color-accent: #e8743b; /* unchanged */
+    --color-on-ink-muted: #a3a3a3;
+    --color-surface: #1a1a1a; /* player bar is a raised dark surface, NOT inverted */
     --color-surface-text: #f2f2f2;
     --color-surface-border: #2a2a2a;
+    --color-outline: #4a4a4a;
     --color-on-fill: #111111;
     --art-outline: rgb(255 255 255 / 8%);
   }

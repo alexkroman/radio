@@ -33,7 +33,7 @@ export const Lockup = () => (
 );
 
 // `home`: the home page, where the lockup is the page's <h1>.
-export const SiteHeader = ({ current, home }: { current?: "home" | "archive" | "about"; home?: boolean }) => (
+export const SiteHeader = ({ current, home }: { current?: "archive" | "about"; home?: boolean }) => (
   <header class="site-header">
     {home ? (
       <h1>
@@ -42,10 +42,8 @@ export const SiteHeader = ({ current, home }: { current?: "home" | "archive" | "
     ) : (
       <Lockup />
     )}
+    {/* The schedule is the home page, so the lockup is its link. */}
     <nav aria-label="Main">
-      <a href="/" aria-current={current === "home" ? "page" : undefined}>
-        Schedule
-      </a>
       <a href="/archive" aria-current={current === "archive" ? "page" : undefined}>
         Archive
       </a>
@@ -72,30 +70,47 @@ const PauseIcon = ({ size }: { size: number }) => (
 // Plays the stream (whatever is on air), or an archive block (src, with its
 // title, and the blocks to play after it: the show's earlier ones, newest
 // first). The client (app/client.ts) finds these by data-play and shows the
-// pause state on every one for what's playing.
+// pause state on every one for what's playing. `episode` (the block's date)
+// makes it a pill: "Last episode · Nov 14", then "Paused · Nov 14" once
+// started (client.ts marks it .current), "Playing last episode" while it plays.
 export const PlayButton = ({
   large,
   src = "/stream",
   title = SITE_TITLE,
   then,
+  episode,
 }: {
   large?: boolean;
   src?: string;
   title?: string;
   then?: { src: string; title: string }[];
-}) => (
-  <button
-    type="button"
-    class={large ? "play play-lg" : "play"}
-    data-play={src}
-    data-title={title}
-    data-then={then?.length ? JSON.stringify(then) : undefined}
-    aria-label={`Play ${title}`}
-  >
-    <PlayIcon size={large ? 20 : 14} d={large ? "M4.5 2.5v9l7.5-4.5z" : "M4 2.5v9l7.5-4.5z"} />
-    <PauseIcon size={large ? 20 : 14} />
-  </button>
-);
+  episode?: string;
+}) => {
+  const size = large ? 20 : episode ? 12 : 14;
+  return (
+    <button
+      type="button"
+      class={large ? "play play-lg" : episode ? "play pill" : "play"}
+      data-play={src}
+      data-title={title}
+      data-then={then?.length ? JSON.stringify(then) : undefined}
+      aria-label={`Play ${title}`}
+    >
+      <PlayIcon size={size} d={large ? "M4.5 2.5v9l7.5-4.5z" : "M4 2.5v9l7.5-4.5z"} />
+      <PauseIcon size={size} />
+      {episode && (
+        <>
+          <span class="pill-text">
+            <span class="pill-idle">Last episode</span>
+            <span class="pill-paused">Paused</span>
+            {` · ${episode}`}
+          </span>
+          <span class="pill-playing">Playing last episode</span>
+        </>
+      )}
+    </button>
+  );
+};
 
 // "with A", "with A & B", "with A, B & C": each name links to its DJ page.
 export const DjCredit = ({ djs, class: cls }: { djs: DjRef[]; class: string }) =>

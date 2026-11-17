@@ -124,7 +124,7 @@ Not in code: filing the Notice of Use with the Copyright Office, paying SoundExc
 
 | URL                          | What's there                                  |
 | ---------------------------- | --------------------------------------------- |
-| `https://localhost/`         | What's on air, the player, up next, schedule  |
+| `https://localhost/`         | What's on air, the player, schedule           |
 | `https://localhost/<slug>`   | A show's hours, now playing (on air), history |
 | `https://localhost/stream`   | The stream for apps and VLC                   |
 | `https://localhost/archive`  | Recorded show blocks, newest first            |

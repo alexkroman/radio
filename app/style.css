@@ -121,7 +121,7 @@ button {
 
 .wordmark {
   font: var(--type-wordmark);
-  letter-spacing: -0.03em;
+  letter-spacing: 0.01em;
   text-transform: lowercase;
 }
 
@@ -161,6 +161,14 @@ h2.label {
   color: var(--color-ink);
 }
 
+/* A home section's label (Today, Just played): small caps, set apart. */
+.section-label {
+  font: var(--type-section);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
 .display {
   font: var(--type-display);
   font-stretch: var(--stretch-display);
@@ -186,6 +194,11 @@ a.url {
 .footer {
   font: var(--type-label);
   color: var(--color-muted);
+}
+
+/* stylelint-disable-next-line no-descending-specificity -- unrelated links */
+.footer a {
+  color: var(--color-ink);
 }
 
 .footer-rule {
@@ -279,11 +292,37 @@ img.cover {
   display: block;
 }
 
-/* ── Stations list ── */
-.stations {
-  border-top: 1px solid var(--color-ink);
+/* A show's last episode, as a pill: outlined, then filled once started. */
+.pill {
+  width: auto;
+  gap: 8px;
+  padding: 0 16px;
+  border-color: var(--color-outline);
+  border-radius: var(--radius-pill);
+  font: var(--type-label);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
+.pill.current {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: var(--color-on-fill);
+}
+
+.pill-paused,
+.pill-playing,
+.pill.current .pill-idle,
+.pill.playing .pill-text {
+  display: none;
+}
+
+.pill.current .pill-paused,
+.pill.playing .pill-playing {
+  display: inline;
+}
+
+/* ── Shows: a row each (the schedule, a DJ's shows) ── */
 .station {
   position: relative;
   display: flex;
@@ -308,7 +347,7 @@ img.cover {
   text-decoration: none;
 }
 
-/* The name's link covers the whole card, so a tap anywhere opens the
+/* The name's link covers the whole row, so a tap anywhere opens the
    station; the play button and any links in the description sit above it. */
 .station-name::after {
   content: "";
@@ -329,8 +368,7 @@ img.cover {
   outline-offset: 2px;
 }
 
-.station-desc :any-link,
-.station-credit :any-link {
+.station-desc :any-link {
   position: relative;
   z-index: 1;
 }
@@ -356,23 +394,13 @@ img.cover {
 }
 
 /* A show's last archived block, playable from the schedule (above the
-   card's link). */
+   row's link). */
 .station-archive {
   position: relative;
   z-index: 1;
   flex: none;
   display: flex;
   align-items: center;
-  gap: 12px;
-}
-
-.station-archive-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  font: var(--type-time);
-  font-variant-numeric: tabular-nums;
-  color: var(--color-muted);
 }
 
 .on-air {
@@ -380,6 +408,8 @@ img.cover {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding-inline: 4px;
+  font-weight: 600;
   color: var(--color-ink);
 }
 
@@ -391,7 +421,6 @@ img.cover {
 /* Underlined links: DJ credits, up next and body text. */
 /* stylelint-disable no-descending-specificity -- unrelated links */
 .credit a,
-.next a,
 .prose p a {
   text-decoration: underline;
   text-decoration-thickness: 1px;
@@ -399,11 +428,6 @@ img.cover {
   text-decoration-color: var(--color-link-underline);
 }
 /* stylelint-enable no-descending-specificity */
-
-.station-credit {
-  margin-top: 2px;
-  font: var(--type-nav);
-}
 
 .title-credit {
   font: var(--type-small);
@@ -476,27 +500,46 @@ img.cover {
   gap: 16px;
 }
 
-/* ── Home: the on-air panel, then the shows as cards ── */
+/* ── Home: the show on air, then the schedule as a listing ── */
 .page-home {
-  gap: 40px;
+  gap: 64px;
 }
 
-/* The show on air, set on the page itself: its name as big as signage. */
+/* The show on air (and a show's page), set on the page itself: its name as
+   big as signage, its track under it. */
 .hero {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 40px;
+}
+
+.page-home .hero {
+  padding-top: 16px;
 }
 
 .hero-head {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .hero .display {
+  font-size: clamp(64px, 12vw, 112px);
+  font-stretch: 80%;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+}
+
+/* The mood · the DJs, on one line when they fit. */
+.hero-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.25em;
   margin-top: 4px;
-  font-size: clamp(64px, 12vw, 120px);
+}
+
+.hero-sub .credit::before {
+  content: "· ";
 }
 
 .on-air-label {
@@ -521,15 +564,8 @@ img.cover {
   text-decoration: none;
 }
 
-.hero .off-air {
-  padding-top: 24px;
-  border-top: 1px solid var(--color-hairline);
-}
-
 .hero .np-block {
   gap: 20px;
-  padding-top: 28px;
-  border-top: 2px solid var(--color-ink);
 }
 
 .hero .play-lg {
@@ -538,20 +574,24 @@ img.cover {
 }
 
 .hero .cover-120 {
-  width: 88px;
-  height: 88px;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-art-sm);
 }
 
 .hero .np-text {
-  gap: 4px;
+  gap: 2px;
 }
 
 .hero .np-text .np-track {
-  font-size: 26px;
+  font: var(--type-track);
+  font-size: 17px;
+  font-weight: 600;
 }
 
 .hero .np-text .np-artist {
-  font-size: 16px;
+  font: var(--type-nav);
+  color: var(--color-muted);
 }
 
 .section-head {
@@ -567,63 +607,45 @@ img.cover {
   color: var(--color-muted);
 }
 
-/* The shows as a listing: one row each, in the order they start, the hours
-   in the first column, as a printed schedule sets them. */
-.cards {
-  display: flex;
-  flex-direction: column;
-  border-top: 2px solid var(--color-ink);
+/* The shows as a listing, in the order they start: hours, then name and
+   mood on one line, then On air or the last episode. */
+.rows {
+  border-top: 1px solid var(--color-hairline);
 }
 
-.station.card {
-  display: grid;
-  grid-template-columns: 160px minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 4px 24px;
-  padding: 22px 0;
+.station.row {
+  gap: 8px 24px;
+  min-height: var(--tap);
+  padding: 14px 0;
+  border-bottom-color: var(--color-hairline-soft);
 }
 
-/* Break a long "ambient/neo-soul/…" only when it can't fit whole. */
-.card {
-  overflow-wrap: break-word;
+.row .station-hours {
+  width: var(--col-time);
 }
 
-.card-top {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-top: 8px;
-}
-
-.card .station-hours {
-  width: auto;
+.row .station-info {
+  flex: 1 1 320px;
+  flex-flow: row wrap;
+  align-items: baseline;
+  gap: 0 12px;
 }
 
 /* stylelint-disable-next-line no-descending-specificity -- unrelated links */
-.card .station-name {
-  font-size: 30px;
+.row .station-name {
+  font-size: 22px;
+  font-stretch: 85%;
 }
 
-.card .station-archive {
-  align-self: center;
+.row .station-desc,
+.row .station-desc * {
+  font: var(--type-nav);
+  font-size: 14px;
+  color: var(--color-muted);
 }
 
-/* The show on air: its row set on a tint that bleeds into the gutter, as a
-   printed listing boxes tonight's pick, with its hours in ink. */
-.card-on {
-  background: var(--color-placeholder);
-  box-shadow: 0 0 0 16px var(--color-placeholder);
-  clip-path: inset(0 -16px);
-  border-bottom-color: transparent;
-}
-
-.card-on .station-hours,
-.card-on .station-hours .time {
+.row-on .station-hours .time {
   color: var(--color-ink);
-}
-
-.card:has(.station-name:focus-visible) {
-  outline-offset: 4px;
 }
 
 /* ── About: questions ── */
@@ -706,56 +728,19 @@ img.cover {
   border-top: 2px solid var(--color-ink);
 }
 
-.stream {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 20px;
-  padding: 16px 0;
-  border-top: 1px solid var(--color-hairline);
-  border-bottom: 1px solid var(--color-hairline);
-}
-
-.stream-label {
-  flex: none;
-  width: 72px;
-}
-
-.stream .url {
-  flex: 1 1 240px;
-  min-width: 0;
-}
-
-.copy {
-  height: var(--tap);
-  padding: 0 18px;
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--color-ink);
-  font: var(--type-nav);
-  font-size: 13px;
-}
-
-.copy:hover {
-  border-color: var(--color-ink);
-}
-
 .history {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.history h2 {
-  margin-bottom: 8px;
-}
-
 .history ol {
   list-style: none;
   padding: 0;
+  border-top: 1px solid var(--color-hairline);
 }
 
+/* When, the cover, then title — artist on one line. */
 .history li {
   display: flex;
   align-items: center;
@@ -767,31 +752,23 @@ img.cover {
 .h-text {
   flex: 1 1 auto;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.h-track,
-.h-artist {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font: var(--type-nav);
 }
 
 .h-track {
-  font: var(--type-track);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .h-artist {
-  font: var(--type-nav);
   color: var(--color-muted);
 }
 
 /* stylelint-disable-next-line no-descending-specificity -- unrelated times */
 .history .time {
-  width: auto;
-  text-align: right;
+  width: calc(var(--col-time) + 8px);
 }
 
 /* ── DJ page ── */
@@ -937,8 +914,30 @@ img.cover {
 }
 
 .play-bar {
-  border-color: var(--color-surface-text);
+  border-color: var(--color-surface-outline);
   color: var(--color-surface-text);
+}
+
+/* On an archive block: back to the stream. */
+.back-live {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--tap);
+  padding: 0 16px;
+  border: 1px solid var(--color-surface-outline);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-surface-text);
+  font: var(--type-label);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.back-live .dot {
+  width: 6px;
+  height: 6px;
 }
 
 /* Room below the page for the bar. */
@@ -1012,48 +1011,21 @@ img.cover {
     padding-inline: 24px;
   }
 
-  .station {
-    gap: 4px 16px;
-    padding: 22px 0;
+  /* The hours over the name, the last episode beside it when it fits. */
+  .row .station-hours {
+    width: 100%;
   }
 
-  /* Compact cards: the last show's play button beside the show, its caption
-     left to the button's label. */
-  .station.card {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "top top"
-      "info archive";
-    gap: 6px 16px;
-    padding: 20px 0;
+  .row .station-info {
+    flex-basis: 200px;
   }
 
-  .card-top {
-    grid-area: top;
-    flex-direction: row;
-    justify-content: space-between;
-    padding-top: 0;
+  .history .time {
+    width: 64px;
   }
 
-  .card .station-info {
-    grid-area: info;
-  }
-
-  .card .station-archive {
-    grid-area: archive;
-    margin: 0;
-    padding: 0;
-    border: 0;
-  }
-
-  .card .station-archive-text {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
+  .back-live {
+    padding: 0 12px;
   }
 
   /* Play button, then the title over its date and length. */
@@ -1084,15 +1056,6 @@ img.cover {
     text-align: left;
   }
 
-  .station-hours {
-    width: 100%;
-  }
-
-  .hero .off-air {
-    padding-top: 24px;
-    border-top: 1px solid var(--color-hairline);
-  }
-
   .hero .np-block {
     flex-wrap: nowrap;
     gap: 14px;
@@ -1107,39 +1070,21 @@ img.cover {
     flex-basis: 0;
   }
 
-  .stream-label {
-    width: 100%;
-  }
-
-  .stream .url {
-    flex-basis: 0;
-  }
-
   .hero .cover-120 {
-    width: 64px;
-    height: 64px;
-  }
-
-  .hero .np-text .np-track {
-    font-size: 22px;
+    width: 56px;
+    height: 56px;
   }
 
   .display {
     font-size: 64px;
   }
 
-  .station-name,
-  .card .station-name {
+  .station-name {
     font-size: 28px;
   }
 
   .station-desc,
   .station-desc * {
     font-size: 14px;
-  }
-
-  .station-credit {
-    margin-top: 0;
-    font-size: 13px;
   }
 }

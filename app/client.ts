@@ -26,8 +26,8 @@ const session = navigator.mediaSession;
 // The station's name (#player's data; app.js is deferred, so the page is there).
 const station = document.getElementById("player")!.dataset.title!;
 // What the player plays: the live stream, or an archive block (/archive/...,
-// played from the beginning; `then`, the show's earlier blocks, play after
-// it). Set by a tap.
+// played from the beginning, or where it was paused; `then`, the show's
+// earlier blocks, play after it). Set by a tap.
 type Source = { src: string; title: string; then?: Source[] };
 const LIVE: Source = { src: "/stream", title: station };
 let source = LIVE;
@@ -52,8 +52,8 @@ let blockFetched = false;
 let lockKey = "";
 // When a dropped stream stops being retried (0: not retrying).
 let retryUntil = 0;
-// How far into the archive block the player last was, and where a retry
-// picks it up again (0: from the beginning).
+// How far into the archive block the player last was, and where it picks up
+// again after a drop or a pause (0: from the beginning).
 let blockAt = 0;
 let resumeAt = 0;
 
@@ -102,7 +102,7 @@ function sync() {
 }
 
 // While an archive block plays: the track playing in it, by how far in the
-// player is (it plays from the beginning, without seeking), fetched when it
+// player is (it plays on from where it starts, without seeking), fetched when it
 // starts and again when that track ends. Only that track: the block's track
 // list is never fetched.
 let blockFetching = false;
@@ -151,10 +151,11 @@ function playSource() {
 }
 
 function start(to: Source) {
+  // The block it was on, paused: where it was. Anything else: the beginning.
+  blockAt = resumeAt = !live() && to.src === source.src ? blockAt : 0;
   source = to;
   blockTrack = NO_TRACK;
   blockFetched = false;
-  blockAt = resumeAt = 0;
   playing = true;
   sync();
   retryUntil = 0;

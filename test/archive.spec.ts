@@ -3,9 +3,9 @@
 // night-2026-11-14.mp3 and night-2026-11-13.mp3, 14 s each at 256 kbps,
 // untagged, with their track sidecars), Icecast serves them through Caddy,
 // and the site's player plays them from the beginning (picking up where it was
-// if it drops), showing each track while it plays, then the show's block before. test/e2e.sh checks the
+// if it drops or is paused), showing each track while it plays, then the show's block before. test/e2e.sh checks the
 // recording itself, the play counts and the retention.
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { get, LOGGED_OUT, lockScreen, player } from "./helpers.ts";
 
 const BLOCK = "/archive/night-2026-11-14.mp3";
@@ -123,17 +123,18 @@ test("the player plays a block with each track as it plays, then the show's bloc
   await expect.poll(() => player(page)).toEqual({ src: "/stream", playing: true });
 });
 
-test("a block that drops picks up where it was, not from the beginning", async ({ page }) => {
+type W = { audio: HTMLAudioElement; after?: number[] };
+// Play the block to 4 s in, then interrupt it (`how`), and return where it
+// plays from after: each time it reports once it's loading again.
+async function interrupted(page: Page, how: () => Promise<unknown>) {
   await page.goto("/archive");
   await page
     .getByRole("main")
     .getByRole("button", { name: `Play ${TITLE}` })
     .click();
-  type W = { audio: HTMLAudioElement; after?: number[] };
   await expect
     .poll(() => page.evaluate(() => (window as unknown as W).audio.currentTime), { timeout: 20_000 })
     .toBeGreaterThanOrEqual(4);
-  // A network error: the player reconnects (in 3 s) and goes back to where it was.
   await page.evaluate(() => {
     const w = window as unknown as W;
     w.audio.addEventListener(
@@ -147,17 +148,37 @@ test("a block that drops picks up where it was, not from the beginning", async (
       },
       { once: true },
     );
-    w.audio.dispatchEvent(new Event("error"));
   });
+  await how();
   await expect
     .poll(() => page.evaluate(() => (window as unknown as W).after?.length ?? 0), { timeout: 15_000 })
     .toBeGreaterThan(2);
-  expect(Math.min(...(await page.evaluate(() => (window as unknown as W).after!)))).toBeGreaterThanOrEqual(4);
+  return page.evaluate(() => (window as unknown as W).after!);
+}
+
+test("a block that drops picks up where it was, not from the beginning", async ({ page }) => {
+  // A network error: the player reconnects (in 3 s) and goes back to where it was.
+  const after = await interrupted(page, () =>
+    page.evaluate(() => (window as unknown as W).audio.dispatchEvent(new Event("error"))),
+  );
+  expect(Math.min(...after)).toBeGreaterThanOrEqual(4);
   expect(await player(page)).toEqual({ src: BLOCK, playing: true });
   await page
     .getByRole("main")
     .getByRole("button", { name: `Pause ${TITLE}` })
     .click();
+});
+
+test("a block paused and played again picks up where it was", async ({ page }) => {
+  const main = page.getByRole("main");
+  const after = await interrupted(page, async () => {
+    await main.getByRole("button", { name: `Pause ${TITLE}` }).click();
+    await expect.poll(() => player(page)).toEqual({ src: null, playing: false });
+    await main.getByRole("button", { name: `Play ${TITLE}` }).click();
+  });
+  expect(Math.min(...after)).toBeGreaterThanOrEqual(4);
+  expect(await player(page)).toEqual({ src: BLOCK, playing: true });
+  await main.getByRole("button", { name: `Pause ${TITLE}` }).click();
 });
 
 test("the schedule plays each show's last archived show", async ({ page }) => {

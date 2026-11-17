@@ -52,6 +52,10 @@ let blockFetched = false;
 let lockKey = "";
 // When a dropped stream stops being retried (0: not retrying).
 let retryUntil = 0;
+// How far into the archive block the player last was, and where a retry
+// picks it up again (0: from the beginning).
+let blockAt = 0;
+let resumeAt = 0;
 
 function localTimes() {
   document.querySelectorAll("time[datetime]").forEach((el) => {
@@ -150,6 +154,7 @@ function start(to: Source) {
   source = to;
   blockTrack = NO_TRACK;
   blockFetched = false;
+  blockAt = resumeAt = 0;
   playing = true;
   sync();
   retryUntil = 0;
@@ -179,18 +184,27 @@ function backToLive() {
   source = LIVE;
   stop();
 }
-// The live stream dropped (a server restart, a network change): reconnect for
-// up to two minutes. iOS allows play() on an element a tap has started. An
-// archive block that fails isn't restarted, which would start it over: the
-// player goes back to the live stream, paused.
+// The stream dropped (a server restart, a network change): reconnect for up
+// to two minutes. iOS allows play() on an element a tap has started. An
+// archive block picks up where it was (the server takes ranges; the browser
+// resumes a short blip that way itself); given up on, it goes back to the
+// live stream, paused.
 function dropped() {
   if (!playing) return;
-  if (!live()) return backToLive();
   retryUntil ||= Date.now() + 120_000;
-  if (Date.now() > retryUntil) return stop();
-  setTimeout(() => playing && live() && retryUntil && playSource(), 3000);
+  if (Date.now() > retryUntil) return live() ? stop() : backToLive();
+  if (!live()) resumeAt ||= blockAt;
+  const src = source.src;
+  setTimeout(() => playing && source.src === src && retryUntil && playSource(), 3000);
 }
 audio.addEventListener("error", dropped);
+audio.addEventListener("timeupdate", () => {
+  if (!live() && !retryUntil && audio.currentTime > 0) blockAt = audio.currentTime;
+});
+audio.addEventListener("loadedmetadata", () => {
+  if (!live() && resumeAt) audio.currentTime = resumeAt;
+  resumeAt = 0;
+});
 // An archive block that ends goes on to the show's block before it (iOS
 // allows play() on an element a tap has started); after the last, back to
 // live, paused. The live stream ending is a drop.

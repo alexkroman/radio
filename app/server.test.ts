@@ -100,8 +100,16 @@ beforeAll(async () => {
   process.env.LOGS_DIR = logs;
   const [y, m] = month.split("-");
   const mon = "JanFebMarAprMayJunJulAugSepOctNovDec".slice((Number(m) - 1) * 3, Number(m) * 3);
-  const line = (path: string, status = 200, seconds = 0, method = "GET", date = `01/${mon}/${y}`) =>
-    `10.0.0.1 - - [${date}:12:00:00 -0800] "${method} ${path} HTTP/1.1" ${status} 1000 "-" "Mozilla/5.0 (X)" ${seconds}`;
+  const line = (
+    path: string,
+    status = 200,
+    seconds = 0,
+    method = "GET",
+    date = `01/${mon}/${y}`,
+    { ip = "10.0.0.1", time = "12:00:00" } = {},
+  ) =>
+    `${ip} - - [${date}:${time} -0800] "${method} ${path} HTTP/1.1" ${status} 1000 "-" "Mozilla/5.0 (X)" ${seconds}`;
+  const day = `02/${mon}/${y}`;
   await writeFile(
     join(logs, "access.log"),
     [
@@ -111,7 +119,14 @@ beforeAll(async () => {
       line("/archive/odd-2026-11-15.mp3", 405, 0, "HEAD"),
       line("/stream", 200, 3600),
       // Left on the 1st after 21 hours: started last month, so not counted.
-      line("/archive/odd-2026-11-15.mp3", 200, 21 * 3600),
+      line("/archive/odd-2026-11-15.mp3", 200, 21 * 3600, "GET", undefined, { ip: "10.0.0.2" }),
+      // One play in three requests: a probe (bytes 0-1), an hour, and after a
+      // blip 100 s later, resumed by range for 3500 s: 7200 s in all (Track A and B).
+      line("/archive/odd-2026-11-15.mp3", 206, 0, "GET", day, { ip: "10.0.0.3", time: "09:00:00" }),
+      line("/archive/odd-2026-11-15.mp3", 200, 3600, "GET", day, { ip: "10.0.0.3", time: "10:00:00" }),
+      line("/archive/odd-2026-11-15.mp3", 206, 3500, "GET", day, { ip: "10.0.0.3", time: "11:00:00" }),
+      // The same listener again an hour later: its own play (Track A).
+      line("/archive/odd-2026-11-15.mp3", 200, 60, "GET", day, { ip: "10.0.0.3", time: "12:01:00" }),
       line("/archive/night-2026-11-14.mp3", 200, 0, "GET", "01/Jan/2001"),
     ].join("\n") + "\n",
   );
@@ -424,9 +439,9 @@ describe("reports", () => {
     expect(rows.slice(1)).toEqual([
       "^MAZES RADIO^|^A^|^ALPHA ARTIST^|^FIRST LIGHT^|^US1234567890^|^ALBUM^|^LABEL^|3",
       "^MAZES RADIO^|^A^|^GAMMA^|^MIDNIGHT^|^US1234567890^|^ALBUM^|^LABEL^|3",
+      "^MAZES RADIO^|^A^|^ODD ONE^|^TRACK A^|^^|^^|^^|3",
       "^MAZES RADIO^|^A^|^BETA & BAND^|^SECOND WIND^|^US1234567890^|^ALBUM^|^LABEL^|2",
-      "^MAZES RADIO^|^A^|^ODD ONE^|^TRACK A^|^^|^^|^^|1",
-      "^MAZES RADIO^|^A^|^ODD ONE^|^TRACK B^|^^|^^|^^|1",
+      "^MAZES RADIO^|^A^|^ODD ONE^|^TRACK B^|^^|^^|^^|2",
     ]);
   });
 

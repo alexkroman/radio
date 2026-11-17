@@ -427,51 +427,6 @@ const BlockRow = ({ show, blocks, i }: { show: Show; blocks: Block[]; i: number 
   </li>
 );
 
-// Each show's recorded blocks, newest first, played (from the beginning, no
-// seeking) in the site's player, which shows each track while it plays. No
-// track lists: a block is its show, date and length.
-app.get("/archive", async (c) => {
-  const shows = await getShows();
-  const blocks = await archive(shows);
-  const listed = scheduled(shows).filter((s) => blocks.has(s.slug));
-  const now = new Date();
-  return c.render(
-    <main class="page page-station page-archive">
-      <SiteHeader current="archive" />
-      <header class="title-block">
-        <h1 class="display">Archive</h1>
-        <p class="subtitle">
-          Every show's episodes from the past two weeks, as broadcast. Each plays from the start, then the
-          episode before it.
-        </p>
-      </header>
-      {listed.length === 0 ? (
-        <p class="muted">Nothing here yet. A show's episode appears once it has finished airing.</p>
-      ) : (
-        listed.map((show) => (
-          <section class="archive-show card" aria-labelledby={`archive-${show.slug}`}>
-            <header class="archive-head">
-              <h2 id={`archive-${show.slug}`} class="archive-name">
-                <a href={`/${show.slug}`}>{show.title}</a>
-              </h2>
-              <span class="station-hours">
-                <Hours show={show} now={now} />
-              </span>
-            </header>
-            <Markdown class="station-desc" html={show.description} />
-            <ol class="archive-blocks">
-              {blocks.get(show.slug)!.map((_, i, all) => (
-                <BlockRow show={show} blocks={all} i={i} />
-              ))}
-            </ol>
-          </section>
-        ))
-      )}
-    </main>,
-    { title: "Archive" },
-  );
-});
-
 // The track playing t seconds into an archive block, for the player (only
 // that track, never a block's track list), as /now.json does live, and when
 // it ends (`until`, seconds into the block; absent for the last), so the
@@ -590,12 +545,12 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
           The archive
         </h2>
         <p>
-          Every show is recorded as it goes out, start to finish, at the same quality as the stream. The{" "}
-          <a href="/archive">archive</a> keeps the latest of each show for you to hear again, from the
-          beginning, as it was broadcast: each track, its album and its artist show as it plays, and when a
-          show ends, the one before it starts. Archived shows are at least five hours long and come down
-          before they've been up two weeks. You can't skip, rewind or download them, and archive plays pay the
-          artists like any other.
+          Every show is recorded as it goes out, start to finish, at the same quality as the stream. Each
+          show's page keeps its latest episodes for you to hear again, from the beginning, as they were
+          broadcast: each track, its album and its artist show as it plays, and when a show ends, the one
+          before it starts. Archived shows are at least five hours long and come down before they've been up
+          two weeks. You can't skip, rewind or download them, and archive plays pay the artists like any
+          other.
         </p>
       </section>
       <section class="prose" aria-labelledby="about-law">

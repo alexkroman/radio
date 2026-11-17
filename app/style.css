@@ -655,33 +655,11 @@ img.cover {
   font-weight: 600;
 }
 
-/* ── Archive: on the archive page (a card a show) and a show's page ── */
+/* ── Archive: a show's past episodes, on its page ── */
 .archive-show {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.archive-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 4px 16px;
-}
-
-.archive-name {
-  font: var(--type-station-name);
-  font-stretch: var(--stretch-display);
-}
-
-/* stylelint-disable-next-line no-descending-specificity -- unrelated links */
-.archive-name a {
-  text-decoration: none;
-}
-
-.archive-head .station-hours {
-  width: auto;
 }
 
 .archive-blocks {
@@ -721,11 +699,6 @@ img.cover {
 .archive-length {
   width: 88px;
   text-align: right;
-}
-
-.page-archive .archive-show {
-  padding-top: 20px;
-  border-top: 2px solid var(--color-ink);
 }
 
 .history {
@@ -918,28 +891,6 @@ img.cover {
   color: var(--color-surface-text);
 }
 
-/* On an archive block: back to the stream. */
-.back-live {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: var(--tap);
-  padding: 0 16px;
-  border: 1px solid var(--color-surface-outline);
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--color-surface-text);
-  font: var(--type-label);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.back-live .dot {
-  width: 6px;
-  height: 6px;
-}
-
 /* Room below the page for the bar. */
 .with-bar .page {
   padding-bottom: calc(var(--page-pad-bottom) + 72px + env(safe-area-inset-bottom));
@@ -1022,10 +973,6 @@ img.cover {
 
   .history .time {
     width: 64px;
-  }
-
-  .back-live {
-    padding: 0 12px;
   }
 
   /* Play button, then the title over its date and length. */

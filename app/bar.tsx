@@ -4,8 +4,7 @@
 // navigation). app/client.ts sets what it shows with setBar(): the show and
 // track on air, or an archive block and the track playing in it; it always
 // shows, paused until played. It has no seek bar or download: the stream
-// plays from where it is, and blocks from the beginning. On a block, it
-// offers "Back to live".
+// plays from where it is, and blocks from the beginning.
 import { render, useLayoutEffect, useRef, useState } from "hono/jsx/dom";
 
 // station: what the button plays (the site's name, or an archive block's
@@ -53,7 +52,7 @@ function Cover({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-function Bar({ onToggle, onLive }: { onToggle: () => void; onLive: () => void }) {
+function Bar({ onToggle }: { onToggle: () => void }) {
   const [s, set] = useState(state);
   setState = set;
   if (!s) return null;
@@ -78,15 +77,9 @@ function Bar({ onToggle, onLive }: { onToggle: () => void; onLive: () => void })
               <path d="M20 4v6h-6" fill="none" stroke="currentColor" stroke-width="3" />
             </svg>
           )}
-          <span>{`${s.title} · ${s.live ? "Live" : "Archive"}`}</span>
+          <span>{s.live ? `${s.title} · Live` : s.title}</span>
         </span>
       </div>
-      {!s.live && (
-        <button type="button" class="back-live" onClick={onLive}>
-          <span class="dot" aria-hidden="true" />
-          Back to live
-        </button>
-      )}
       <button
         type="button"
         class="play play-bar"
@@ -109,6 +102,6 @@ function Bar({ onToggle, onLive }: { onToggle: () => void; onLive: () => void })
   );
 }
 
-export function mountBar(el: HTMLElement, onToggle: () => void, onLive: () => void) {
-  render(<Bar onToggle={onToggle} onLive={onLive} />, el);
+export function mountBar(el: HTMLElement, onToggle: () => void) {
+  render(<Bar onToggle={onToggle} />, el);
 }

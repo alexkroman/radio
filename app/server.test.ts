@@ -303,13 +303,20 @@ describe("archive", () => {
     expect(await (await page("/")).text()).not.toContain('href="/archive"');
   });
 
-  test("a block's button plays the show's earlier blocks after it", async () => {
-    const html = await (await page("/night")).text();
-    const then = /data-play="\/archive\/night-2026-11-14\.mp3"[^>]*data-then="([^"]+)"/.exec(html)?.[1];
-    expect(JSON.parse(then!.replaceAll("&quot;", '"'))).toEqual([
-      { src: "/archive/night-2026-11-13.mp3", title: "Fixture Night #2" },
-    ]);
-    expect(html).not.toMatch(/data-play="\/archive\/night-2026-11-13\.mp3"[^>]*data-then/);
+  test("a block's button plays the show's earlier blocks after it, newest first", async () => {
+    const then = (html: string) =>
+      JSON.parse(
+        /data-play="\/archive\/night-2026-11-14\.mp3"[^>]*data-then="([^"]+)"/
+          .exec(html)![1]!
+          .replaceAll("&quot;", '"'),
+      ) as unknown;
+    const earlier = [{ src: "/archive/night-2026-11-13.mp3", title: "Fixture Night #2" }];
+    const show = await (await page("/night")).text();
+    expect(then(show)).toEqual(earlier);
+    // The last has nothing after it: the player goes back to live.
+    expect(show).not.toMatch(/data-play="\/archive\/night-2026-11-13\.mp3"[^>]*data-then/);
+    // The home page's latest episode goes on the same way.
+    expect(then(await (await page("/")).text())).toEqual(earlier);
   });
 
   test("offers no downloads and names no tracks", async () => {

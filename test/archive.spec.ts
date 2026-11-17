@@ -210,6 +210,25 @@ test("the home page plays each show's latest episode, and the page's play button
   await expect.poll(() => player(page)).toEqual({ src: "/stream", playing: true });
   await bar.getByRole("button", { name: "Pause Mazes Radio" }).click();
 });
+test("a latest episode played from the home page goes on to the show's earlier episode, then live", async ({
+  page,
+}) => {
+  await onAir("default");
+  await page.goto("/");
+  const bar = page.getByRole("region", { name: "Player" });
+  const night = page.locator("#episodes .episode", { has: page.locator('a[href="/night"]') });
+  await night.getByRole("button", { name: `Play ${TITLE}` }).click();
+  await expect.poll(() => player(page)).toEqual({ src: BLOCK, playing: true });
+  await expect(bar.locator(".bar-status")).toHaveText(TITLE);
+  // At its end, the one before, with its own tracks.
+  await expect.poll(() => player(page), { timeout: 30_000 }).toEqual({ src: EARLIER, playing: true });
+  await expect(bar.locator(".bar-status")).toHaveText(EARLIER_TITLE);
+  await expect(page.locator("#bar-track")).toHaveText("First Light · Alpha Artist · Fixture LP");
+  // That was the earliest: back to live, paused.
+  await expect(bar).toContainText("· Live", { timeout: 30_000 });
+  expect(await player(page)).toEqual({ src: null, playing: false });
+});
+
 test.describe("logged out", () => {
   test.use(LOGGED_OUT);
   test("a block's now.json needs a login; its blocks play without one, like the stream", async ({

@@ -13,7 +13,7 @@ import { jsxRenderer } from "hono/jsx-renderer";
 import { login, throttle } from "./login.tsx";
 import { latestPlay, type Play, recentPlays } from "./plays.ts";
 import { reports } from "./reports.tsx";
-import { nextSlot, scheduled, showAt, upNext } from "./schedule.ts";
+import { nextSlot, scheduled, showAt } from "./schedule.ts";
 import { getDj, getShow, getShows, type Show, SLUG } from "./shows.ts";
 import {
   Cover,
@@ -173,82 +173,71 @@ const Until = ({ show, now }: { show: Show; now: Date }) => {
   ) : null;
 };
 
-// A show as a card, with its hours, mood and DJs (`credit`: not on a DJ's
-// page, whose subject they are), and its last archived block, so a listener
-// can pick another show to suit the mood.
-const ShowCard = ({
+// A show as a row of the schedule: its hours, name and mood on one line;
+// "On air" when it is, else its last archived block to play from the start,
+// so a listener can pick another show to suit the mood. (The DJs are on the
+// show's page.)
+const ShowRow = ({
   show,
   now,
   onAir,
-  credit = true,
   blocks = [],
 }: {
   show: Show;
   now: Date;
   onAir: boolean;
-  credit?: boolean;
   blocks?: Block[];
 }) => (
-  <article class={onAir ? "station card card-on" : "station card"}>
-    <div class="card-top">
-      <span class="station-hours">
-        <Hours show={show} now={now} />
-      </span>
-      {onAir && (
-        <span class="label on-air">
-          <span class="dot" aria-hidden="true" />
-          On air
-        </span>
-      )}
-    </div>
-    <div class="station-info">
+  <article class={onAir ? "station row row-on" : "station row"}>
+    <span class="station-hours">
+      <Hours show={show} now={now} />
+    </span>
+    <span class="station-info">
       <a class="station-name" href={`/${show.slug}`}>
         {show.title}
       </a>
       <Markdown class="station-desc" html={show.description} />
-      {credit && <DjCredit djs={show.djs} class="station-credit" />}
-    </div>
-    {blocks[0] && (
-      <span class="station-archive">
-        <BlockButton show={show} blocks={blocks} i={0} />
-        <span class="station-archive-text">
-          <span class="label">Latest episode</span>
-          <span>{`#${blocks[0].number} · ${day(blocks[0].date)} · ${hours(blocks[0].seconds)}`}</span>
-        </span>
+    </span>
+    {onAir ? (
+      <span class="label on-air">
+        <span class="dot" aria-hidden="true" />
+        On air
       </span>
+    ) : (
+      blocks[0] && (
+        <span class="station-archive">
+          <BlockButton show={show} blocks={blocks} i={0} episode />
+        </span>
+      )
     )}
   </article>
 );
 
-// A block's length, roughly: "7 h" (exactly, if under an hour).
-const hours = (seconds: number) => (seconds < 3600 ? duration(seconds) : `${Math.round(seconds / 3600)} h`);
-
 // The track on air: its cover and text, with the play button.
-const NowPlaying = ({ play }: { play?: Play }) => (
+// `status`: "Live" over the track (not on the home page, whose on-air line says it).
+const NowPlaying = ({ play, status = true }: { play?: Play; status?: boolean }) => (
   <section class="np-block" aria-label="Now playing">
     <PlayButton large />
     <div class="np">
       <Cover play={play} size="cover-120" labelled />
       <div class="np-text">
-        <span class="label np-status">
-          <span class="dot" aria-hidden="true" />
-          <span data-status>Live</span>
-        </span>
+        {status && (
+          <span class="label np-status">
+            <span class="dot" aria-hidden="true" />
+            <span data-status>Live</span>
+          </span>
+        )}
         <TrackLines play={play} cls="np" />
       </div>
     </div>
   </section>
 );
 
-// The stream's address, to copy into a radio app.
+// The stream's address, for a radio app, at the foot of the home page.
 const StreamUrl = ({ host }: { host: string }) => (
-  <section class="stream" aria-label="Stream URL">
-    <span class="label stream-label">Stream</span>
-    <a class="url" href="/stream" hx-boost="false">{`${host}/stream`}</a>
-    <button type="button" class="copy" data-copy={`https://${host}/stream`}>
-      Copy
-    </button>
-  </section>
+  <footer class="footer">
+    Stream URL: <a class="url" href="/stream" hx-boost="false">{`${host}/stream`}</a>
+  </footer>
 );
 
 // The show on air: the newest play's (the schedule's until anything has played).
@@ -258,10 +247,12 @@ async function onAir(shows: Show[]) {
   return { show, play: play && play.show === show?.slug ? play : undefined };
 }
 
+// The tracks played before the one on air, newest first: when, the cover, and
+// title — artist.
 const History = ({ plays }: { plays: Play[] }) => (
   <section id="history" class="history" aria-labelledby="recent-heading">
-    <h2 id="recent-heading" class="label">
-      Recently played
+    <h2 id="recent-heading" class="section-label">
+      Just played
     </h2>
     {plays.length === 0 ? (
       <p class="muted">Nothing played yet.</p>
@@ -269,11 +260,12 @@ const History = ({ plays }: { plays: Play[] }) => (
       <ol>
         {plays.map((p) => (
           <li>
+            <Time at={new Date(p.time * 1000)} />
             <Cover play={p} size="cover-40" />
             <span class="h-text">
-              <TrackLines play={p} cls="h" />
+              <span class="h-track">{p.title}</span>
+              {p.artist && <span class="h-artist">{` — ${p.artist}`}</span>}
             </span>
-            <Time at={new Date(p.time * 1000)} />
           </li>
         ))}
       </ol>
@@ -353,68 +345,49 @@ app.route("/reports", reports);
 
 app.get("/", async (c) => {
   const shows = await getShows();
-  const [{ show, play }, recent, blocks] = await Promise.all([onAir(shows), recentPlays(11), archive(shows)]);
+  const [{ show, play }, recent, blocks] = await Promise.all([onAir(shows), recentPlays(6), archive(shows)]);
   const now = new Date();
-  // While the show whose hours have started waits for the last one's track to
-  // end, it's up next; otherwise the schedule's next show.
-  const due = showAt(shows, now);
-  const next = due && show && due.slug !== show.slug ? { show: due, start: undefined } : upNext(shows, now);
   return c.render(
     <main class="page page-station page-home">
-      <SiteHeader current="home" home />
+      <SiteHeader home />
       <section class="hero" aria-label="On air">
         <header id="on-air" class="hero-head">
-          <span class="label on-air-label">
+          <p class="label on-air-label">
             <span class="dot" aria-hidden="true" />
             On air
             {show && <Until show={show} now={now} />}
-          </span>
+          </p>
           {show ? (
             <>
               <h2 class="display">
                 <a href={`/${show.slug}`}>{show.title}</a>
               </h2>
-              <Markdown class="subtitle" html={show.description} />
-              <DjCredit djs={show.djs} class="title-credit" />
+              <div class="hero-sub">
+                <Markdown class="subtitle" html={show.description} />
+                <DjCredit djs={show.djs} class="subtitle" />
+              </div>
             </>
           ) : (
             <h2 class="display">{SITE_TITLE}</h2>
           )}
         </header>
         <div id="np">
-          <NowPlaying play={play} />
+          <NowPlaying play={play} status={false} />
         </div>
-        <p id="next" class="next">
-          {next && (
-            <>
-              Up next: <a href={`/${next.show.slug}`}>{next.show.title}</a>{" "}
-              {next.start ? (
-                <>
-                  at <Time at={next.start} />
-                </>
-              ) : (
-                "after this track"
-              )}
-            </>
-          )}
-        </p>
       </section>
       <section id="schedule" class="schedule" aria-labelledby="schedule-heading">
-        <div class="section-head">
-          <h2 id="schedule-heading" class="label">
-            Schedule
-          </h2>
-          <p class="section-note">Not your mood? Play any show's latest episode from the start.</p>
-        </div>
-        <div class="cards">
+        <h2 id="schedule-heading" class="section-label">
+          Today
+        </h2>
+        <div class="rows">
           {scheduled(shows).map((s) => (
-            <ShowCard show={s} now={now} onAir={s.slug === show?.slug} blocks={blocks.get(s.slug)} />
+            <ShowRow show={s} now={now} onAir={s.slug === show?.slug} blocks={blocks.get(s.slug)} />
           ))}
         </div>
       </section>
       <History plays={recent.slice(1)} />
       <StreamUrl host={c.req.header("host") ?? ""} />
-      <Poll path="/" ids={["on-air", "np", "next", "schedule", "history"]} />
+      <Poll path="/" ids={["on-air", "np", "schedule", "history"]} />
     </main>,
   );
 });
@@ -424,11 +397,23 @@ app.get("/", async (c) => {
 const blockTitle = (show: Show, b: Block) => `${show.title} #${b.number}`;
 
 // A block's play button: when it ends, the show's earlier blocks follow.
-const BlockButton = ({ show, blocks, i }: { show: Show; blocks: Block[]; i: number }) => (
+// `episode`: as a "Last episode · Nov 14" pill.
+const BlockButton = ({
+  show,
+  blocks,
+  i,
+  episode,
+}: {
+  show: Show;
+  blocks: Block[];
+  i: number;
+  episode?: boolean;
+}) => (
   <PlayButton
     src={blocks[i]!.url}
     title={blockTitle(show, blocks[i]!)}
     then={blocks.slice(i + 1).map((e) => ({ src: e.url, title: blockTitle(show, e) }))}
+    episode={episode ? day(blocks[i]!.date).replace(/^\w+, /, "") : undefined}
   />
 );
 
@@ -685,7 +670,7 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
 
 app.get(`/:slug{${SLUG}}`, async (c) => {
   const slug = c.req.param("slug");
-  const [show, shows, recent] = await Promise.all([getShow(slug), getShows(), recentPlays(11, slug)]);
+  const [show, shows, recent] = await Promise.all([getShow(slug), getShows(), recentPlays(6, slug)]);
   if (!show) return c.notFound();
   const [{ show: on, play }, archived] = await Promise.all([onAir(shows), archive(shows)]);
   const blocks = archived.get(show.slug) ?? [];
@@ -749,7 +734,7 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
           </ol>
         </section>
       )}
-      <History plays={isOn ? recent.slice(1) : recent} />
+      <History plays={(isOn ? recent.slice(1) : recent).slice(0, 5)} />
       <Poll path={`/${show.slug}`} ids={["np", "history"]} />
     </main>,
     { title: show.title },
@@ -776,15 +761,9 @@ app.get(`/djs/:dj{${SLUG}}`, async (c) => {
         <h2 id="dj-shows" class="label">
           Shows
         </h2>
-        <div id="dj-shows-list" class="cards">
+        <div id="dj-shows-list" class="rows">
           {dj.shows.map((s) => (
-            <ShowCard
-              show={s}
-              now={now}
-              onAir={s.slug === on?.slug}
-              credit={false}
-              blocks={blocks.get(s.slug)}
-            />
+            <ShowRow show={s} now={now} onAir={s.slug === on?.slug} blocks={blocks.get(s.slug)} />
           ))}
         </div>
       </section>

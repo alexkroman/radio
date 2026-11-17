@@ -6,7 +6,7 @@
 // if it drops or is paused), showing each track while it plays, then the show's block before. test/e2e.sh checks the
 // recording itself, the play counts and the retention.
 import { expect, type Page, test } from "@playwright/test";
-import { get, LOGGED_OUT, lockScreen, player } from "./helpers.ts";
+import { get, LOGGED_OUT, lockScreen, onAir, player } from "./helpers.ts";
 
 const BLOCK = "/archive/night-2026-11-14.mp3";
 const EARLIER = "/archive/night-2026-11-13.mp3";
@@ -181,21 +181,31 @@ test("a block paused and played again picks up where it was", async ({ page }) =
   await main.getByRole("button", { name: `Pause ${TITLE}` }).click();
 });
 
-test("the schedule plays each show's last archived show", async ({ page }) => {
+test("the schedule plays each show's last episode, and the bar goes back to live", async ({ page }) => {
+  await onAir("default");
   await page.goto("/");
   const night = page.locator("#schedule .station", { has: page.locator('a[href="/night"]') });
-  await expect(night.locator(".station-archive")).toContainText("Latest episode");
-  await expect(night.locator(".station-archive")).toContainText("#2 · Sat, Nov 14");
+  const pill = night.locator(".pill");
+  await expect(pill).toHaveText("Last episode · Nov 14", { useInnerText: true });
   await expect(night).not.toContainText("Midnight");
-  // Only shows with an archived block have one.
-  await expect(page.locator("#schedule .station-archive")).toHaveCount(1);
-  // It plays in place, above the card's link.
+  // Only shows with an archived block, off air, have one.
+  await expect(page.locator("#schedule .pill")).toHaveCount(1);
+  // It plays in place, above the row's link.
   await night.getByRole("button", { name: `Play ${TITLE}` }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect.poll(() => player(page)).toEqual({ src: BLOCK, playing: true });
+  await expect(pill).toHaveText("Playing last episode", { useInnerText: true });
   await expect(page.locator("#bar-track")).toHaveText("Midnight · Gamma");
   await night.getByRole("button", { name: `Pause ${TITLE}` }).click();
   await expect.poll(() => player(page)).toEqual({ src: null, playing: false });
+  await expect(pill).toHaveText("Paused · Nov 14", { useInnerText: true });
+  // Back to live: the stream, playing; the pill as it was.
+  const bar = page.getByRole("region", { name: "Player" });
+  await bar.getByRole("button", { name: "Back to live" }).click();
+  await expect.poll(() => player(page)).toEqual({ src: "/stream", playing: true });
+  await expect(bar.getByRole("button", { name: "Back to live" })).toHaveCount(0);
+  await expect(pill).toHaveText("Last episode · Nov 14", { useInnerText: true });
+  await bar.getByRole("button", { name: "Pause Mazes Radio" }).click();
 });
 test.describe("logged out", () => {
   test.use(LOGGED_OUT);

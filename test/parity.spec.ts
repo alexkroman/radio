@@ -20,11 +20,14 @@ test("the live stream, the archive recordings and the served blocks are all 256 
 });
 
 // What the player shows: the bar's text, cover and button, the shape of the
-// bar (its elements, without their text), and the lock screen.
+// bar (its elements, without their text, but for the status, whose icon says
+// which, and an archive block's "Back to live"), and the lock screen.
 const widgets = (page: Page) =>
   page.evaluate(() => {
     const bar = document.getElementById("bar")!;
-    const shape = [...bar.querySelectorAll("*")].map((el) => `${el.tagName}.${el.className}`);
+    const shape = [...bar.querySelectorAll("*")]
+      .filter((el) => !el.closest(".bar-status, .back-live"))
+      .map((el) => `${el.tagName}.${el.className}`);
     const m = navigator.mediaSession.metadata;
     return {
       track: document.getElementById("bar-track")!.textContent,
@@ -50,6 +53,9 @@ test("a track looks the same in the player live and from the archive", async ({ 
   await expect.poll(async () => (await widgets(page)).lock?.title).toBe("Midnight");
   const live = await widgets(page);
 
+  // On the show's page (the schedule offers no episode of the show on air).
+  await page.locator('#on-air a[href="/night"]').click();
+  await expect(page).toHaveURL(/\/night$/);
   await main.locator('button[data-play="/archive/night-2026-11-14.mp3"]').click();
   await expect.poll(() => player(page)).toEqual({ src: "/archive/night-2026-11-14.mp3", playing: true });
   await expect(page.locator("#bar-track")).toHaveText("Midnight · Gamma");

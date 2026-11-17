@@ -1,11 +1,9 @@
 // Browser code for the site, bundled by esbuild into /assets/app.js (+ app.css).
 // One audio element for the whole site; links swap only <main> (hx-boost), so
 // the station keeps playing while you browse.
-// Archivo (variable, with its width axis) and JetBrains Mono (the wordmark and stream address), self-hosted (bundled into app.css + font files).
+// Archivo (variable, with its width axis), the site's one typeface, self-hosted (bundled into app.css + font files).
 import "@fontsource-variable/archivo/wdth.css";
 import "@fontsource-variable/archivo/wdth-italic.css";
-import "@fontsource/jetbrains-mono/400.css";
-import "@fontsource/jetbrains-mono/700.css";
 import "./tokens.css";
 import "./style.css";
 import htmx from "htmx.org";
@@ -64,10 +62,13 @@ function localTimes() {
   });
 }
 
-// Show the play state everywhere: play buttons, "Live" labels, the player bar (app/bar.tsx).
+// Show the play state everywhere: play buttons (.current: what the player
+// is on, playing or paused), "Live" labels, the player bar (app/bar.tsx).
 function sync() {
   document.querySelectorAll<HTMLButtonElement>("button[data-play]").forEach((b) => {
-    const on = playing && b.dataset.play === source.src;
+    const current = b.dataset.play === source.src;
+    const on = playing && current;
+    b.classList.toggle("current", current);
     b.classList.toggle("playing", on);
     b.setAttribute("aria-label", `${on ? "Pause" : "Play"} ${b.dataset.title}`);
   });
@@ -231,23 +232,10 @@ for (const action of ["seekto", "seekforward", "seekbackward", "previoustrack", 
 }
 
 document.addEventListener("click", (e) => {
-  const button = (e.target as Element).closest<HTMLButtonElement>("button[data-play], button[data-copy]");
+  const button = (e.target as Element).closest<HTMLButtonElement>("button[data-play]");
   if (!button) return;
-  if (button.dataset.play) {
-    const then = JSON.parse(button.dataset.then ?? "[]") as Source[];
-    return toggle({ src: button.dataset.play, title: button.dataset.title!, then });
-  }
-  const url = button.dataset.copy!;
-  navigator.clipboard.writeText(url).then(
-    () => {
-      button.textContent = "Copied";
-      setTimeout(() => (button.textContent = "Copy"), 1600);
-    },
-    () => {
-      // No clipboard access: select the URL so it can be copied by hand.
-      getSelection()!.selectAllChildren(button.parentElement!.querySelector("a")!);
-    },
-  );
+  const then = JSON.parse(button.dataset.then ?? "[]") as Source[];
+  toggle({ src: button.dataset.play!, title: button.dataset.title!, then });
 });
 
 document.addEventListener("htmx:beforeRequest", (e) => {
@@ -259,7 +247,11 @@ document.addEventListener("htmx:beforeRequest", (e) => {
   poll.addEventListener("htmx:beforeOnLoad", (l) => poll.isConnected || l.preventDefault(), { once: true });
 });
 
-mountBar(document.getElementById("player")!, () => toggle(source));
+mountBar(
+  document.getElementById("player")!,
+  () => toggle(source),
+  () => start(LIVE),
+);
 
 function settle() {
   localTimes();

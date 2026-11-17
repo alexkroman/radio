@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, describe, expect, test, vi } from "vitest";
 import type { Play } from "./plays.ts";
+import { showAt } from "./schedule.ts";
+import { getShows } from "./shows.ts";
 
 const now = Math.floor(Date.now() / 1000);
 const play = (p: Partial<Play>): Play => ({
@@ -349,15 +351,18 @@ describe("archive", () => {
     expect((await req("/archive/night-2026-11-14/now.json?t=0")).status).toBe(401);
   });
 
-  test("the schedule plays each show's last archived show, then its earlier ones", async () => {
+  test("the schedule plays each show's last archived show, unless it's on air", async () => {
     const html = await (await page("/")).text();
     const rows = html.split('<article class="station').slice(1);
     const row = (slug: string) => rows.find((r) => r.includes(`href="/${slug}"`))!;
-    expect(row("night")).toMatch(
-      /data-play="\/archive\/night-2026-11-14\.mp3" data-title="Fixture Night #3"/,
+    // Night is on air: "On air", not its last episode.
+    expect(row("night")).toContain('class="label on-air"');
+    expect(row("night")).not.toContain("data-play");
+    expect(row("default")).toMatch(
+      /data-play="\/archive\/default-2026-11-14\.mp3" data-title="Fixture Default #5"/,
     );
-    expect(row("night")).toContain("night-2026-11-13.mp3"); // next, in data-then
-    expect(row("night")).toContain("#3 · Sat, Nov 14");
+    expect(row("default")).toContain("Last episode</span>");
+    expect(row("default")).toContain(" · Nov 14");
     expect(row("odd")).toMatch(/data-play="\/archive\/odd-2026-11-15\.mp3" data-title="Odd Characters #1"/);
     expect(row("quiet")).not.toContain("data-play"); // nothing archived
     expect(html).not.toContain("Track A");
@@ -371,14 +376,11 @@ describe("archive", () => {
     expect(await (await page("/quiet")).text()).not.toContain("Past episodes");
   });
 
-  test("while a show waits for the last one's track to end, it's up next, after this track", async () => {
+  test("while a show waits for the last one's track to end, its page says it starts after this track", async () => {
     // Night is on air (the newest play); whichever show's hours it is now is due.
-    const html = await (await page("/")).text();
-    const hour = new Date().getUTCHours();
-    if (hour >= 12 && hour < 15) return expect(html).toMatch(/Up next: <a[^>]*>[^<]+<\/a> at </);
-    expect(html).toMatch(/Up next: <a[^>]*>[^<]+<\/a> after this track/);
-    const due = /Up next: <a href="\/([a-z-]+)"/.exec(html)![1]!;
-    expect(await (await page(`/${due}`)).text()).toContain("Starting after this track.");
+    const due = showAt(await getShows(), new Date());
+    if (!due || due.slug === "night") return;
+    expect(await (await page(`/${due.slug}`)).text()).toContain("Starting after this track.");
   });
 
   test("needs the site password, like every page", async () => {

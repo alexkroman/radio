@@ -36,9 +36,9 @@
 		path /stream
 	}
 	# Public: an archive block, /archive/<show>-<YYYY-MM-DD>.mp3, a file
-	# Icecast serves (icecast/config.sh). GET only, and played only from the
-	# beginning: Range is dropped on the way in, and the length and
-	# Accept-Ranges on the way out, so players see a stream they can't seek.
+	# Icecast serves (icecast/config.sh). GET only. Range passes, so a player
+	# that drops (a blip, a network change) resumes where it was rather than
+	# from the beginning; the site's player has no seek bar or download.
 	# (/archive itself is the app's page.)
 	@archive {
 		method GET
@@ -67,11 +67,7 @@
 	}
 	handle @archive {
 		reverse_proxy icecast:8000 {
-			header_up -Range
-			header_up -If-Range
 			header_down -Server
-			header_down -Accept-Ranges
-			header_down -Content-Length
 			flush_interval -1
 		}
 	}

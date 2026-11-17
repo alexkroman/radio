@@ -247,11 +247,7 @@ document.addEventListener("htmx:beforeRequest", (e) => {
   poll.addEventListener("htmx:beforeOnLoad", (l) => poll.isConnected || l.preventDefault(), { once: true });
 });
 
-mountBar(
-  document.getElementById("player")!,
-  () => toggle(source),
-  () => start(LIVE),
-);
+mountBar(document.getElementById("player")!, () => toggle(source));
 
 function settle() {
   localTimes();

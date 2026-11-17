@@ -21,12 +21,12 @@ test("the live stream, the archive recordings and the served blocks are all 256 
 
 // What the player shows: the bar's text, cover and button, the shape of the
 // bar (its elements, without their text, but for the status, whose icon says
-// which, and an archive block's "Back to live"), and the lock screen.
+// which), and the lock screen.
 const widgets = (page: Page) =>
   page.evaluate(() => {
     const bar = document.getElementById("bar")!;
     const shape = [...bar.querySelectorAll("*")]
-      .filter((el) => !el.closest(".bar-status, .back-live"))
+      .filter((el) => !el.closest(".bar-status"))
       .map((el) => `${el.tagName}.${el.className}`);
     const m = navigator.mediaSession.metadata;
     return {
@@ -64,7 +64,7 @@ test("a track looks the same in the player live and from the archive", async ({ 
   const archived = await widgets(page);
 
   expect(live.status).toBe("Fixture Night · Live");
-  expect(archived.status).toBe("Fixture Night #2 · Archive");
+  expect(archived.status).toBe("Fixture Night #2");
   // Everything else is the same.
   expect({ ...archived, status: "" }).toEqual({ ...live, status: "" });
   expect(live.lock).toEqual({

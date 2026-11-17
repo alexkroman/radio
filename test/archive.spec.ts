@@ -89,7 +89,9 @@ test("the player plays a block with each track as it plays, then the show's bloc
   await main.getByRole("button", { name: `Play ${TITLE}` }).click();
   await expect.poll(() => player(page)).toEqual({ src: BLOCK, playing: true });
   await expect(main.getByRole("button", { name: `Pause ${TITLE}` })).toBeVisible();
-  await expect(bar).toContainText(`${TITLE} · Archive`);
+  await expect(bar.locator(".bar-status")).toHaveText(TITLE);
+  await expect(bar).not.toContainText("Archive");
+  await expect(bar.getByRole("button")).toHaveCount(1); // play/pause; no "Back to live"
   // Each track while it plays, never before.
   await expect(page.locator("#bar-track")).toHaveText("Midnight · Gamma");
   await expect(bar.getByRole("img", { name: "Cover art: Midnight, Gamma" })).toBeVisible();
@@ -105,12 +107,12 @@ test("the player plays a block with each track as it plays, then the show's bloc
   await expect(page.locator('audio, video, input, [role="slider"]')).toHaveCount(0);
   // Browsing keeps it playing.
   await page.getByRole("link", { name: "About", exact: true }).click();
-  await expect(bar).toContainText(`${TITLE} · Archive`);
+  await expect(bar.locator(".bar-status")).toHaveText(TITLE);
   expect((await player(page)).playing).toBe(true);
 
   // At its end, the show's block before it plays, with its own tracks.
   await expect.poll(() => player(page), { timeout: 30_000 }).toEqual({ src: EARLIER, playing: true });
-  await expect(bar).toContainText(`${EARLIER_TITLE} · Archive`);
+  await expect(bar.locator(".bar-status")).toHaveText(EARLIER_TITLE);
   await expect(page.locator("#bar-track")).toHaveText("First Light · Alpha Artist · Fixture LP");
   await expect
     .poll(() => lockScreen(page))
@@ -203,11 +205,10 @@ test("the schedule plays each show's last episode, and the bar goes back to live
   await night.getByRole("button", { name: `Pause ${TITLE}` }).click();
   await expect.poll(() => player(page)).toEqual({ src: null, playing: false });
   await expect(pill).toHaveText("Paused · Nov 14", { useInnerText: true });
-  // Back to live: the stream, playing; the pill as it was.
+  // Live again, from the page's play button: the stream, playing; the pill as it was.
   const bar = page.getByRole("region", { name: "Player" });
-  await bar.getByRole("button", { name: "Back to live" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Play Mazes Radio" }).first().click();
   await expect.poll(() => player(page)).toEqual({ src: "/stream", playing: true });
-  await expect(bar.getByRole("button", { name: "Back to live" })).toHaveCount(0);
   await expect(pill).toHaveText("Last episode · Nov 14", { useInnerText: true });
   await bar.getByRole("button", { name: "Pause Mazes Radio" }).click();
 });

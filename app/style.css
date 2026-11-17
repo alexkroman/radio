@@ -161,7 +161,7 @@ h2.label {
   color: var(--color-ink);
 }
 
-/* A home section's label (Latest episodes, Shows, Just played): small caps, set apart. */
+/* A home section's label (Latest episodes, Just played): small caps, set apart. */
 .section-label {
   font: var(--type-section);
   letter-spacing: 0.08em;
@@ -494,13 +494,7 @@ img.cover {
   color: var(--color-muted);
 }
 
-.schedule {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-/* ── Home: the show on air, then the schedule as a listing ── */
+/* ── Home: the show on air, then the latest episodes ── */
 .page-home {
   gap: 64px;
 }
@@ -735,6 +729,15 @@ img.cover {
 
 .episode-number {
   color: var(--color-muted);
+}
+
+/* The show's name over its description. */
+.episode-info {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .history {
@@ -1025,7 +1028,8 @@ img.cover {
     grid-area: play;
   }
 
-  .archive-title {
+  .archive-title,
+  .episode-info {
     grid-area: title;
   }
 

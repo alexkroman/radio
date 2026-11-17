@@ -1,4 +1,4 @@
-// The web app behind Caddy: what's on air and the schedule (/), each show's
+// The web app behind Caddy: what's on air and the latest episodes (/), each show's
 // page (/<slug>), the track on air (/now.json), DJ pages (/djs/<dj>),
 // /about, and the SoundExchange reports (/reports). Shows are
 // shows/<slug>.md (app/shows.ts), with their DJs and hours in the front matter;
@@ -173,7 +173,7 @@ const Until = ({ show, now }: { show: Show; now: Date }) => {
   ) : null;
 };
 
-// A show as a row of the schedule: its hours, name and mood on one line;
+// A show as a row (a DJ's shows): its hours, name and mood on one line;
 // "On air" when it is, else its last archived block to play from the start,
 // so a listener can pick another show to suit the mood. (The DJs are on the
 // show's page.)
@@ -376,19 +376,9 @@ app.get("/", async (c) => {
         </div>
       </section>
       <LatestEpisodes shows={shows} blocks={blocks} />
-      <section id="schedule" class="schedule" aria-labelledby="schedule-heading">
-        <h2 id="schedule-heading" class="section-label">
-          Shows
-        </h2>
-        <div class="rows">
-          {byNextSlot(shows, now, show).map((s) => (
-            <ShowRow show={s} now={now} onAir={s.slug === show?.slug} />
-          ))}
-        </div>
-      </section>
       <History plays={recent.slice(1)} />
       <StreamUrl host={c.req.header("host") ?? ""} />
-      <Poll path="/" ids={["on-air", "np", "episodes", "schedule", "history"]} />
+      <Poll path="/" ids={["on-air", "np", "episodes", "history"]} />
     </main>,
   );
 });
@@ -418,15 +408,9 @@ const BlockButton = ({
   />
 );
 
-// The scheduled shows by when they're next on air, the one on air first.
-const byNextSlot = (shows: Show[], now: Date, on?: Show) =>
-  scheduled(shows)
-    .map((s) => ({ s, at: s === on ? -Infinity : nextSlot(s, now)!.start.getTime() }))
-    .sort((a, b) => a.at - b.at)
-    .map(({ s }) => s);
-
 // Each show's latest archived block, newest first: its play button to the
-// left of the show's name (linked to its page), then its date and length.
+// left of the show's name (linked to its page) over its description, then
+// its date and length.
 const LatestEpisodes = ({ shows, blocks }: { shows: Show[]; blocks: Map<string, Block[]> }) => {
   const latest = scheduled(shows)
     .filter((s) => blocks.get(s.slug)?.length)
@@ -445,10 +429,13 @@ const LatestEpisodes = ({ shows, blocks }: { shows: Show[]; blocks: Map<string, 
             return (
               <li class="archive-block episode">
                 <BlockButton show={show} blocks={list} i={0} />
-                <a class="archive-title" href={`/${show.slug}`}>
-                  {show.title}
-                  <span class="episode-number">{` #${list[0]!.number}`}</span>
-                </a>
+                <span class="episode-info">
+                  <a class="archive-title" href={`/${show.slug}`}>
+                    {show.title}
+                    <span class="episode-number">{` #${list[0]!.number}`}</span>
+                  </a>
+                  <Markdown class="station-desc" html={show.description} />
+                </span>
                 <span class="archive-date">{day(list[0]!.date)}</span>
                 <span class="archive-length">{duration(list[0]!.seconds)}</span>
               </li>

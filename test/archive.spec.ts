@@ -20,7 +20,7 @@ test("a show's page lists its blocks, without track names or downloads, and ther
   await onAir("default");
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link")).toHaveText(["About"]);
-  await page.locator('#schedule a[href="/night"]').first().click();
+  await page.locator('#episodes a[href="/night"]').first().click();
   await expect(page).toHaveURL(/\/night$/);
   const past = page.locator(".archive-show", { has: page.getByRole("heading", { name: "Past episodes" }) });
   const blocks = past.locator(".archive-block");
@@ -197,8 +197,7 @@ test("the home page plays each show's latest episode, and the page's play button
   await expect(night.locator(".archive-title")).toHaveText(TITLE);
   await expect(night.locator(".archive-date")).toHaveText("Sat, Nov 14");
   await expect(night.locator(".archive-title")).toHaveAttribute("href", "/night");
-  // The shows below have no play buttons.
-  await expect(page.locator("#schedule .play")).toHaveCount(0);
+  await expect(night.locator(".station-desc")).toHaveText("A one-track night show.");
   await night.getByRole("button", { name: `Play ${TITLE}` }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect.poll(() => player(page)).toEqual({ src: BLOCK, playing: true });

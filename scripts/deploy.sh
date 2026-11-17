@@ -52,21 +52,40 @@ if [ -z "$IP" ]; then
 fi
 HOST=ubuntu@$IP
 
-# Mirror local files to the server. -O: the ubuntu user can't set times on the
-# dirs compose.yml's init service owns. -i lists each change.
-rs() { rsync -rltO --delete --chmod=D755,F644 -e "$SSH" -i "$@"; }
-{ git ls-files -z && printf '.env\0'; } | rs --from0 --files-from=- ./ "$HOST:radio/"
-rs music covers shows "$HOST:radio/"
-
-# Pre-create bind-mounted dirs so Docker doesn't create them as root on first run.
+# Mirror local files to the server, in an order that never puts anything on
+# air (or on a page) before what it needs is there, nor takes anything away
+# while it's still in use:
+#   1. Add new covers, then new music (Liquidsoap watches the music folders,
+#      and a track's cover must be there when it starts), deleting nothing.
+#   2. Copy the code (every tracked file but the shows) and .env, pull the
+#      images and build the app's while the old containers keep running.
+#   3. Copy the shows (a new show only now that its music and covers are
+#      there; Liquidsoap re-reads the hours every minute), then at once start
+#      the new containers and restart Liquidsoap if the shows changed
+#      (scripts/reconcile.sh), which drops no listener.
+#   4. Only then delete the music and covers that went: a removed show's
+#      until Liquidsoap stopped playing it, and a removed track's cover after
+#      the track.
+# -O: the ubuntu user can't set times on the dirs compose.yml's init service
+# owns. -i lists each change.
+rs() { rsync -rltO --chmod=D755,F644 -e "$SSH" -i "$@"; }
+rs covers "$HOST:radio/"
+rs music "$HOST:radio/"
+{ git ls-files -z -- ':!shows/' && printf '.env\0'; } | rs --from0 --files-from=- ./ "$HOST:radio/"
 # No build attestations: they're stamped with the build time, so every deploy
 # made a new app image (even one built all from cache) and recreated the app.
-# Then bring Icecast, Liquidsoap and Caddy up to date (scripts/reconcile.sh),
-# which drops no listener.
 $SSH "$HOST" 'chmod 600 radio/.env && cd radio &&
+  docker compose pull -q --ignore-buildable &&
+  BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose build'
+rs --delete shows "$HOST:radio/"
+# Pre-create bind-mounted dirs so Docker doesn't create them as root on first
+# run. The images are built (step 2), so `up` only swaps in what changed.
+$SSH "$HOST" 'cd radio &&
   mkdir -p music plays logs covers archive &&
-  BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose up -d --build --remove-orphans &&
+  docker compose up -d --no-build --remove-orphans &&
   sh scripts/reconcile.sh'
+rs --delete music "$HOST:radio/"
+rs --delete covers "$HOST:radio/"
 
 # Back up the play log (the only record for SoundExchange reports) to
 # backup/plays/. Never deletes, and never touches the local plays/.

@@ -165,10 +165,20 @@ def complement_entry(uri, m) =
   }
 end
 
-# Played tracks, newest first ({time, artists, album}), and picked ones not
-# yet played, oldest first ({show, file, artists, album}).
+# Played tracks, newest first ({time, artists, album}): written only by the
+# shows' on_track, which all run on the one clock's thread.
 complement_played = ref([])
-complement_pending = ref([])
+
+# Picked tracks not yet played, oldest first ({show, seq, file, artists,
+# album}). Each show keeps its own (show() below): its picks are written only
+# by its playlist's check_next, which runs on another thread than on_track, so
+# no list here is written from two threads (Liquidsoap has no mutex: a
+# read-then-write from each could drop the other's change). A getter per
+# show, registered as the shows are built at startup.
+complement_shows = ref([])
+def complement_pending() =
+  list.flatten(list.map(fun (pending) -> pending(), complement_shows()))
+end
 
 # Whether a candidate track (request metadata) for show slug keeps the complement.
 # What the complement counts of a track: its artists and album.
@@ -216,16 +226,10 @@ def complement_allows(slug, uri, m) =
   artists_ok and album_ok
 end
 
-# A track starts playing: it's played, no longer pending.
-def complement_played_now(slug, m, now) =
+# A track starts playing: it's played (the list of picks is its show's, in
+# show() below).
+def complement_played_now(m, now) =
   c = complement_entry(list.assoc(default="", "filename", m), m)
-
-  # It's no longer pending, nor are this show's picks from before it: those
-  # were skipped (they failed, or the playlist dropped them) and won't play.
-  picked = list.filter(fun (p) -> p.show == slug and p.file == c.file, complement_pending())
-  picked_at = list.fold(fun (t, p) -> p.time < t ? p.time : t, now, picked)
-  complement_pending :=
-    list.filter(fun (p) -> p.show != slug or (p.file != c.file and p.time > picked_at), complement_pending())
   complement_played :=
     {time = now, artists = c.artists, album = c.album}::list.filter(
       fun (p) -> p.time > now - complement_window,
@@ -367,8 +371,8 @@ def archive_track(slug, m, now) =
 end
 
 # A file's tags, read once per path (quickly: without autocue's measuring).
-# A show the complement holds back retries its candidates nonstop until it
-# can play one, so they mustn't each touch the disk.
+# A show the complement holds back retries its candidates until it can play
+# one, so they mustn't each touch the disk.
 tag_cache = ref([])
 def file_tags(uri) =
   cached = list.assoc(default=[("", "")], uri, tag_cache())
@@ -400,6 +404,29 @@ def show(f) =
   # async on_track below is done) already sees them.
   recent_artists = ref([])
   rejected = ref(0)
+
+  # This show's picks for the complement, oldest first, numbered (seq) as
+  # they're picked: written only by next_ok. `started` is the number of the
+  # newest pick that has started playing, written only by on_track: the picks
+  # after it are pending. A track that starts uses up one pick, the oldest
+  # with its file (the same file can be picked twice before it plays), and the
+  # picks before that one, which the playlist dropped and won't play.
+  picks = ref([])
+  picked = ref(0)
+  started = ref(0)
+  def pending() =
+    list.filter(fun (p) -> p.seq > started(), picks())
+  end
+  complement_shows :=
+    list.append(
+      complement_shows(),
+      [fun () -> list.map(fun (p) -> {show = p.show, artists = p.artists, album = p.album}, pending())]
+    )
+  def started_now(m) =
+    file = list.assoc(default="", "filename", m)
+    match = list.filter(fun (p) -> p.file == file, pending())
+    if match != [] then started := list.hd(match).seq end
+  end
   def next_ok(r) =
     # A candidate isn't resolved yet, so its tags are read from the file
     # (quickly: without autocue's measuring).
@@ -414,6 +441,15 @@ def show(f) =
         label=slug,
         "Skipping #{name}: the performance complement"
       )
+
+      # The playlist tries its next candidate at once, and when the
+      # complement holds every one back it would spin through them, thousands
+      # a second, starving the stream's clock (it falls behind, and the
+      # archive records slower than real time). A pause per refusal keeps that
+      # to a few a second. It runs on the playlist's own thread, not the
+      # clock's, and the next track is picked while this one plays, so it
+      # costs no audio.
+      sleep(0.1)
       false
     elsif
       rejected() < 20 and list.exists(fun (a) -> list.mem(a, recent_artists()), artists)
@@ -428,10 +464,11 @@ def show(f) =
       rejected := 0
       recent_artists := list.prefix(20, list.append(artists, recent_artists()))
       c = complement_entry(uri, m)
-      complement_pending :=
+      picked := picked() + 1
+      picks :=
         list.append(
-          complement_pending(),
-          [{show = slug, file = c.file, artists = c.artists, album = c.album, time = time()}]
+          pending(),
+          [{show = slug, seq = picked(), file = c.file, artists = c.artists, album = c.album}]
         )
       true
     end
@@ -449,7 +486,8 @@ def show(f) =
     fun (m) ->
       begin
         now = time()
-        complement_played_now(slug, m, now)
+        started_now(m)
+        complement_played_now(m, now)
         starts := list.prefix(10, (list.assoc(default="", "filename", m), now)::starts())
         archive_track(slug, m, now)
       end

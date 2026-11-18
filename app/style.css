@@ -487,7 +487,7 @@ img.cover {
 }
 
 .hero .display {
-  font-size: clamp(64px, 12vw, 112px);
+  font-size: clamp(36px, 6vw, 56px);
   font-stretch: 80%;
   line-height: 0.95;
   letter-spacing: -0.02em;
@@ -564,10 +564,6 @@ img.cover {
 
 .page-home .hero-head {
   gap: 6px;
-}
-
-.page-home .hero .display {
-  font-size: clamp(36px, 6vw, 56px);
 }
 
 .section-head {
@@ -1032,7 +1028,7 @@ img.cover {
     padding: 16px;
   }
 
-  .page-home .hero .display {
+  .hero .display {
     font-size: 36px;
   }
 

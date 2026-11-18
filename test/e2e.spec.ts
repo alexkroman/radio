@@ -43,10 +43,22 @@ test("each show's own stream loops its archived blocks, naming each track, and l
   await expect
     .poll(() => icyTitle("/stream/night"), { timeout: 60_000 })
     .toMatch(/^(Gamma - Midnight|Beta & Band - Second Wind)$/);
-  // Each track as it comes up, from the blocks' sidecars, over and over.
+  // Each track as it comes up, from the blocks' sidecars (night-2026-11-14:
+  // Midnight, then Second Wind; night-2026-11-13: First Light): both blocks,
+  // over and over, each in order.
+  const titles = async () => (await loggedPlays("night")).map((p) => p.title);
   await expect
-    .poll(async () => (await loggedPlays("night")).map((p) => p.title).join(), { timeout: 60_000 })
-    .toMatch(/Midnight,Second Wind,Midnight/);
+    .poll(
+      async () =>
+        (await titles()).filter((t) => t === "Midnight").length >= 2 &&
+        (await titles()).includes("First Light"),
+      {
+        timeout: 90_000,
+      },
+    )
+    .toBe(true);
+  const played = await titles();
+  played.forEach((t, i) => t === "Second Wind" && expect(played[i - 1]).toBe("Midnight"));
   expect(new Set((await loggedPlays("night")).map((p) => p.show))).toEqual(new Set(["night"]));
   // Its plays aren't the station's: default stays on air.
   expect((await loggedPlays()).at(-1)?.show).toBe("default");

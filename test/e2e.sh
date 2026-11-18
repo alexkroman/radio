@@ -242,6 +242,11 @@ step "hours changed: nothing restarts; Liquidsoap re-reads them, and a gap is an
 deploy_change "" "an hours change" "edit_files 'sed -i \"s/^hours: 0-3$/hours: 0-2/\" /shows/*.md'"
 WAIT=90 wait_for logged "2:00: no show on air" || fail "Liquidsoap didn't log the gap the new hours left"
 
+step "a deploy cut short after syncing a new show: Liquidsoap keeps the hours it has"
+edit_files 'printf -- "---\ntitle: Added\nhours: 2-3\n---\n" >/shows/added.md && chmod a+r /shows/added.md'
+WAIT=90 wait_for logged "differ from the ones running" ||
+  fail "Liquidsoap didn't log that the shows on disk differ from the ones it runs"
+
 block=$(recording)
 before=$(size "recording/$block")
 step "a show added: Liquidsoap restarts, and the recording carries on in the same file"

@@ -67,8 +67,9 @@ HOST=ubuntu@$IP
 #      until Liquidsoap stopped playing it, and a removed track's cover after
 #      the track.
 # -O: the ubuntu user can't set times on the dirs compose.yml's init service
-# owns. -i lists each change.
-rs() { rsync -rltO --chmod=D755,F644 -e "$SSH" -i "$@"; }
+# owns. -i lists each change. Finder's .DS_Store files stay home (Liquidsoap
+# would try to play one in music/), and --delete-excluded removes any there.
+rs() { rsync -rltO --chmod=D755,F644 --exclude=.DS_Store -e "$SSH" -i "$@"; }
 rs covers "$HOST:radio/"
 rs music "$HOST:radio/"
 { git ls-files -z -- ':!shows/' && printf '.env\0'; } | rs --from0 --files-from=- ./ "$HOST:radio/"
@@ -84,8 +85,8 @@ $SSH "$HOST" 'cd radio &&
   mkdir -p music plays logs covers archive &&
   docker compose up -d --no-build --remove-orphans &&
   sh scripts/reconcile.sh'
-rs --delete music "$HOST:radio/"
-rs --delete covers "$HOST:radio/"
+rs --delete --delete-excluded music "$HOST:radio/"
+rs --delete --delete-excluded covers "$HOST:radio/"
 
 # Back up the play log (the only record for SoundExchange reports) to
 # backup/plays/. Never deletes, and never touches the local plays/.

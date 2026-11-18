@@ -139,12 +139,15 @@ const trackJson = (t?: Track) => ({
 // The track on air and its show's title, in /now.json.
 export const nowTrack = (play: Play | undefined, title: string) => ({ title, ...trackJson(play) });
 
-// Re-fetches the page on "refresh" (sent by client.ts when the track on air
-// changes) and swaps in just the elements with these ids.
-export const Poll = ({ path, ids }: { path: string; ids: string[] }) => (
+// Re-fetches the page on "refresh" (sent by client.ts when the track playing
+// on one of the `watch` streams changes: their now.json URLs, the station's
+// /now.json and any show's /<slug>/now.json) and swaps in just the elements
+// with these ids.
+export const Poll = ({ path, ids, watch }: { path: string; ids: string[]; watch: string[] }) => (
   <div
     id="poll"
     hidden
+    data-watch={watch.join(" ")}
     hx-get={path}
     hx-trigger="refresh"
     hx-select="#poll"

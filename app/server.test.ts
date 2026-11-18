@@ -167,6 +167,8 @@ describe("pages", () => {
     expect(html.replace(shows, "")).not.toContain("Unheard");
     // Plain has no archived block, so no stream and nothing playing on it.
     expect(row("plain")).not.toContain("stream-track");
+    // The page refreshes when the station's track changes, or a stream's.
+    expect(html).toMatch(/data-watch="\/now.json( \/[a-z]+\/now.json)+"/);
   });
 
   test("a show page has its hours, and plays only its own stream", async () => {
@@ -181,10 +183,16 @@ describe("pages", () => {
     );
     expect(off).not.toContain('class="np-track"');
     expect(off).not.toContain("Midnight");
-    expect(off).not.toContain("Unheard");
-    // Its own channel, around the clock.
-    expect(off).toContain('href="/stream/default"');
-    expect(off).toMatch(/Fixture Default Stream URL: <a class="url" href="\/stream\/default"/);
+    // Its own stream, a replay of its past shows, with the track playing on
+    // it; the page refreshes when that changes.
+    const replay = off.slice(off.indexOf('id="channel"'), off.indexOf("</ol>", off.indexOf('id="channel"')));
+    expect(replay).toContain('data-play="/stream/default"');
+    expect(replay).toContain('data-status="Replay"');
+    expect(replay).toMatch(/st-label">Replaying<.*st-track">Unheard<.*st-artist">Nobody</);
+    expect(off).toMatch(
+      /data-watch="\/now.json \/default\/now.json"[^>]*hx-select-oob="#show-hours,#channel,#past"/,
+    );
+    expect(off).toMatch(/Fixture Default replay stream URL: <a class="url" href="\/stream\/default"/);
     // On air or not, no track on air and no button for the station's stream.
     const on = await (await page("/night")).text();
     expect(on).not.toContain('class="np-track"');
@@ -274,7 +282,8 @@ describe("channels and past shows", () => {
     const quiet = await (await page("/quiet")).text();
     expect(quiet).toContain("Not on the station in the last two weeks.");
     // No archived block: nothing to play on its own stream.
-    expect(quiet).not.toContain("Around the clock");
+    expect(quiet).not.toContain('id="channel"');
+    expect(quiet).toContain('data-watch="/now.json"');
     expect(quiet).not.toContain("/stream/quiet");
   });
 

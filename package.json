@@ -22,6 +22,7 @@
   "knip": {
     "entry": [
       "test/listen.ts",
+      "test/block-stream.ts",
       "app/check-schedule.ts"
     ]
   },

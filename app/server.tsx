@@ -203,11 +203,13 @@ const StreamUrl = ({
   </footer>
 );
 
-// A show's own stream: its archived shows, in a loop (radio.liq block_stream).
-// Offered only once it has one (app/archive.ts): until then it's silence.
+// A show's own stream: a replay of its past shows, one after another
+// (radio.liq block_stream). Offered only once it has one (app/archive.ts):
+// until then it's silence.
 const channel = (show: Show) => `/stream/${show.slug}`;
+const channelNow = (slug: string) => `/${slug}/now.json`;
 const ChannelButton = ({ show }: { show: Show }) => (
-  <PlayButton src={channel(show)} title={show.title} now={`/${show.slug}/now.json`} status="24/7" />
+  <PlayButton src={channel(show)} title={show.title} now={channelNow(show.slug)} status="Replay" />
 );
 
 // The show on air: the newest play's (the schedule's until anything has played).
@@ -319,7 +321,7 @@ app.get("/", async (c) => {
       </section>
       <ShowList shows={shows} streams={streams} playing={playing} />
       <StreamUrl host={c.req.header("host") ?? ""} />
-      <Poll path="/" ids={["on-air", "np", "shows"]} />
+      <Poll path="/" ids={["on-air", "np", "shows"]} watch={["/now.json", ...[...streams].map(channelNow)]} />
     </main>,
   );
 });
@@ -344,6 +346,7 @@ const ShowList = ({
         <h2 id="shows-heading" class="section-label">
           Shows
         </h2>
+        <p class="section-note">Play any show's past shows, back to back, any time.</p>
       </div>
       <ol class="item-list">
         {scheduled(shows, now).map((show) => (
@@ -370,13 +373,15 @@ const ShowList = ({
   );
 };
 
-// The track playing on a show's own stream: its cover, then its title over
-// artist · album (all three, as the statutory license has us show).
+// The track playing on a show's own stream (a replay of a past show): its
+// cover, then "Replaying" over its title over artist · album (all three, as
+// the statutory license has us show).
 const StreamTrack = ({ play }: { play?: Play }) =>
   play ? (
     <span class="stream-track">
       <Cover play={play} size="cover-40" />
       <span class="st-text">
+        <span class="label st-label">Replaying</span>
         <TrackLines play={play} cls="st" />
       </span>
     </span>
@@ -537,10 +542,11 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
   const slug = c.req.param("slug");
   const [show, shows] = await Promise.all([getShow(slug), getShows()]);
   if (!show) return c.notFound();
-  const [{ show: on }, past, streams] = await Promise.all([
+  const [{ show: on }, past, streams, playing] = await Promise.all([
     onAir(shows),
     pastAirings(show.slug),
     archivedShows(),
+    latestPlay(show.slug),
   ]);
   const stream = streams.has(show.slug);
   const isOn = on?.slug === show.slug;
@@ -551,7 +557,7 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
       <section class="hero" aria-label={show.title}>
         <header class="title-block hero-head">
           {show.hours && (
-            <p class={isOn ? "label on-air-label" : "label"}>
+            <p id="show-hours" class={isOn ? "label on-air-label" : "label"}>
               {isOn && (
                 <>
                   <span class="dot" aria-hidden="true" />
@@ -570,15 +576,16 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
         <section class="past-shows" aria-labelledby="show-channel">
           <div class="section-head">
             <h2 id="show-channel" class="label">
-              Around the clock
+              Replay
             </h2>
-            <p class="section-note">Its recent shows, one after another, on a stream of its own.</p>
+            <p class="section-note">Its past shows, as they aired, back to back, any time.</p>
           </div>
-          <ol class="item-list">
+          <ol id="channel" class="item-list">
             <li class="item show-item">
               <ChannelButton show={show} />
               <span class="item-info">
-                <span class="item-title">{`${show.title}, 24/7`}</span>
+                <span class="item-title">{`${show.title} replay`}</span>
+                <StreamTrack play={playing} />
               </span>
             </li>
           </ol>
@@ -604,10 +611,14 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
         <StreamUrl
           host={c.req.header("host") ?? ""}
           path={channel(show)}
-          label={`${show.title} Stream URL`}
+          label={`${show.title} replay stream URL`}
         />
       )}
-      <Poll path={`/${show.slug}`} ids={["past"]} />
+      <Poll
+        path={`/${show.slug}`}
+        ids={["show-hours", "channel", "past"]}
+        watch={["/now.json", ...(stream ? [channelNow(show.slug)] : [])]}
+      />
     </main>,
     { title: show.title },
   );
@@ -659,7 +670,7 @@ app.get(`/djs/:dj{${SLUG}}`, async (c) => {
         </section>
       )}
       <footer class="footer footer-rule">{c.req.header("host")}</footer>
-      <Poll path={`/djs/${dj.slug}`} ids={["dj-shows-list"]} />
+      <Poll path={`/djs/${dj.slug}`} ids={["dj-shows-list"]} watch={["/now.json"]} />
     </main>,
     { title: dj.name },
   );

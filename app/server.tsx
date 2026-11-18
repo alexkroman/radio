@@ -1,10 +1,10 @@
-// The web app behind Caddy: what's on air and the latest episodes (/), each show's
-// page (/<slug>), the track on air (/now.json), DJ pages (/djs/<dj>),
+// The web app behind Caddy: what's on air and the shows (/), each show's
+// page (/<slug>), the track on air (/now.json, and on a show's channel
+// /<slug>/now.json), DJ pages (/djs/<dj>),
 // /about, and the SoundExchange reports (/reports). Shows are
 // shows/<slug>.md (app/shows.ts), with their DJs and hours in the front matter;
 // Liquidsoap plays them on their hours on the station's stream, /stream (via
 // Caddy), and each around the clock on its own, /stream/<slug>.
-import { archive, BLOCK, type Block, day, duration, inArchive, trackAt } from "./archive.ts";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -12,7 +12,7 @@ import { etag } from "hono/etag";
 import { createMiddleware } from "hono/factory";
 import { jsxRenderer } from "hono/jsx-renderer";
 import { login, throttle } from "./login.tsx";
-import { latestPlay, type Play, recentPlays } from "./plays.ts";
+import { type Airing, latestPlay, pastAirings, type Play, recentPlays } from "./plays.ts";
 import { reports } from "./reports.tsx";
 import { nextSlot, scheduled, showAt } from "./schedule.ts";
 import { getDj, getShow, getShows, type Show, SLUG } from "./shows.ts";
@@ -27,13 +27,12 @@ import {
   SITE_TITLE,
   SiteHeader,
   Time,
-  trackJson,
 } from "./ui.tsx";
 
 const COVERS = process.env.COVERS_DIR ?? "/covers";
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL || "alex@mazesradio.com";
 const GITHUB_URL = "https://github.com/alexkroman/radio";
-// radio.liq: %mp3(bitrate = 256), the stream and the archive both.
+// radio.liq: %mp3(bitrate = 256), the station and every show's channel.
 const FORMAT = "MP3, 256 kbps";
 
 // The law the station plays music under, for the About page: each provision,
@@ -57,14 +56,9 @@ const LAWS = [
     what: "no advance schedule of songs or artists. Our schedule names shows, never what they'll play.",
   },
   {
-    cite: "§ 114(d)(2)(C)(iii)",
-    url: `${USC}/114#d_2_C_iii`,
-    what: "archived programs must be at least five hours long and available for no more than two weeks. Shorter recordings are never published, and old ones come down automatically.",
-  },
-  {
     cite: "§ 114(d)(2)(C)(vi)",
     url: `${USC}/114#d_2_C_vi`,
-    what: "nothing that helps listeners copy the music. There are no downloads, and no seeking or skipping in the archive.",
+    what: "nothing that helps listeners copy the music. There are no downloads, and no seeking or skipping.",
   },
   {
     cite: "§ 114(d)(2)(C)(ix)",
@@ -79,7 +73,7 @@ const LAWS = [
   {
     cite: "17 U.S.C. § 112(e)",
     url: `${USC}/112#e`,
-    what: "the copies a station makes in order to broadcast. This covers the archive's recordings.",
+    what: "the copies a station makes in order to broadcast, such as the buffers that carry each stream.",
   },
   {
     cite: "37 C.F.R. Part 380",
@@ -89,7 +83,7 @@ const LAWS = [
   {
     cite: "37 C.F.R. Part 370",
     url: `${CFR}/part-370`,
-    what: "reports of use. Every performance, live or archived, is reported to SoundExchange each month with the number of listeners. Ours are public.",
+    what: "reports of use. Every performance, on the station or a show's channel, is reported to SoundExchange each month with the number of listeners. Ours are public.",
   },
 ];
 
@@ -100,20 +94,12 @@ const FAQ = [
     a: "The license forbids announcing songs or artists before they play (§ 114(d)(2)(C)(ii)). We can tell you which show is on next, but not what it will play.",
   },
   {
-    q: "Why does a show's page list what has played on air, but not the tracks in an archived episode?",
-    a: "Songs that have played on air have already been performed, so listing them is fine. An archived episode hasn't played for you yet, so its track list would announce songs before you hear them. Instead, the archive shows each track's title, album and artist while it plays.",
-  },
-  {
     q: "Why can't I pick a song, skip or rewind?",
-    a: "Letting you choose songs would make this an interactive service (§ 114(j)(7)), which the statutory license doesn't cover: every song would need a deal with its label. We leave out skipping and rewinding too, so the station stays radio and the archive plays shows as they were broadcast.",
+    a: "Letting you choose songs would make this an interactive service (§ 114(j)(7)), which the statutory license doesn't cover: every song would need a deal with its label. We leave out skipping and rewinding too, so the station stays radio.",
   },
   {
     q: "Why can't I download a show?",
-    a: "The license requires that we not help listeners make copies (§ 114(d)(2)(C)(vi)). You can listen as often as you like while a show is in the archive.",
-  },
-  {
-    q: "Why are archived shows only up for two weeks, and why only whole shows?",
-    a: "An archived program must be at least five hours long and can't be offered for more than two weeks (§ 114(d)(2)(C)(iii)). A show that gets cut short, by a restart for example, isn't archived.",
+    a: "The license requires that we not help listeners make copies (§ 114(d)(2)(C)(vi)). Each show plays around the clock on its own stream instead.",
   },
   {
     q: "Why won't you play a whole album, or an hour of one artist?",
@@ -124,8 +110,8 @@ const FAQ = [
     a: "The license requires each recording to be identified by title, album and featured artist while it plays (§ 114(d)(2)(C)(ix)).",
   },
   {
-    q: "Do artists get paid when I listen to the archive?",
-    a: "Yes. Every track you reach in an archived show counts as a performance in our monthly SoundExchange report, the same as a live play.",
+    q: "Do artists get paid when I listen to a show's own stream?",
+    a: "Yes. Every track played to a listener there counts as a performance in our monthly SoundExchange report, the same as on the station.",
   },
 ];
 
@@ -175,20 +161,9 @@ const Until = ({ show, now }: { show: Show; now: Date }) => {
 };
 
 // A show as a row (a DJ's shows): its hours, name and mood on one line;
-// "On air" when it is, else its last archived block to play from the start,
-// so a listener can pick another show to suit the mood. (The DJs are on the
-// show's page.)
-const ShowRow = ({
-  show,
-  now,
-  onAir,
-  blocks = [],
-}: {
-  show: Show;
-  now: Date;
-  onAir: boolean;
-  blocks?: Block[];
-}) => (
+// "On air" when it is, else its channel's play button, so a listener can
+// pick another show to suit the mood. (The DJs are on the show's page.)
+const ShowRow = ({ show, now, onAir }: { show: Show; now: Date; onAir: boolean }) => (
   <article class={onAir ? "station row row-on" : "station row"}>
     <span class="station-hours">
       <Hours show={show} now={now} />
@@ -205,11 +180,9 @@ const ShowRow = ({
         On air
       </span>
     ) : (
-      blocks[0] && (
-        <span class="station-archive">
-          <BlockButton show={show} blocks={blocks} i={0} episode />
-        </span>
-      )
+      <span class="station-play">
+        <ChannelButton show={show} />
+      </span>
     )}
   </article>
 );
@@ -249,6 +222,10 @@ const StreamUrl = ({
     {label}: <a class="url" href={path} hx-boost="false">{`${host}${path}`}</a>
   </footer>
 );
+
+// A show's own channel: its music around the clock.
+const channel = (show: Show) => `/stream/${show.slug}`;
+const ChannelButton = ({ show }: { show: Show }) => <PlayButton src={channel(show)} title={show.title} />;
 
 // The show on air: the newest play's (the schedule's until anything has played).
 async function onAir(shows: Show[]) {
@@ -355,7 +332,7 @@ app.route("/reports", reports);
 
 app.get("/", async (c) => {
   const shows = await getShows();
-  const [{ show, play }, recent, blocks] = await Promise.all([onAir(shows), recentPlays(6), archive(shows)]);
+  const [{ show, play }, recent] = await Promise.all([onAir(shows), recentPlays(6)]);
   const now = new Date();
   return c.render(
     <main class="page page-station page-home">
@@ -385,100 +362,67 @@ app.get("/", async (c) => {
           <NowPlaying play={play} status={false} />
         </div>
       </section>
-      <LatestEpisodes shows={shows} blocks={blocks} />
+      <ShowList shows={shows} />
       <History plays={recent.slice(1)} />
       <StreamUrl host={c.req.header("host") ?? ""} />
-      <Poll path="/" ids={["on-air", "np", "episodes", "history"]} />
+      <Poll path="/" ids={["on-air", "np", "history"]} />
     </main>,
   );
 });
 
-// An archive block's title, as its row, play button and the player show it:
-// shows' blocks have no names of their own, so they're numbered.
-const blockTitle = (show: Show, b: Block) => `${show.title} #${b.number}`;
-
-// A block's play button: when it ends, the show's earlier blocks follow.
-// `episode`: as a "Last episode · Nov 14" pill.
-const BlockButton = ({
-  show,
-  blocks,
-  i,
-  episode,
-}: {
-  show: Show;
-  blocks: Block[];
-  i: number;
-  episode?: boolean;
-}) => (
-  <PlayButton
-    src={blocks[i]!.url}
-    title={blockTitle(show, blocks[i]!)}
-    then={blocks.slice(i + 1).map((e) => ({ src: e.url, title: blockTitle(show, e) }))}
-    episode={episode ? day(blocks[i]!.date).replace(/^\w+, /, "") : undefined}
-  />
-);
-
-// Each show's latest archived block, newest first: its play button to the
-// left of the show's name (linked to its page) over its description, then
-// its date and length.
-const LatestEpisodes = ({ shows, blocks }: { shows: Show[]; blocks: Map<string, Block[]> }) => {
-  const latest = scheduled(shows)
-    .filter((s) => blocks.get(s.slug)?.length)
-    .sort((a, b) => blocks.get(b.slug)![0]!.date.localeCompare(blocks.get(a.slug)![0]!.date));
+// The shows, in the order of their hours: each one's channel's play button
+// to the left of its name (linked to its page) over its description, then
+// its hours.
+const ShowList = ({ shows }: { shows: Show[] }) => {
+  const now = new Date();
   return (
-    <section id="episodes" class="episodes" aria-labelledby="episodes-heading">
-      <h2 id="episodes-heading" class="section-label">
-        Latest episodes
-      </h2>
-      {latest.length === 0 ? (
-        <p class="muted">No episodes yet.</p>
-      ) : (
-        <ol class="archive-blocks">
-          {latest.map((show) => {
-            const list = blocks.get(show.slug)!;
-            return (
-              <li class="archive-block episode">
-                <BlockButton show={show} blocks={list} i={0} />
-                <span class="episode-info">
-                  <a class="archive-title" href={`/${show.slug}`}>
-                    {show.title}
-                    <span class="episode-number">{` #${list[0]!.number}`}</span>
-                  </a>
-                  <Markdown class="station-desc" html={show.description} />
-                </span>
-                <span class="archive-date">{day(list[0]!.date)}</span>
-                <span class="archive-length">{duration(list[0]!.seconds)}</span>
-              </li>
-            );
-          })}
-        </ol>
-      )}
+    <section id="shows" class="shows-list" aria-labelledby="shows-heading">
+      <div class="section-head">
+        <h2 id="shows-heading" class="section-label">
+          Shows
+        </h2>
+        <p class="section-note">Each one also streams on its own, around the clock.</p>
+      </div>
+      <ol class="item-list">
+        {scheduled(shows).map((show) => (
+          <li class="item show-item">
+            <ChannelButton show={show} />
+            <span class="item-info">
+              <a class="item-title" href={`/${show.slug}`}>
+                {show.title}
+              </a>
+              <Markdown class="station-desc" html={show.description} />
+            </span>
+            <span class="item-date">
+              <Hours show={show} now={now} />
+            </span>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 };
 
-// A block in a list: its play button, title, date and length.
-const BlockRow = ({ show, blocks, i }: { show: Show; blocks: Block[]; i: number }) => (
-  <li class="archive-block">
-    <BlockButton show={show} blocks={blocks} i={i} />
-    <span class="archive-title">{blockTitle(show, blocks[i]!)}</span>
-    <span class="archive-date">{day(blocks[i]!.date)}</span>
-    <span class="archive-length">{duration(blocks[i]!.seconds)}</span>
+// "Sat, Nov 14": the station's day (TZ) an airing started.
+const day = (t: number) =>
+  new Date(t * 1000).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+
+// A past airing in a list: its day, when it ran and how many tracks it played.
+const AiringRow = ({ airing }: { airing: Airing }) => (
+  <li class="item item-past">
+    <span class="item-title">{day(airing.start)}</span>
+    <span class="item-date">
+      <Time at={new Date(airing.start * 1000)} />–<Time at={new Date(airing.end * 1000)} />
+    </span>
+    <span class="item-length">{`${airing.tracks} ${airing.tracks === 1 ? "track" : "tracks"}`}</span>
   </li>
 );
 
-// The track playing t seconds into an archive block, for the player (only
-// that track, never a block's track list), as /now.json does live, and when
-// it ends (`until`, seconds into the block; absent for the last), so the
-// player asks again only then.
-app.get(`/archive/:block{${BLOCK}}/now.json`, async (c) => {
-  const name = c.req.param("block");
-  const show = await getShow(name.slice(0, -11));
-  if (!show || !(await inArchive(name))) return c.notFound();
-  const t = c.req.query("t") ?? "";
-  if (!/^\d+(\.\d+)?$/.test(t)) return c.text("t: seconds into the block", 400);
-  const { track, until } = await trackAt(name, Number(t));
-  return c.json({ ...trackJson(track), until });
+// The track playing on a show's channel, as /now.json is for the station.
+app.get(`/:slug{${SLUG}}/now.json`, async (c) => {
+  const show = await getShow(c.req.param("slug"));
+  if (!show) return c.notFound();
+  return c.json(nowTrack(await latestPlay(show.slug), show.title));
 });
 
 // Also at /manifesto, its old name: /about once answered with a 301 there,
@@ -493,10 +437,10 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
       <p class="lead">Public radio for the streaming era: a nonprofit alternative to Spotify.</p>
       <section class="prose" aria-label="Introduction">
         <p>
-          {SITE_TITLE} is one station, on around the clock, where a person picks every song. Every show is
-          kept in an archive, so you can hear it again from the start, exactly as it went out. No ads. No
-          account. No tracking. Every play, live or archived, pays the artist directly, at the same rate for a
-          superstar as for a band you've never heard of.
+          {SITE_TITLE} is one station, on around the clock, where a person picks every song. Every show also
+          plays on its own stream, around the clock, so you can hear it whenever you like. No ads. No account.
+          No tracking. Every play pays the artist directly, at the same rate for a superstar as for a band
+          you've never heard of.
         </p>
         <p>It isn't trying to be a better Spotify. It's trying to be what Spotify's business can't be.</p>
       </section>
@@ -560,7 +504,7 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
         </ul>
         <p>
           On Spotify, the money goes through label deals, and most of it reaches the top artists. Here,
-          whenever the station plays a band, on the live stream or in an archived show, the band is paid
+          whenever the station plays a band, on the live stream or on a show's own stream, the band is paid
           directly, at the same rate as everyone else. You don't have to take our word for it: our{" "}
           <a href="/reports">reports</a> are public and show every play.
         </p>
@@ -574,21 +518,19 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
           the background of a day. Press play and you're hearing what everyone else tuned in is hearing.
         </p>
       </section>
-      <section class="prose" aria-labelledby="about-archive">
-        <h2 id="about-archive" class="label">
-          Every show, kept so you can hear it again
+      <section class="prose" aria-labelledby="about-channels">
+        <h2 id="about-channels" class="label">
+          Every show, around the clock
         </h2>
         <p>
-          Radio used to vanish as it aired. Here, every show is recorded in full as it goes out, at the same
-          quality as the stream, and its latest episodes stay on the show's page. Missed this morning's show?
-          Start it from the beginning tonight, exactly as it was broadcast. Each track's title, album and
-          artist appear as it plays, and when an episode ends, the one before it starts, so a show you like
-          can keep going for hours.
+          Radio used to be gone once its hours were over. Here, every show also has a stream of its own that
+          never stops: its music, picked the same way, at any hour. Missed this morning's show? Play it
+          tonight. Each track's title, album and artist appear as it plays, and a show's page lists when it
+          was on the station over the last two weeks.
         </p>
         <p>
-          An archived show plays the way radio does: at least five hours long, with no skipping, rewinding or
-          downloading, and it comes down within two weeks. Those are the license's conditions for an archive,
-          and keeping them means archive plays pay artists just as live plays do.
+          A show's stream plays the way radio does, with no skipping, rewinding or downloading, and its plays
+          pay artists just as the station's do.
         </p>
       </section>
       <section class="prose" aria-labelledby="about-not">
@@ -698,8 +640,7 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
   const slug = c.req.param("slug");
   const [show, shows, recent] = await Promise.all([getShow(slug), getShows(), recentPlays(6, slug)]);
   if (!show) return c.notFound();
-  const [{ show: on, play }, archived] = await Promise.all([onAir(shows), archive(shows)]);
-  const blocks = archived.get(show.slug) ?? [];
+  const [{ show: on, play }, past] = await Promise.all([onAir(shows), pastAirings(show.slug)]);
   const isOn = on?.slug === show.slug;
   const now = new Date();
   const next = nextSlot(show, now);
@@ -745,28 +686,46 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
           )}
         </div>
       </section>
-      {blocks.length > 0 && (
-        <section class="archive-show" aria-labelledby="show-archive">
-          <div class="section-head">
-            <h2 id="show-archive" class="label">
-              Past episodes
-            </h2>
-            <p class="section-note">Each plays from the start, as broadcast.</p>
-          </div>
-          <ol class="archive-blocks">
-            {blocks.map((_, i) => (
-              <BlockRow show={show} blocks={blocks} i={i} />
+      <section class="past-shows" aria-labelledby="show-channel">
+        <div class="section-head">
+          <h2 id="show-channel" class="label">
+            Around the clock
+          </h2>
+          <p class="section-note">This show's music, on a stream of its own.</p>
+        </div>
+        <ol class="item-list">
+          <li class="item show-item">
+            <ChannelButton show={show} />
+            <span class="item-info">
+              <span class="item-title">{`${show.title}, 24/7`}</span>
+            </span>
+          </li>
+        </ol>
+      </section>
+      <section id="past" class="past-shows" aria-labelledby="show-past">
+        <div class="section-head">
+          <h2 id="show-past" class="label">
+            Past shows
+          </h2>
+          <p class="section-note">On the station, the last two weeks.</p>
+        </div>
+        {past.length === 0 ? (
+          <p class="muted">Not on the station in the last two weeks.</p>
+        ) : (
+          <ol class="item-list">
+            {past.map((a) => (
+              <AiringRow airing={a} />
             ))}
           </ol>
-        </section>
-      )}
+        )}
+      </section>
       <History plays={(isOn ? recent.slice(1) : recent).slice(0, 5)} />
       <StreamUrl
         host={c.req.header("host") ?? ""}
         path={`/stream/${show.slug}`}
         label={`${show.title}, 24/7`}
       />
-      <Poll path={`/${show.slug}`} ids={["np", "history"]} />
+      <Poll path={`/${show.slug}`} ids={["np", "past", "history"]} />
     </main>,
     { title: show.title },
   );
@@ -775,7 +734,7 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
 app.get(`/djs/:dj{${SLUG}}`, async (c) => {
   const [dj, shows] = await Promise.all([getDj(c.req.param("dj")), getShows()]);
   if (!dj) return c.notFound();
-  const [{ show: on }, blocks] = await Promise.all([onAir(shows), archive(shows)]);
+  const { show: on } = await onAir(shows);
   const now = new Date();
   return c.render(
     <main class="page page-dj">
@@ -794,7 +753,7 @@ app.get(`/djs/:dj{${SLUG}}`, async (c) => {
         </h2>
         <div id="dj-shows-list" class="rows">
           {dj.shows.map((s) => (
-            <ShowRow show={s} now={now} onAir={s.slug === on?.slug} blocks={blocks.get(s.slug)} />
+            <ShowRow show={s} now={now} onAir={s.slug === on?.slug} />
           ))}
         </div>
       </section>

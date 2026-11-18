@@ -82,7 +82,7 @@ rs --delete shows "$HOST:radio/"
 # Pre-create bind-mounted dirs so Docker doesn't create them as root on first
 # run. The images are built (step 2), so `up` only swaps in what changed.
 $SSH "$HOST" 'cd radio &&
-  mkdir -p music plays logs covers archive &&
+  mkdir -p music plays logs covers &&
   docker compose up -d --no-build --remove-orphans &&
   sh scripts/reconcile.sh'
 rs --delete --delete-excluded music "$HOST:radio/"
@@ -92,11 +92,4 @@ rs --delete --delete-excluded covers "$HOST:radio/"
 # backup/plays/. Never deletes, and never touches the local plays/.
 mkdir -p backup/plays
 rsync -rt -e "$SSH" "$HOST:radio/plays/" backup/plays/
-# Likewise Icecast's access logs, where archive plays are counted
-# (scripts/archive-plays.sh backup/logs/access.log*).
-mkdir -p backup/logs
-rsync -rt -e "$SSH" --include='access.log*' --exclude='*' "$HOST:radio/logs/" backup/logs/
-# And the archive's track sidecars, which the reports read archive plays with.
-mkdir -p backup/archive/tracks
-rsync -rt -e "$SSH" "$HOST:radio/archive/tracks/" backup/archive/tracks/
 echo "Deployed to $IP"

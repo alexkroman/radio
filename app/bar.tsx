@@ -2,13 +2,14 @@
 // The fixed player bar, rendered in the browser with hono/jsx/dom
 // into #player (outside the swapped page, so it and the audio survive
 // navigation). app/client.ts sets what it shows with setBar(): the show and
-// track on air, or an archive block and the track playing in it; it always
-// shows, paused until played. It has no seek bar or download: the stream
-// plays from where it is, and blocks from the beginning.
+// track on air, or a show's own channel and the track playing on it; it
+// always shows, paused until played. It has no seek bar or download: a
+// stream plays from where it is.
 import { render, useLayoutEffect, useRef, useState } from "hono/jsx/dom";
 
-// station: what the button plays (the site's name, or an archive block's
-// title); title: the show on air, or the block; live: not an archive block.
+// station: what the button plays (the site's name, or a show's title for its
+// channel); title: the show on air, or the channel's show; live: the station,
+// not a channel.
 export type BarState = {
   station: string;
   title: string;
@@ -68,16 +69,8 @@ function Bar({ onToggle }: { onToggle: () => void }) {
       <div class="bar-text">
         <span id="bar-track">{parts.join(" · ")}</span>
         <span class="bar-status">
-          {s.live ? (
-            s.playing && <span class="dot" aria-hidden="true" />
-          ) : (
-            // Replay: an archive block, from its start.
-            <svg width={10} height={10} viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="3" />
-              <path d="M20 4v6h-6" fill="none" stroke="currentColor" stroke-width="3" />
-            </svg>
-          )}
-          <span>{s.live ? `${s.title} · Live` : s.title}</span>
+          {s.playing && <span class="dot" aria-hidden="true" />}
+          <span>{`${s.title} · ${s.live ? "Live" : "24/7"}`}</span>
         </span>
       </div>
       <button

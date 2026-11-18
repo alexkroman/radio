@@ -1,7 +1,6 @@
 // SoundExchange reports, mounted at /reports (linked from the site nav): the
 // last 12 months, each a Report of Use from the play log at /reports/<YYYY-MM>.
 import { Hono } from "hono";
-import { archivePerformances } from "./archive-plays.ts";
 import { channelPlays, monthOf, monthPlays, type Track } from "./plays.ts";
 import { SiteHeader } from "./ui.tsx";
 
@@ -21,11 +20,10 @@ const HEADER = [
 const field = (v: string | number) =>
   typeof v === "number" ? String(v) : `^${v.toUpperCase().replace(/[|^]/g, "")}^`;
 
-// One row per song across all shows, their channels and the archive. Each
-// live play on the station counts its listeners (at least 1); each on a
-// show's channel counts its listeners (a channel plays around the clock, and
-// is mostly heard by no one); each archive play counts once for each track of
-// the block it reached (app/archive-plays.ts). ISRCs come from tags written
+// One row per song across all shows and their channels. Each play on the
+// station counts its listeners (at least 1); each on a show's channel counts
+// its listeners (a channel plays around the clock, and is mostly heard by no
+// one). ISRCs come from tags written
 // by scripts/import.sh (beet mbsync).
 async function report(month: string): Promise<string> {
   const songs = new Map<string, Track & { count: number }>();
@@ -37,7 +35,6 @@ async function report(month: string): Promise<string> {
   };
   for (const p of await monthPlays(month)) add(p, Math.max(p.listeners, 1));
   for (const p of await channelPlays(month)) if (p.listeners > 0) add(p, p.listeners);
-  for (const t of await archivePerformances(month)) add(t, 1);
   const rows: (string | number)[][] = [HEADER];
   const sorted = [...songs.values()].sort(
     (a, b) => b.count - a.count || a.artist.localeCompare(b.artist) || a.title.localeCompare(b.title),
@@ -60,8 +57,8 @@ reports.get("/", (c) => {
       <SiteHeader />
       <h1 class="display">Reports</h1>
       <p class="lead">
-        Our monthly Reports of Use for SoundExchange: every song the station played, live or from the archive,
-        and how many people heard it.
+        Our monthly Reports of Use for SoundExchange: every song the station and the shows' own streams
+        played, and how many people heard it.
       </p>
       <table class="reports-table">
         {months.map((m) => (

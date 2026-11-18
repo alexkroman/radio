@@ -44,7 +44,7 @@ settings.request.timeout := 45.
 # And a channel per show: its music around the clock, mount /stream/<slug>
 # (public at /stream/<slug>, linked from the show's page), with a playlist,
 # performance complement and play log (/plays/YYYY-MM.<slug>.jsonl, for the
-# reports) of its own. A channel isn't archived and doesn't count as on air.
+# reports) of its own. A channel doesn't count as on air.
 
 # A show's hours, from `hours: <start>-<end>` in its front matter: whole hours
 # on a 24-hour clock in local time (TZ), the end not included; 22-6 runs past
@@ -251,85 +251,9 @@ def complement_played_now(ch, m, now) =
   )
 end
 
-# The archive: the program as broadcast (`radio`, the final bus, so anything
-# mixed into it is recorded too), one MP3 per show block, the same 256 kbps
-# as the stream. A block follows the songs, not the clock: it starts with
-# its show's first track, as the crossfade into it starts (the song before it
-# fading out), and ends ARCHIVE_TAIL seconds (default 12, the crossfade's
-# length) after the next show's first track starts, as its own last track
-# finishes fading out. So a 17-23 show's block runs from its first track,
-# a little after 17:00 (the 16:00 show's last track plays to its end first),
-# to the end of its last track, a little after 23:00. A block
-# under five hours isn't archived, so give shows more than that (every
-# show has six) for restarts and outages to fit in. The file is
-# /archive/recording/<show>-<YYYY-MM-DD>.mp3 (the date the block started)
-# while it's recorded; when it ends it moves to /archive/blocks/, which
-# Icecast serves and the app lists (/archive), if it's at least
-# ARCHIVE_MIN_SECONDS long (default 5 hours: an archived program under the
-# statutory license must be), else to /archive/short/, which nothing serves
-# and scripts/prune-archive.sh empties. A restart mid-block appends to the
-# same file. A recording is its own output: an error writing it (a full
-# disk) retries every 10 s and never touches the stream.
-#
-# Each block has a sidecar, /archive/tracks/<show>-<YYYY-MM-DD>.jsonl: one
-# line per track, with its offset in the file in seconds, so a player can
-# show each track's title, album and artist while it plays (the license
-# requires that), and the reports can count archive plays per track. The
-# sidecars are kept after their blocks (for the reports).
-# A file's name without its folder and extension: a show's slug from its
-# shows/<slug>.md, a block's name from its archive file.
+# A show's slug, from its shows/<slug>.md.
 def slug_of(f) =
   path.remove_extension(path.basename(f))
-end
-
-archive_recording = "/archive/recording"
-archive_blocks = "/archive/blocks"
-archive_short = "/archive/short"
-archive_tracks = "/archive/tracks"
-archive_bytes_per_second = 32000.
-archive_tail = float_of_string(default=12., environment.get("ARCHIVE_TAIL"))
-archive_min = float_of_string(default=18000., environment.get("ARCHIVE_MIN_SECONDS"))
-
-# The longest a show's last track can run past its hours (seconds; tracks
-# are at most 20 min, see autocue above). A show still "on air" after that
-# isn't playing (the next show has nothing to play, so it's silence): its
-# block ends, and the show whose hours it is records the silence instead.
-archive_overrun = float_of_string(default=1200., environment.get("ARCHIVE_OVERRUN"))
-
-# The show on air by its tracks, and when its latest track started ("" when
-# none has played since startup), and the show before it, and when it went
-# off (its block's tail). Tracks played by hand (onair) don't count.
-airing = ref(("", 0.))
-handover = ref(("", 0.))
-
-# A block's sidecar.
-def sidecar_path(name) =
-  "#{archive_tracks}/#{name}.jsonl"
-end
-
-# The show a recording is for.
-def slug_of_block(f) =
-  m = r/^(.+)-\d{4}-\d{2}-\d{2}\.mp3$/.exec(path.basename(f))
-  list.assoc(default="", 1, m)
-end
-
-# The track playing now, for a block that opens mid-track (its first track).
-no_track = {title = "", artist = "", album = "", label = "", isrc = "", cover = ""}
-current_track = ref(no_track)
-
-# A sidecar line: a track at an offset (seconds) in a block's file.
-def sidecar_line(offset, t) =
-  line =
-    {
-      offset = offset,
-      title = t.title,
-      artist = t.artist,
-      album = t.album,
-      label = t.label,
-      isrc = t.isrc,
-      cover = t.cover
-    }
-  "#{json.stringify(compact=true, line)}\n"
 end
 
 # A track's title, artist, album, label, ISRC and cover (pre-extracted by
@@ -348,40 +272,6 @@ def track_info(slug, m) =
     isrc = tag(or_tag="tsrc", "isrc"),
     cover = file.exists("/covers/#{cover}") ? cover : ""
   }
-end
-
-# A show's track starts (as the crossfade into it starts): when it's another
-# show's than the last, that show's block ends (after its tail) and this
-# one's starts. Add the track, at the file's length so far, to the sidecar of
-# every block being recorded but one in its tail (whose last track is still
-# fading out). Synchronous, so a block that opens now starts with this track.
-def archive_track(slug, m, now) =
-  t = track_info(slug, m)
-  current_track := t
-  if
-    onair() == ""
-  then
-    let (was, _) = airing()
-    if was != slug then handover := (was, now) end
-    airing := (slug, now)
-  end
-  let (ending, ended_at) = handover()
-  list.iter(
-    fun (f) ->
-      if
-        slug_of_block(f) == slug or not (slug_of_block(f) == ending and now - ended_at < archive_tail)
-      then
-        try
-          offset = float_of_int(file.size(f)) / archive_bytes_per_second
-          file.write(append=true, data=sidecar_line(offset, t), sidecar_path(slug_of(f)))
-        catch e do
-          log.severe(
-            "Archive: couldn't add a track to #{f}'s sidecar: #{e}"
-          )
-        end
-      end,
-    file.ls(absolute=true, pattern="*.mp3", archive_recording)
-  )
 end
 
 # A file's tags, read once per path (quickly: without autocue's measuring).
@@ -407,7 +297,7 @@ def file_tags(uri) =
 end
 
 # A show's source, on a channel (ch, its complement): the station's, which
-# records the archive and logs to /plays/YYYY-MM.jsonl, or the show's own
+# logs to /plays/YYYY-MM.jsonl, or the show's own
 # (~channel=true), which logs to /plays/YYYY-MM.<slug>.jsonl. `mount`: the
 # Icecast mount its listeners are counted on.
 def show(ch, ~channel=false, ~mount, f) =
@@ -458,7 +348,7 @@ def show(ch, ~channel=false, ~mount, f) =
       # The playlist tries its next candidate at once, and when the
       # complement holds every one back it would spin through them, thousands
       # a second, starving the stream's clock (it falls behind, and the
-      # archive records slower than real time). A pause per refusal keeps that
+      # outputs fall behind). A pause per refusal keeps that
       # to a few a second. It runs on a scheduler queue, not the clock's
       # thread, and the next track is picked while this one plays, so it
       # costs no audio; but the queue is held until a candidate is allowed
@@ -503,7 +393,6 @@ def show(ch, ~channel=false, ~mount, f) =
         started_now(m)
         complement_played_now(ch, m, now)
         starts := list.prefix(10, (list.assoc(default="", "filename", m), now)::starts())
-        if not channel then archive_track(slug, m, now) end
       end
   )
 
@@ -688,8 +577,7 @@ end
 # would build its own "Artist - Title".
 settings.encoder.metadata.export := list.append(settings.encoder.metadata.export(), ["song"])
 
-# A channel's final bus, sent to Icecast mount `mount` (returned, for the
-# archive): crossfaded, never failing, limited, with its metadata in UTF-8 and
+# A channel's final bus, sent to Icecast mount `mount`: crossfaded, never failing, limited, with its metadata in UTF-8 and
 # the ICY title. icecast/silence.mp3 (Icecast's fallback while this restarts;
 # see icecast/config.sh) is the same format: change both together.
 def broadcast((mount:string), music) =
@@ -712,164 +600,18 @@ def broadcast((mount:string), music) =
     mount=mount,
     radio
   )
-  radio
 end
-radio = broadcast("stream", music)
+broadcast("stream", music)
 
 # Each show's own channel: its music around the clock.
 list.iter(
   fun (f) ->
     begin
       mount = "stream/#{slug_of(f)}"
-      ignore(broadcast(mount, show(complement_channel(), channel=true, mount=mount, f)))
+      broadcast(mount, show(complement_channel(), channel=true, mount=mount, f))
     end,
   shows
 )
-
-# "YYYY-MM-DD" for a local date.
-def ymd(t) =
-  pad = fun (n) -> n < 10 ? "0#{n}" : "#{n}"
-  "#{t.year}-#{pad(t.month)}-#{pad(t.day)}"
-end
-
-# Whether a show's block is being recorded. While a show is on air by its
-# tracks (airing: within its hours, or its last track running over them),
-# that show's, from its first track (its fade in) until ARCHIVE_TAIL s after
-# the next show's first track (its last track's fade out). Otherwise (after
-# a restart until a track starts, or silence), the show whose hours it is.
-def recording_on(slug) =
-  fun () ->
-    begin
-      let (on, started) = airing()
-      hour = time.local().hour
-      if
-        on != "" and (within(hour, hours_of(on)) or time() - started < archive_overrun)
-      then
-        let (ending, ended_at) = handover()
-        on == slug or (ending == slug and time() - ended_at < archive_tail)
-      else
-        within(hour, hours_of(slug))
-      end
-    end
-end
-
-# The block a show is recording: "<show>-<YYYY-MM-DD>", the date it started
-# (yesterday for 22-6 at 2:00, or for its last track running over at 6:00).
-def block_name(slug) =
-  let (start, _) = hours_of(slug)
-  now = time.local()
-  day =
-    if
-      now.hour >= start
-    then
-      now
-    else
-      # Two hours before today's midnight, DST or not.
-      time.local(time() - float_of_int(now.hour * 3600 + now.min * 60 + now.sec + 7200))
-    end
-  "#{slug}-#{ymd(day)}"
-end
-
-# A block ended: to blocks/ if long enough, else short/.
-def finish_block(f) =
-  name = path.basename(f)
-  seconds = float_of_int(file.size(f)) / archive_bytes_per_second
-  dest = seconds >= archive_min ? archive_blocks : archive_short
-  if
-    dest == archive_short
-  then
-    log.severe(
-      "Archive: #{name} is only #{seconds} s (under #{archive_min} s): not archived"
-    )
-  else
-    log.important(
-      "Archive: #{name} finished (#{seconds} s)"
-    )
-  end
-  try
-    file.move(force=true, f, "#{dest}/#{name}")
-  catch e do
-    log.severe(
-      "Archive: couldn't move #{f} to #{dest}: #{e}"
-    )
-  end
-end
-
-# Whether a recording's block is over: its show isn't recording, or is
-# recording another block (another day's, for a show on all day, or after
-# being down from one block into the next).
-def block_ended(f) =
-  slug = slug_of_block(f)
-  on = recording_on(slug)
-  not on() or path.basename(f) != "#{block_name(slug)}.mp3"
-end
-
-# Blocks that ended while this wasn't running.
-def finish_if_ended(f) =
-  if block_ended(f) then finish_block(f) end
-end
-list.iter(finish_if_ended, file.ls(absolute=true, pattern="*.mp3", archive_recording))
-
-# Each show's recorder: on while its block is, so a new file each block.
-def recorder(f) =
-  slug = slug_of(f)
-  on = recording_on(slug)
-
-  # The block in the file open now.
-  opened = ref("")
-  output.file(
-    id="archive-#{slug}",
-    fallible=true,
-    %mp3(bitrate = 256),
-    # The same block after a restart: carry on in its file.
-    append=true,
-    # Each file closes when its block ends (the switch below goes off, or the
-    # day changes for a show on all day), or when this stops (a restart):
-    # only an ended block is finished.
-    reopen_when=fun () -> opened() != "" and block_name(slug) != opened(),
-    reopen_delay=5.,
-    on_close=fun (f) -> if block_ended(f) then finish_block(f) end,
-    reopen_on_error=fun (e) ->
-      begin
-        log.severe(
-          "Archive: recording #{slug} failed, retrying in 10 s: #{e}"
-        )
-        10.
-      end,
-    {
-      begin
-        name = block_name(slug)
-        opened := name
-        target = "#{archive_recording}/#{name}.mp3"
-
-        # A block that ended and starts again (its hours changed back) carries on.
-        list.iter(
-          fun (d) ->
-            if
-              not file.exists(target) and file.exists("#{d}/#{name}.mp3")
-            then
-              file.move("#{d}/#{name}.mp3", target)
-            end,
-          [archive_blocks, archive_short]
-        )
-
-        # A new block starts with the track playing.
-        if
-          not file.exists(target)
-        then
-          file.write(
-            data=current_track().title == "" ? "" : sidecar_line(0., current_track()),
-            sidecar_path(name)
-          )
-        end
-        target
-      end
-    },
-    # No track titles in the file: they're in the sidecar.
-    switch(track_sensitive=false, [(on, source.drop.metadata(radio))])
-  )
-end
-list.iter(recorder, shows)
 
 # The shows this process plays, for scripts/reconcile.sh to compare with /shows.
 file.write(data=string.concat(separator="\n", shows), "/tmp/shows")

@@ -76,28 +76,6 @@ export function mp3Format(bytes: Buffer): { kbps: number; sampleRate: number; ch
   return undefined;
 }
 
-// A whole response: status, headers and body.
-export function get(path: string, headers: Record<string, string> = {}, method = "GET") {
-  return new Promise<{ status?: number; headers: Record<string, unknown>; body: Buffer }>(
-    (resolve, reject) => {
-      const req = https(
-        new URL(path, BASE),
-        { method, headers, rejectUnauthorized: false, timeout: 30_000 },
-        (res) => {
-          const chunks: Buffer[] = [];
-          res.on("data", (c: Buffer) => chunks.push(c));
-          res.on("end", () =>
-            resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }),
-          );
-        },
-      );
-      req.on("timeout", () => req.destroy(new Error(`timeout reading ${path}`)));
-      req.on("error", reject);
-      req.end();
-    },
-  );
-}
-
 // Stay connected to a stream (discarding audio) until the returned function is called.
 export function listen(path: string): () => void {
   const req = https(new URL(path, BASE), { rejectUnauthorized: false }, (res) => res.resume());
@@ -179,12 +157,6 @@ export const player = (page: Page) =>
   page.evaluate(() => {
     const a = (window as unknown as { audio: HTMLAudioElement }).audio;
     return { src: a.getAttribute("src"), playing: !a.paused && a.readyState >= 3 };
-  });
-// The lock screen's title, artist and album (navigator.mediaSession).
-export const lockScreen = (page: Page) =>
-  page.evaluate(() => {
-    const m = navigator.mediaSession.metadata;
-    return m && { title: m.title, artist: m.artist, album: m.album };
   });
 
 export const playerState = async (page: Page) => ((await player(page)).playing ? "playing" : "stopped");

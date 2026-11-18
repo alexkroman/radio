@@ -1,7 +1,7 @@
 // Fails (exit 1) unless the shows in shows/ (or SHOWS_DIR) cover every hour of
 // the day exactly once, saying what's wrong. radio.liq schedules every
 // shows/*.md, so a file the site can't use as a show (a reserved slug such as
-// "archive", or a name that isn't lowercase letters, digits and hyphens) is
+// "about", or a name that isn't lowercase letters, digits and hyphens) is
 // an error too. Run by pre-commit (and so CI) on a change to shows/, and by
 // scripts/deploy.sh before it syncs anything:
 //   node app/check-schedule.ts

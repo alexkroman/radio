@@ -1,8 +1,8 @@
 // Edge cases: odd titles and show files, missing music, traversal,
 // listener counting. Fixtures: test/fixtures/{shows,music}/{edge,plain,empty,quiet}.
 import { expect, test } from "@playwright/test";
-import { archivePerformances } from "../app/archive-plays.ts";
-import { listen, loggedPlays, month, onAir, performances, streamHead, waitForTrack } from "./helpers.ts";
+import type { Play } from "../app/plays.ts";
+import { listen, loggedPlays, onAir, performances, streamHead, waitForTrack } from "./helpers.ts";
 
 test("titles with unicode, pipes and HTML show exactly as tagged", async ({ page }) => {
   await onAir("edge");
@@ -113,15 +113,12 @@ test("the report counts every listener connected when a track starts", async ({ 
   stops.forEach((stop) => stop());
 });
 
-test("the report matches the play log and the archive plays", async ({ request }) => {
+test("the report matches the play logs, the station's and the channels'", async ({ request }) => {
   await expect(async () => {
-    const live = (await loggedPlays())
-      .filter((p) => p.title === "Midnight")
-      .reduce((n, p) => n + Math.max(p.listeners, 1), 0);
-    // test/archive.spec.ts played the night blocks, the first of which starts with Midnight.
-    const archived = (await archivePerformances(month)).filter((t) => t.title === "Midnight").length;
-    expect(archived).toBeGreaterThan(0);
-    const expected = live + archived;
-    expect(await performances(request, "GAMMA", "MIDNIGHT")).toBe(expected);
+    const midnight = (plays: Play[]) => plays.filter((p) => p.title === "Midnight");
+    // At least 1 a play on the station; on a channel, its listeners.
+    const station = midnight(await loggedPlays()).reduce((n, p) => n + Math.max(p.listeners, 1), 0);
+    const channel = midnight(await loggedPlays("night")).reduce((n, p) => n + p.listeners, 0);
+    expect(await performances(request, "GAMMA", "MIDNIGHT")).toBe(station + channel);
   }).toPass();
 });

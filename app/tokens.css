@@ -20,7 +20,6 @@
   --color-surface-text: #ffffff;
   --color-surface-border: transparent;
   --color-surface-outline: #4a4a4a; /* outlined buttons on the player bar */
-  --color-outline: #b5b5b5; /* outlined pill buttons ("Last episode") */
   --color-on-fill: #ffffff; /* icon on a filled (--color-ink) play button */
   --art-outline: transparent; /* hairline around album covers */
 
@@ -53,7 +52,7 @@
   --page-pad-top: 72px;
   --page-pad-x: 32px;
   --page-pad-bottom: 96px;
-  --width-station: 880px; /* home, show, DJ and archive pages */
+  --width-station: 880px; /* home, show and DJ pages */
   --width-prose: 640px; /* About */
 
   /* Radius */
@@ -86,7 +85,6 @@
     --color-surface: #1a1a1a; /* player bar is a raised dark surface, NOT inverted */
     --color-surface-text: #f2f2f2;
     --color-surface-border: #2a2a2a;
-    --color-outline: #4a4a4a;
     --color-on-fill: #111111;
     --art-outline: rgb(255 255 255 / 8%);
   }

@@ -2,8 +2,8 @@
 
 A small internet radio station: stock open-source services plus one small TypeScript app.
 
-- **Liquidsoap** plays one 24/7 stream, each show at its hours of the day, on shuffle with automatic cue points, loudness levelling and crossfades, appends every play (tags and listener count) to a monthly log, `plays/YYYY-MM.jsonl`, and records each show block to `archive/`.
-- **Icecast** serves the stream, with track titles (UTF-8) in the stream for players like VLC, and the archive's recorded blocks.
+- **Liquidsoap** plays one 24/7 stream, each show at its hours of the day, on shuffle with automatic cue points, loudness levelling and crossfades, appends every play (tags and listener count) to a monthly log, `plays/YYYY-MM.jsonl`, and records each show block to `archive/`. Each show also has a 24/7 stream of its own, looping its archived blocks.
+- **Icecast** serves the streams, with track titles (UTF-8) in the stream for players like VLC.
 - **`app/`** ([Hono](https://hono.dev)) serves what's on air, the schedule, the show pages and the SoundExchange reports (from the play log). Its browser code (htmx, fonts) is bundled from npm, so nothing loads from a CDN, and plays the stream in a plain `<audio>` element.
 - **Caddy** provides HTTPS and is the only public entry point.
 - **Docker** restarts any service that crashes.
@@ -39,7 +39,7 @@ A track that goes silent for 10 seconds (a hidden track after minutes of silence
 
 ## Shows
 
-The station is one 24/7 stream at `/stream`. Each `shows/<slug>.md` is a show: it plays `music/<slug>/` on shuffle during its hours, and has a page at `/<slug>`. Slugs are lowercase letters, digits and hyphens. The front matter sets the title and hours; the body is the description shown on the page:
+The station is one 24/7 stream at `/stream`. Each `shows/<slug>.md` is a show: it plays `music/<slug>/` on shuffle during its hours, and has a page at `/<slug>`. Each show also has its own stream at `/stream/<slug>`, played from its page: its archived blocks in a loop (below). Icecast takes up to 10 shows (`ICECAST_MAX_SOURCES` in `compose.yml`). Slugs are lowercase letters, digits and hyphens. The front matter sets the title and hours; the body is the description shown on the page:
 
 ```md
 ---
@@ -94,41 +94,41 @@ The show files are in the repo. Adding or removing a show needs a Liquidsoap res
 
 Liquidsoap records the program as broadcast (the final mix, after the limiter) at the stream's 256 kbps, one MP3 per show block: `archive/recording/<show>-<YYYY-MM-DD>.mp3` while it records, the date being the day the block started. A block follows the songs, not the clock: it starts with its show's first track, as the crossfade into it starts (the show before's last track plays to its end first, so a little after the hour), and ends as its own last track finishes fading out into the next show's first (`ARCHIVE_TAIL`, 12 s, after that track starts), so Drift's runs from a little after 13:00 to a little after 19:00. A block's sidecar lists only its own show's tracks. Give every show more than five hours: every show here has six, so a few restarts or a short outage don't take a block under the minimum. When it ends it moves to `archive/blocks/` if it's at least five hours long (an archived program under the statutory license must be), else to `archive/short/`, which nothing serves. A Liquidsoap restart mid-block carries on in the same file, and an error writing it (a full disk) is retried every 10 s without touching the stream.
 
-Each block has a sidecar, `archive/tracks/<show>-<YYYY-MM-DD>.jsonl`: a line per track with its offset in the file and its tags. The player uses it to show each track's title, artist and album while it plays, never before (the block's `now.json?t=<seconds>` answers with the one track playing then, and when it ends, so the player asks again only then), and the reports use it to count archive plays per track. Sidecars are kept after their blocks; deploys back them up to `backup/archive/tracks/`.
-
-A show's page lists its blocks, newest first, numbered (Frequency #12: the days since the show's first block) with date and length, and the home page's schedule offers each show's latest. There's no archive page of its own. They play in the site's player from the beginning, then the show's block before, with no seek bar and no download. Icecast serves the files at `/archive/<show>-<date>.mp3` (Caddy passes only GET there). Range requests work, so a player that drops (a blip, a network change) picks up where it was instead of starting over: the browser resumes a short blip itself, and the site's player retries a longer drop for two minutes at the same point. Paused (a tap, a call, the lock screen) and played again, a block also picks up where it was.
+Each block has a sidecar, `archive/tracks/<show>-<YYYY-MM-DD>.jsonl`: a line per track with its offset in the file and its tags. Sidecars are kept after their blocks.
 
 Retention: the `archive-prune` service runs `scripts/prune-archive.sh` at start and every hour (so nightly too). It deletes blocks before they've been up two weeks (at 14 days less an hour), then all but the newest `ARCHIVE_KEEP` (`.env`, default 1) of each show, and anything in `archive/short/`. An hour is ~115 MB, so the default keeps ~2.8 GB of finished blocks, plus up to ~1.3 GB being recorded.
 
-Plays: each request for a block is a line in Icecast's `logs/access.log` (kept when rotated, as `access.log.<date>`; deploys back them up to `backup/logs/`), apart from `/stream`'s; a listener's requests for a block that overlap or follow within two minutes (a resume, a probe) are one play. The SoundExchange reports count each archive play once for every track it reached (`app/archive-plays.ts`), and `scripts/archive-plays.sh` prints plays and hours connected per block per day:
+### Each show's stream
 
-```sh
-scripts/archive-plays.sh                    # logs/access.log* on the server
-scripts/archive-plays.sh backup/logs/access.log*
-```
+`/stream/<slug>` plays the show's archived blocks (`archive/blocks/`) around the clock: one picked at random (not the one just played, when there's another), then another, as recorded (no autocue, no crossfade between blocks). Each track in a block, from its sidecar, plays as its own segment of the block's file, cut at its offset and tagged with its title, artist and album, so it's a track change like the station's. With the default `ARCHIVE_KEEP` of 1 that's the show's latest block over and over; keep more for variety. Until a show has a block, its stream is silence, and the site offers no play button for it (the app reads `archive/blocks`). As each one starts it's in the stream's ICY title, and a line in the show's stream's play log, `plays/YYYY-MM.<slug>.jsonl`, with the stream's listeners, which the site's player shows (`/<slug>/now.json`) and the reports count. The blocks were recorded from the station, which kept the performance complement; nothing checks it again where one block runs into the next.
+
+### Past shows
+
+A show's page lists when it was on the station over the last two weeks: each stretch of its plays in a row in the play log (`plays/YYYY-MM.jsonl`, this month's and last), with its day, its times and how many tracks it played.
 
 ## The statutory license
 
 The station plays music under the statutory license for noncommercial webcasting (17 U.S.C. § 114(d)(2), § 112(e); 37 C.F.R. Parts 380 and 370). `/about` links each provision and answers listeners' questions about them. What the code does to keep its conditions:
 
-- **Performance complement** (§ 114(j)(13)): `radio.liq` refuses any track that would make more than 4 by one artist (3 in a row) or 3 from one album (2 in a row) in three hours, across the station. A show with nothing else plays silence until it can. `app/complement.ts` checks a play log the same way (the e2e suite checks every play).
-- **No advance announcements** (§ 114(d)(2)(C)(ii)): the schedule names shows, never tracks; archive blocks list no tracks.
-- **Archived programs** (§ 114(d)(2)(C)(iii)): at least five hours, down before two weeks (above).
+- **Performance complement** (§ 114(j)(13)): `radio.liq` refuses any track that would make more than 4 by one artist (3 in a row) or 3 from one album (2 in a row) in three hours, on the station. A show with nothing else plays silence until it can. `app/complement.ts` checks a play log the same way (the e2e suite checks every play).
+- **No advance announcements** (§ 114(d)(2)(C)(ii)): the schedule names shows, never tracks.
+- **Archived programs** (§ 114(d)(2)(C)(iii)): a show's stream plays only blocks of at least five hours, none up two weeks (above).
 - **No copying** (§ 114(d)(2)(C)(vi)): no downloads, no seeking.
 - **Track identification** (§ 114(d)(2)(C)(ix)): title, artist and album while each track plays, on the site, the lock screen and the stream's ICY title (`Artist - Title (Album)`).
-- **Reports of use** (37 C.F.R. Part 370): `/reports`, live and archive performances.
+- **Reports of use** (37 C.F.R. Part 370): `/reports`, every play on the station and the shows' streams, each counting its stream's listeners: the more of the count as it started and as it ended (Liquidsoap logs the second when the next track starts, as an end line). A song nobody heard isn't listed.
 
 Not in code: filing the Notice of Use with the Copyright Office, paying SoundExchange, and anything a lawyer would add.
 
 ## Where things are
 
-| URL                          | What's there                                        |
-| ---------------------------- | --------------------------------------------------- |
-| `https://localhost/`         | What's on air, the player, schedule                 |
-| `https://localhost/<slug>`   | A show's hours, now playing, past episodes, history |
-| `https://localhost/stream`   | The stream for apps and VLC                         |
-| `https://localhost/djs/<dj>` | A DJ's profile and shows                            |
-| `https://localhost/reports`  | Monthly SoundExchange reports                       |
+| URL                               | What's there                                                 |
+| --------------------------------- | ------------------------------------------------------------ |
+| `https://localhost/`              | What's on air, the player, schedule                          |
+| `https://localhost/<slug>`        | A show's hours, now playing, its stream, past shows, history |
+| `https://localhost/stream`        | The stream for apps and VLC                                  |
+| `https://localhost/stream/<slug>` | A show's own 24/7 stream (its archived blocks)               |
+| `https://localhost/djs/<dj>`      | A DJ's profile and shows                                     |
+| `https://localhost/reports`       | Monthly SoundExchange reports                                |
 
 Set `SITE_PASSWORD` in `.env` to put the show pages behind a login form; the stream stays public so apps can play it. After 10 wrong passwords from one address, logins are refused for 15 minutes. Nothing else is public.
 

@@ -305,16 +305,7 @@ current_track = ref(no_track)
 
 # A sidecar line: a track at an offset (seconds) in a block's file.
 def sidecar_line(offset, t) =
-  line =
-    {
-      offset = offset,
-      title = t.title,
-      artist = t.artist,
-      album = t.album,
-      label = t.label,
-      isrc = t.isrc,
-      cover = t.cover
-    }
+  line = t.{offset = offset}
   "#{json.stringify(compact=true, line)}\n"
 end
 
@@ -332,7 +323,9 @@ def track_info(slug, m) =
     album = tag("album"),
     label = tag(or_tag="publisher", "label"),
     isrc = tag(or_tag="tsrc", "isrc"),
-    cover = file.exists("/covers/#{cover}") ? cover : ""
+    cover =
+      # An archived track's, given (block_stream), else the file's if there is one.
+      list.assoc(default=file.exists("/covers/#{cover}") ? cover : "", "archive_cover", m)
   }
 end
 
@@ -392,6 +385,37 @@ def file_tags(uri) =
   end
 end
 
+# A stream's play log (/plays/YYYY-MM<suffix>.jsonl): f(start, show, t)
+# appends a play of track t (starting at `start`) with the stream's listeners
+# now, and before it, for the stream's play before it (just ended), an end
+# line with the same count, {time, listeners_at_end}. A play's performances
+# are the more of the two (app/plays.ts), so a listener who tunes in
+# mid-track counts for that track. Each line goes in its own play's month.
+def play_log(mount, suffix) =
+  last = ref(-1.)
+  def file_for(start) =
+    t = time.local(start)
+    pad = fun (n) -> n < 10 ? "0#{n}" : "#{n}"
+    "/plays/#{t.year}-#{pad(t.month)}#{suffix}.jsonl"
+  end
+  def write(start, line) =
+    file.write(append=true, data="#{json.stringify(compact=true, line)}\n", file_for(start))
+  end
+  fun (start, show, t) ->
+    begin
+      # Which play this one ends, claimed before the listener count's HTTP
+      # call, so two tracks starting close together each end their own.
+      ended = last()
+      last := start
+      n = listeners(mount)
+      if ended >= 0. then write(ended, {time = ended, listeners_at_end = n}) end
+      write(start, t.{time = start, show = show, listeners = n})
+    end
+end
+
+# The station's play log, which every show's tracks go to while on air.
+station_log = play_log("stream", "")
+
 # A show's source.
 def show(f) =
   slug = slug_of(f)
@@ -449,7 +473,7 @@ def show(f) =
       # to a few a second. It runs on the playlist's own thread, not the
       # clock's, and the next track is picked while this one plays, so it
       # costs no audio.
-      sleep(0.1)
+      thread.pause(0.1)
       false
     elsif
       rejected() < 20 and list.exists(fun (a) -> list.mem(a, recent_artists()), artists)
@@ -499,26 +523,11 @@ def show(f) =
   tracks.on_track(
     synchronous=false,
     fun (m) ->
-      begin
-        t = track_info(slug, m)
-        play =
-          {
-            time = list.assoc(default=time(), list.assoc(default="", "filename", m), starts()),
-            show = slug,
-            artist = t.artist,
-            title = t.title,
-            album = t.album,
-            label = t.label,
-            isrc = t.isrc,
-            cover = t.cover,
-            listeners = listeners("stream")
-          }
-        file.write(
-          append=true,
-          data="#{json.stringify(compact=true, play)}\n",
-          "/plays/#{time.string('%Y-%m')}.jsonl"
-        )
-      end
+      station_log(
+        list.assoc(default=time(), list.assoc(default="", "filename", m), starts()),
+        slug,
+        track_info(slug, m)
+      )
   )
 
   # Loudness: autocue measures each track and sets liq_amplify (gain to reach
@@ -669,20 +678,25 @@ radio = metadata.map(update=true, icy_song, radio)
 # would build its own "Artist - Title".
 settings.encoder.metadata.export := list.append(settings.encoder.metadata.export(), ["song"])
 
-# icecast/silence.mp3 (Icecast's fallback while this restarts; see
-# icecast/config.sh) is the same format: change both together.
-output.icecast(
-  %mp3(bitrate = 256),
-  encoding="UTF-8",
-  # Only "song" ("Artist - Title"), which Icecast shows players as the
-  # StreamTitle. Sending artist and title too made Icecast warn on every
-  # track that it got "song" but also "artist" and/or "title".
-  icy_metadata=["song"],
-  host="icecast",
-  password=environment.get("PASSWORD"),
-  mount="stream",
-  radio
-)
+# A stream to Icecast mount `mount`. icecast/silence.mp3 (Icecast's fallback
+# while this restarts; see icecast/config.sh) is the same format: change
+# both together.
+def to_icecast((mount:string), s) =
+  output.icecast(
+    id=mount,
+    %mp3(bitrate = 256),
+    encoding="UTF-8",
+    # Only "song" ("Artist - Title"), which Icecast shows players as the
+    # StreamTitle. Sending artist and title too made Icecast warn on every
+    # track that it got "song" but also "artist" and/or "title".
+    icy_metadata=["song"],
+    host="icecast",
+    password=environment.get("PASSWORD"),
+    mount=mount,
+    s
+  )
+end
+to_icecast("stream", radio)
 
 # "YYYY-MM-DD" for a local date.
 def ymd(t) =
@@ -828,6 +842,109 @@ def recorder(f) =
   )
 end
 list.iter(recorder, shows)
+
+# Each show's own stream, Icecast mount /stream/<slug> (public at
+# /stream/<slug> via Caddy, played from the show's page): its archived
+# blocks, picked at random (not the one just played, when it has another),
+# one after another, around the clock. These are the archived programs the
+# statutory license allows: at least five hours each (finish_block), and
+# none up two weeks (scripts/prune-archive.sh). Silence until the show has a
+# block. Each track in a block, from its sidecar, is its own request: the
+# block's file cut at the track's offset and the next's (liq_cue_in/out),
+# tagged with the track (annotate), so it's a track like the station's: in
+# the ICY title, and in the show's stream's play log,
+# /plays/YYYY-MM.<slug>.jsonl (play_log, as the station's), when it starts.
+# No autocue: a block plays as recorded, with the broadcast's levels and
+# crossfades.
+def block_stream(f) =
+  slug = slug_of(f)
+  mount = "stream/#{slug}"
+  log_play = play_log(mount, ".#{slug}")
+  last = ref("")
+
+  # The tracks of the block playing still to come, as request URIs.
+  queue = ref([])
+
+  # A block's tracks, as request URIs.
+  def segments(block) =
+    lines =
+      try
+        string.split(separator="\n", file.contents(sidecar_path(slug_of(block))))
+      catch _ do
+        []
+      end
+    tracks =
+      list.filter_map(
+        fun (l) ->
+          try
+            let json.parse (o : {offset: float}) = l
+            let json.parse (t :
+              {title: string, artist: string, album: string, label: string, isrc: string, cover: string}
+            ) = l
+            (o.offset, t)
+          catch _ do
+            null
+          end,
+        lines
+      )
+    q = fun (v) -> "\"#{string.escape(encoding='ascii', v)}\""
+
+    # Each track, cut at its offset and the next's (the last, to the end).
+    def rec uris(ts) =
+      if
+        ts == []
+      then
+        []
+      else
+        let (offset, t) = list.hd(ts)
+        rest = list.tl(ts)
+        cue_out = rest == [] ? "" : ",liq_cue_out=#{q(string(fst(list.hd(rest))))}"
+        "annotate:liq_cue_in=#{q(string(offset))}#{cue_out},title=#{q(t.title)},artist=#{q(t.artist)},album=#{
+          q(t.album)
+        },label=#{q(t.label)},isrc=#{q(t.isrc)},archive_cover=#{q(t.cover)}:#{block}"::uris(rest)
+      end
+    end
+    uris(tracks)
+  end
+
+  def next() =
+    # A block pruned while it plays: its tracks to come are gone too.
+    if not file.exists(last()) then queue := [] end
+    if
+      queue() == []
+    then
+      blocks =
+        list.filter(
+          fun (b) -> slug_of_block(b) == slug,
+          file.ls(absolute=true, sorted=true, pattern="*.mp3", archive_blocks)
+        )
+      others = list.filter(fun (b) -> b != last(), blocks)
+      pick = others == [] ? blocks : others
+      if
+        pick != []
+      then
+        b = list.nth(pick, random.int(min=0, max=list.length(pick)))
+        last := b
+        queue := segments(b)
+      end
+    end
+    if
+      queue() == []
+    then
+      null
+    else
+      u = list.hd(queue())
+      queue := list.tl(queue())
+      request.create(excluded_metadata_resolvers=["autocue"], u)
+    end
+  end
+  blocks = request.dynamic(id="blocks-#{slug}", retry_delay=60., next)
+
+  # Asynchronous, so the listener count's HTTP call never holds up the stream.
+  blocks.on_track(synchronous=false, fun (m) -> log_play(time(), slug, track_info(slug, m)))
+  to_icecast(mount, metadata.map(update=true, icy_song, mksafe(blocks)))
+end
+list.iter(block_stream, shows)
 
 # The shows this process plays, for scripts/reconcile.sh to compare with /shows.
 file.write(data=string.concat(separator="\n", shows), "/tmp/shows")

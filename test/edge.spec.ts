@@ -1,8 +1,8 @@
 // Edge cases: odd titles and show files, missing music, traversal,
 // listener counting. Fixtures: test/fixtures/{shows,music}/{edge,plain,empty,quiet}.
 import { expect, test } from "@playwright/test";
-import { archivePerformances } from "../app/archive-plays.ts";
-import { listen, loggedPlays, month, onAir, performances, streamHead, waitForTrack } from "./helpers.ts";
+import type { Play } from "../app/plays.ts";
+import { listen, loggedPlays, onAir, performances, streamHead, waitForTrack } from "./helpers.ts";
 
 test("titles with unicode, pipes and HTML show exactly as tagged", async ({ page }) => {
   await onAir("edge");
@@ -38,7 +38,13 @@ test("an unchanged page or asset is 304 through Caddy's compression", async ({ r
 });
 
 test("report keeps unicode and the whole title when it contains a pipe", async ({ request }) => {
-  await expect.poll(() => performances(request, "ZOË ÑANDÚ", "CAFÉ  OLÉ <B>")).toBeGreaterThan(0);
+  // Reported once someone hears it.
+  const stop = listen("/stream");
+  await onAir("edge");
+  await expect
+    .poll(() => performances(request, "ZOË ÑANDÚ", "CAFÉ  OLÉ <B>"), { timeout: 90_000 })
+    .toBeGreaterThan(0);
+  stop();
 });
 
 test("a track without cover art shows the placeholder", async ({ page, request }) => {
@@ -104,7 +110,7 @@ test("encoded and dotted paths don't leak files", async ({ request }) => {
 
 test("the report counts every listener connected when a track starts", async ({ request }) => {
   await onAir("night");
-  const before = await performances(request, "GAMMA", "MIDNIGHT");
+  const before = (await performances(request, "GAMMA", "MIDNIGHT")) ?? 0;
   const stops = [listen("/stream"), listen("/stream"), listen("/stream")];
   // Midnight (20 s) repeats on the night show; wait for it to be logged again.
   await expect
@@ -113,15 +119,12 @@ test("the report counts every listener connected when a track starts", async ({ 
   stops.forEach((stop) => stop());
 });
 
-test("the report matches the play log and the archive plays", async ({ request }) => {
+test("the report matches the play logs, the station's and the shows' streams", async ({ request }) => {
   await expect(async () => {
-    const live = (await loggedPlays())
-      .filter((p) => p.title === "Midnight")
-      .reduce((n, p) => n + Math.max(p.listeners, 1), 0);
-    // test/archive.spec.ts played the night blocks, the first of which starts with Midnight.
-    const archived = (await archivePerformances(month)).filter((t) => t.title === "Midnight").length;
-    expect(archived).toBeGreaterThan(0);
-    const expected = live + archived;
+    // Each play's listeners, the more of its start and end (folded in by loggedPlays).
+    const midnight = (plays: Play[]) =>
+      plays.filter((p) => p.title === "Midnight").reduce((n, p) => n + p.listeners, 0);
+    const expected = midnight(await loggedPlays()) + midnight(await loggedPlays("night"));
     expect(await performances(request, "GAMMA", "MIDNIGHT")).toBe(expected);
   }).toPass();
 });

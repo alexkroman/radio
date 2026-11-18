@@ -26,7 +26,7 @@ dc up -d --no-build caddy liquidsoap archive-prune
 dc run --rm --no-deps e2e npx playwright test "$@"
 
 # Deploys disturb no listener. With a listener playing the stream through
-# Caddy (as players do, test/listen.ts), and another an archive block, run a
+# Caddy (as players do, test/listen.ts), and another a show's own stream, run a
 # deploy's server side (`compose up`, then scripts/reconcile.sh) for each kind
 # of change, and check that each stays connected without a pause in the audio
 # longer than MAX_GAP_MS
@@ -58,8 +58,8 @@ has_listeners() { [ "$(listeners)" = "$1" ]; }
 # The stream has $1 listeners; a listener moved to the fallback never comes back.
 expect() { wait_for has_listeners "$1" || fail "after $2, the stream has $(listeners) listeners, not $1"; }
 # A listener through Caddy, in the background (radio-e2e-listen$1): on
-# /stream, or with $2, on that archive block.
-listen() { dc run -d --no-deps --name "radio-e2e-listen${1:-}" e2e node test/listen.ts ${2:+"$2"} >/dev/null; }
+# /stream, or with $2, on that show's own stream (/stream/<show>).
+listen() { dc run -d --no-deps --name "radio-e2e-listen${1:-}" e2e node test/listen.ts ${2:+"/stream/$2"} >/dev/null; }
 # Stop a listener ($1 as for listen) and check its log: never dropped, no
 # pause over MAX_GAP_MS.
 heard() {
@@ -76,7 +76,7 @@ heard() {
 edit_files() { dc run --rm --no-deps -T seed sh -c "$1"; }
 # Times Icecast has moved listeners from the fallback back to the stream.
 returns() {
-  dc exec -T icecast grep -c 'passing [1-9][0-9]* listeners from "/fallback.mp3" to "/stream"' \
+  dc exec -T icecast grep -c 'passing [1-9][0-9]* listeners from "/fallback-stream.mp3" to "/stream"' \
     /var/log/icecast/error.log || true
 }
 returned() { [ "$(returns)" -gt "$1" ]; }
@@ -130,22 +130,11 @@ too_short() { dc exec -T liquidsoap test -s "/archive/short/$1"; }
 recording_is() { [ "$(recording)" = "$1" ]; }
 recording_not() { [ -n "$(recording)" ] && [ "$(recording)" != "$1" ]; }
 offsets() { dc exec -T liquidsoap sed -n 's/^{"offset":\([0-9.]*\),.*/\1/p' "/archive/tracks/${1%.mp3}.jsonl"; }
-# Icecast's answer to a block's URL (Caddy passes /archive/<block>.mp3 to it).
-served() { dc exec -T caddy wget -q -O /dev/null "http://icecast:8000/archive/$1"; }
 # Swap two shows' hours (Liquidsoap re-reads them within a minute).
 swap_hours() {
   edit_files "a=\$(grep '^hours:' /shows/$1.md) b=\$(grep '^hours:' /shows/$2.md)
     sed -i \"s/^hours:.*/\$b/\" /shows/$1.md && sed -i \"s/^hours:.*/\$a/\" /shows/$2.md"
 }
-
-step "archive plays are counted per block and day from Icecast's access log, apart from the stream"
-plays=$(dc exec -T icecast cat /var/log/icecast/access.log | sh scripts/archive-plays.sh -)
-printf '%s\n' "$plays" | sed 's/^/  /'
-printf '%s\n' "$plays" | grep -qE "^[0-9]{4}-[0-9]{2}-[0-9]{2}	night-2026-11-14	[1-9][0-9]*	" ||
-  fail "archive-plays.sh counted no plays of the archive block"
-! printf '%s\n' "$plays" | grep -q stream || fail "archive-plays.sh counted the live stream"
-dc exec -T icecast grep -q '"GET /stream HTTP' /var/log/icecast/access.log ||
-  fail "the access log has no live stream requests to tell apart"
 
 # Back to the schedule: the specs leave the show they last needed on air
 # (test/helpers.ts onAir), and a block follows the show on air by its hours.
@@ -169,14 +158,8 @@ echo "  $rate bytes a second"
 
 listen
 expect 1 "connecting"
-# An archive listener, on a block long enough to outlast the deploys (the
-# fixture block 120 times over, 28 minutes; MP3 frames just concatenate).
-# zz isn't a show; the retention step below prunes it, mid-play, as the hourly
-# prune would: Icecast keeps sending the file it has open.
-LONG=zz-2026-11-11.mp3
-edit_files "for _ in \$(seq 120); do cat /archive/blocks/night-2026-11-14.mp3; done >/archive/blocks/$LONG &&
-  chmod a+r /archive/blocks/$LONG"
-listen -archive "/archive/$LONG"
+# A listener on a show's own stream: night's, which loops its archived blocks.
+listen -show night
 
 step "nothing changed: nothing restarts"
 deploy_change "" "nothing" :
@@ -213,16 +196,14 @@ offsets "$ended" | sed 's/^/  track at /'
 [ "$(offsets "$ended" | wc -l)" -ge 2 ] || fail "$ended's sidecar has under two tracks"
 offsets "$ended" | sort -n -c || fail "$ended's sidecar isn't in order"
 [ "$(offsets "$ended" | tail -n 1 | cut -d. -f1)" -le "$seconds" ] || fail "$ended's sidecar runs past its end"
-served "$ended" || fail "Icecast doesn't serve $ended"
 
-step "a block cut short isn't archived: it's kept from Icecast and the site"
+step "a block cut short isn't archived"
 # Swap again before the new block reaches ARCHIVE_MIN_SECONDS (150).
 third=long
 [ "$show" != long ] || third=plain
 deploy_change "" "a short block" "swap_hours $other $third"
 WAIT=150 wait_for too_short "$block" || fail "$block, cut short, wasn't moved to short/"
 ! finished "$block" || fail "$block, cut short, was archived"
-! served "$block" || fail "Icecast serves $block, cut short"
 short=$block
 block=$(recording)
 
@@ -249,18 +230,20 @@ WAIT=90 wait_for logged "differ from the ones running" ||
 
 block=$(recording)
 before=$(size "recording/$block")
-step "a show added: Liquidsoap restarts, and the recording carries on in the same file"
+step "a show added: Liquidsoap restarts, the recording carries on in the same file, and the show has its own stream"
 deploy_change liquidsoap "a new show" \
   "edit_files 'printf -- \"---\\ntitle: Added\\nhours: 2-3\\n---\\n\" >/shows/added.md && chmod a+r /shows/added.md'" restart
 
 wait_for recording_is "$block" || fail "after the restart, recording $(recording), not $block"
 wait_for grows "$block" "$before" || fail "after the restart, $block didn't grow from $before bytes"
+own_stream() { dc exec -T caddy wget -qO- "http://icecast:8000/status-json.xsl?mount=/stream/added" | grep -q listenurl; }
+wait_for own_stream || fail "after the restart, Icecast has no /stream/added"
 
 step "a show removed: Liquidsoap restarts"
-deploy_change liquidsoap "a removed show" "edit_files 'rm /shows/night.md'" restart
+deploy_change liquidsoap "a removed show" "edit_files 'rm /shows/added.md'" restart
 
 step "what the listener heard"
 heard
-step "what the archive listener heard"
-heard -archive "$LONG"
+step "what the listener on night's stream heard"
+heard -show night
 step "the listeners stayed connected, without a pause over ${MAX_GAP_MS} ms, through every deploy"

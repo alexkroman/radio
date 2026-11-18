@@ -64,47 +64,36 @@ const PauseIcon = ({ size }: { size: number }) => (
   </svg>
 );
 
-// Plays the stream (whatever is on air), or an archive block (src, with its
-// title, and the blocks to play after it: the show's earlier ones, newest
-// first). The client (app/client.ts) finds these by data-play and shows the
-// pause state on every one for what's playing. `episode` (the block's date)
-// makes it a pill: "Last episode · Nov 14", then "Paused · Nov 14" once
-// started (client.ts marks it .current), "Playing last episode" while it plays.
+// Plays the station's stream (whatever is on air), or a show's own stream
+// (src /stream/<slug>, with its title and its now.json). The client (app/client.ts) finds
+// these by data-play and shows the pause state on every one for what's
+// playing.
 export const PlayButton = ({
   large,
   src = "/stream",
   title = SITE_TITLE,
-  then,
-  episode,
+  now = "/now.json",
+  status = "Live",
 }: {
   large?: boolean;
   src?: string;
   title?: string;
-  then?: { src: string; title: string }[];
-  episode?: string;
+  now?: string; // its track playing, for the player bar and lock screen
+  status?: string; // the player bar's word for it
 }) => {
-  const size = large ? 20 : episode ? 12 : 14;
+  const size = large ? 20 : 14;
   return (
     <button
       type="button"
-      class={large ? "play play-lg" : episode ? "play pill" : "play"}
+      class={large ? "play play-lg" : "play"}
       data-play={src}
       data-title={title}
-      data-then={then?.length ? JSON.stringify(then) : undefined}
+      data-now={now}
+      data-status={status}
       aria-label={`Play ${title}`}
     >
       <PlayIcon size={size} d={large ? "M4.5 2.5v9l7.5-4.5z" : "M4 2.5v9l7.5-4.5z"} />
       <PauseIcon size={size} />
-      {episode && (
-        <>
-          <span class="pill-text">
-            <span class="pill-idle">Last episode</span>
-            <span class="pill-paused">Paused</span>
-            {` · ${episode}`}
-          </span>
-          <span class="pill-playing">Playing last episode</span>
-        </>
-      )}
     </button>
   );
 };
@@ -138,9 +127,9 @@ export const Cover = ({ play, size, labelled }: { play?: Play; size: string; lab
     <span class={`cover ${size} cover-ph`} aria-hidden="true" />
   );
 
-// A track as the player shows it (client.ts `Track`): live in /now.json, and
-// in an archive block's now.json.
-export const trackJson = (t?: Track) => ({
+// A track as the player shows it (client.ts `Track`), in /now.json and a
+// channel's /<slug>/now.json.
+const trackJson = (t?: Track) => ({
   track: t?.title ?? "",
   artist: t?.artist ?? "",
   album: t?.album ?? "",

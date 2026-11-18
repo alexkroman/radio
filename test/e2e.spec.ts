@@ -5,6 +5,9 @@
 import { expect, test } from "@playwright/test";
 import {
   BASE,
+  icyTitle,
+  listen,
+  loggedPlays,
   LOGGED_OUT,
   month,
   onAir,
@@ -25,6 +28,55 @@ test("the station is one MP3 stream", async () => {
   }).toPass({ timeout: 60_000 });
 });
 
+test("each show's own stream loops its archived blocks, naming each track, and logs its own plays", async ({
+  page,
+}) => {
+  await onAir("default");
+  // Night's stream plays night's archived blocks (test/fixtures/archive:
+  // Midnight, then Second Wind), though default is on the station.
+  await expect(async () => {
+    expect(await streamHead("/stream/night")).toEqual({
+      status: 200,
+      type: "audio/mpeg",
+      bytes: expect.any(Number),
+    });
+  }).toPass({ timeout: 60_000 });
+  await expect
+    .poll(() => icyTitle("/stream/night"), { timeout: 60_000 })
+    .toMatch(/^(Gamma - Midnight|Beta & Band - Second Wind)$/);
+  // Each track as it comes up, from the blocks' sidecars (night-2026-11-14:
+  // Midnight, then Second Wind; night-2026-11-13: First Light): both blocks,
+  // over and over, each in order.
+  const titles = async () => (await loggedPlays("night")).map((p) => p.title);
+  await expect
+    .poll(
+      async () =>
+        (await titles()).filter((t) => t === "Midnight").length >= 2 &&
+        (await titles()).includes("First Light"),
+      {
+        timeout: 90_000,
+      },
+    )
+    .toBe(true);
+  const played = await titles();
+  played.forEach((t, i) => t === "Second Wind" && expect(played[i - 1]).toBe("Midnight"));
+  expect(new Set((await loggedPlays("night")).map((p) => p.show))).toEqual(new Set(["night"]));
+  // Its plays aren't the station's: default stays on air.
+  expect((await loggedPlays()).at(-1)?.show).toBe("default");
+  await page.goto("/");
+  await expect(page.locator("#on-air h2")).toHaveText("Fixture Default");
+  // The show's page links its stream.
+  await page.goto("/night");
+  await expect(page.locator("footer").getByRole("link", { name: /\/stream\/night$/ })).toHaveAttribute(
+    "href",
+    "/stream/night",
+  );
+  // A show with no archived block yet streams silence.
+  expect((await streamHead("/stream/plain")).status).toBe(200);
+  // No channel for what isn't a show.
+  expect((await streamHead("/stream/nope")).status).toBe(404);
+});
+
 test("home page has what's on", async ({ page }) => {
   await onAir("night");
   await page.goto("/");
@@ -33,8 +85,13 @@ test("home page has what's on", async ({ page }) => {
   await expect(page.locator("#np .np-track")).toHaveText("Midnight");
   await expect(page.locator("#on-air .credit")).toHaveText("with Ana Ruiz, Ben Cho & Zoë Ñandú");
   await expect(page.getByRole("main").getByRole("button", { name: "Play Mazes Radio" })).toBeVisible();
-  // No list of shows: the latest episodes stand for them.
-  await expect(page.locator("#schedule")).toHaveCount(0);
+  // The shows, each with its channel.
+  await expect(page.locator("#shows").getByRole("button", { name: "Play Fixture Night" })).toHaveAttribute(
+    "data-play",
+    "/stream/night",
+  );
+  // Plain has no archived block, so nothing to play on its own stream yet.
+  await expect(page.locator('#shows button[data-play="/stream/plain"]')).toHaveCount(0);
   await expect(page.locator("footer").getByRole("link", { name: /\/stream$/ })).toHaveAttribute(
     "href",
     "/stream",
@@ -187,6 +244,19 @@ test("security headers are set and the server banner is stripped", async ({ requ
 });
 
 test("SoundExchange report counts plays from every show with file tags", async ({ page, request }) => {
+  // Someone listening while default's two tracks and night's play.
+  const stop = listen("/stream");
+  await onAir("default");
+  await expect
+    .poll(
+      async () =>
+        new Set(
+          (await loggedPlays()).filter((p) => p.show === "default" && p.listeners > 0).map((p) => p.title),
+        ).size,
+      { timeout: 120_000 },
+    )
+    .toBe(2);
+  await onAir("night");
   await page.goto("/about");
   await page.getByRole("link", { name: "reports", exact: true }).click();
   await expect(page.locator(`a[href="/reports/${month}"]`)).toBeVisible();
@@ -205,6 +275,7 @@ test("SoundExchange report counts plays from every show with file tags", async (
     );
     expect(text).toMatch(/^\^MAZES RADIO\^\|\^A\^\|\^GAMMA\^\|\^MIDNIGHT\^\|\^\^\|\^\^\|\^\^\|\d+$/m);
   }).toPass({ timeout: 80_000 });
+  stop();
 });
 
 test("player plays the stream using only self-hosted assets", async ({ page }) => {
@@ -377,7 +448,7 @@ test.describe("logged out", () => {
       "/admin/stats",
       "/admin/listmounts",
       "/admin/metadata",
-      "/fallback.mp3",
+      "/fallback-stream.mp3",
       "/default.md",
       "/stream/../status-json.xsl",
       "/style.css",

@@ -53,8 +53,8 @@ services:
       - ./archive:/archive
     restart: "no"
 
-  # Serves the stream (mount /stream), with UTF-8 track metadata, extra
-  # buffering for slow connections and a silent fallback so listeners stay
+  # Serves the streams (mounts /stream and /stream/<show>), with UTF-8 track
+  # metadata, extra buffering for slow connections and a silent fallback so listeners stay
   # connected through a Liquidsoap restart: see icecast/config.sh, which also
   # reloads the config without dropping anyone.
   icecast:
@@ -64,18 +64,19 @@ services:
     image: libretime/icecast:2.5.0
     command: ["sh", "-c", "sh /icecast/config.sh && exec icecast -c /tmp/icecast.xml"]
     environment:
-      # access.log's times, so scripts/archive-plays.sh counts local days.
+      # Its logs' times.
       TZ: ${TZ:-America/Los_Angeles}
       DOMAIN: ${DOMAIN:-localhost}
       ICECAST_SOURCE_PASSWORD: &password ${PASSWORD:?Set PASSWORD in .env}
       ICECAST_ADMIN_PASSWORD: *password
       ICECAST_RELAY_PASSWORD: *password
-      # The Liquidsoap source and its silence fallback, plus a spare for a
-      # restarting Liquidsoap whose old connection lingers (the image's default
-      # is 2). Icecast logs an error at start unless the client limit below is
+      # The Liquidsoap sources (the station and a channel per show), with room
+      # for each one's silence fallback and for a restarting Liquidsoap whose
+      # old connections linger (the image's default is 2): enough for 10
+      # shows. Icecast logs an error at start unless the client limit below is
       # more than twice this ("Client limit (200) is too small for given source
-      # limit (100)"), so keep MAX_LISTENERS over 8.
-      ICECAST_MAX_SOURCES: 4
+      # limit (100)"), so keep MAX_LISTENERS over 80.
+      ICECAST_MAX_SOURCES: 40
       # Shown on Icecast's status pages (not public: Caddy only exposes the
       # streams). Unset, Icecast warns at every start.
       ICECAST_ADMIN_EMAIL: admin@${DOMAIN:-localhost}
@@ -87,14 +88,16 @@ services:
     volumes:
       - ./logs:/var/log/icecast
       - ./icecast:/icecast:ro
-      # Finished archive blocks, served at /archive/<file> (icecast/config.sh).
-      - ./archive:/archive:ro
+      # The shows, for their streams' mounts (icecast/config.sh).
+      - ./shows:/shows:ro
     depends_on:
       init: { condition: service_completed_successfully }
 
-  # The 24/7 stream, playing the shows on their schedule (radio.liq), sent to
-  # Icecast; writes the play log (plays/YYYY-MM.jsonl) and records each show
-  # block to archive/. TZ is the schedule's time zone (.env).
+  # The 24/7 stream, playing the shows on their schedule (radio.liq), and each
+  # show's own stream, looping its archived blocks, sent to Icecast; writes
+  # the play logs (plays/YYYY-MM.jsonl, and plays/YYYY-MM.<show>.jsonl for the
+  # shows' streams) and records each show block to archive/. TZ is the
+  # schedule's time zone (.env).
   liquidsoap:
     <<: [*hardening, *logging]
     group_add: ["10001"]
@@ -128,7 +131,6 @@ services:
     init: true
     environment:
       TZ: ${TZ:-America/Los_Angeles}
-      ARCHIVE_KEEP: ${ARCHIVE_KEEP:-1}
       SITE_TITLE: ${SITE_TITLE:-}
       CONTACT_EMAIL: ${CONTACT_EMAIL:-}
       SITE_PASSWORD: ${SITE_PASSWORD:-}
@@ -136,9 +138,9 @@ services:
       - ./shows:/shows:ro
       - ./covers:/covers:ro
       - ./plays:/plays:ro
+      # Which shows have archived blocks, so a play button for each one's own
+      # stream (app/archive.ts).
       - ./archive:/archive:ro
-      # Icecast's access logs: archive plays, for the reports (app/archive-plays.ts).
-      - ./logs:/logs:ro
     depends_on:
       init: { condition: service_completed_successfully }
 

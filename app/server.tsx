@@ -363,12 +363,12 @@ app.get("/", async (c) => {
       <ShowList shows={shows} streams={streams} />
       <History plays={recent.slice(1)} />
       <StreamUrl host={c.req.header("host") ?? ""} />
-      <Poll path="/" ids={["on-air", "np", "history"]} />
+      <Poll path="/" ids={["on-air", "np", "shows", "history"]} />
     </main>,
   );
 });
 
-// The shows, in the order of their hours: each one's own stream's play
+// The shows, in the order they're on from now (the one on now first): each one's own stream's play
 // button (once it has an archived block) to the left of its name (linked to
 // its page) over its description, then its hours.
 const ShowList = ({ shows, streams }: { shows: Show[]; streams: Set<string> }) => {
@@ -381,7 +381,7 @@ const ShowList = ({ shows, streams }: { shows: Show[]; streams: Set<string> }) =
         </h2>
       </div>
       <ol class="item-list">
-        {scheduled(shows).map((show) => (
+        {scheduled(shows, now).map((show) => (
           <li class="item show-item">
             {streams.has(show.slug) ? (
               <ChannelButton show={show} />

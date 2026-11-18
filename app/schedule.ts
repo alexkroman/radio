@@ -45,9 +45,14 @@ export function scheduleProblems(shows: Show[]): string[] {
   return problems;
 }
 
-// The scheduled shows, in the order they start from midnight.
-export const scheduled = (shows: Show[]) =>
-  shows.filter((s) => s.hours).sort((a, b) => a.hours![0] - b.hours![0]);
+// The scheduled shows in the order they're on from now: the one on now
+// first, then what's up next.
+export const scheduled = (shows: Show[], now: Date) =>
+  shows
+    .filter((s) => s.hours)
+    .map((s) => ({ s, start: nextSlot(s, now)!.start.getTime() }))
+    .sort((a, b) => a.start - b.start)
+    .map(({ s }) => s);
 
 // The show scheduled at a time (the first by slug, if more than one).
 export const showAt = (shows: Show[], at: Date) =>

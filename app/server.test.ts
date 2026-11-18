@@ -180,7 +180,7 @@ describe("pages", () => {
     expect(off).not.toContain("Unheard");
     // Its own channel, around the clock.
     expect(off).toContain('href="/stream/default"');
-    expect(off).toMatch(/Fixture Default, 24\/7: <a class="url" href="\/stream\/default"/);
+    expect(off).toMatch(/Fixture Default Stream URL: <a class="url" href="\/stream\/default"/);
     const on = await (await page("/night")).text();
     expect(on).toMatch(/np-track">Midnight/);
     expect(on).not.toContain("Off air");

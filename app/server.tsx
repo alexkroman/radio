@@ -203,7 +203,7 @@ const NowPlaying = ({ play, status = true }: { play?: Play; status?: boolean }) 
 const StreamUrl = ({
   host,
   path = "/stream",
-  label = "Stream URL",
+  label = "Mazes Stream URL",
 }: {
   host: string;
   path?: string;
@@ -647,7 +647,11 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
       </section>
       <History plays={(isOn ? recent.slice(1) : recent).slice(0, 5)} />
       {stream && (
-        <StreamUrl host={c.req.header("host") ?? ""} path={channel(show)} label={`${show.title}, 24/7`} />
+        <StreamUrl
+          host={c.req.header("host") ?? ""}
+          path={channel(show)}
+          label={`${show.title} Stream URL`}
+        />
       )}
       <Poll path={`/${show.slug}`} ids={["np", "past", "history"]} />
     </main>,

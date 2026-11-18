@@ -655,13 +655,6 @@ img.cover {
   color: var(--color-ink);
 }
 
-/* ── About: questions ── */
-.faq h3 {
-  margin: 20px 0 4px;
-  font: var(--type-track);
-  font-weight: 600;
-}
-
 /* ── Archive: a show's past episodes, on its page ── */
 .archive-show {
   display: flex;

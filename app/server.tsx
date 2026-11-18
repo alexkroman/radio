@@ -92,42 +92,6 @@ const LAWS = [
   },
 ];
 
-// Questions about what the license allows, for the About page.
-const FAQ = [
-  {
-    q: "Why can't I see what's coming up next?",
-    a: "The license forbids announcing songs or artists before they play (§ 114(d)(2)(C)(ii)). We can tell you which show is on next, but not what it will play.",
-  },
-  {
-    q: "Why does a show's page list what has played on air, but not the tracks in an archived episode?",
-    a: "Songs that have played on air have already been performed, so listing them is fine. An archived episode hasn't played for you yet, so its track list would announce songs before you hear them. Instead, the archive shows each track's title, album and artist while it plays.",
-  },
-  {
-    q: "Why can't I pick a song, skip or rewind?",
-    a: "Letting you choose songs would make this an interactive service (§ 114(j)(7)), which the statutory license doesn't cover: every song would need a deal with its label. We leave out skipping and rewinding too, so the station stays radio and the archive plays shows as they were broadcast.",
-  },
-  {
-    q: "Why can't I download a show?",
-    a: "The license requires that we not help listeners make copies (§ 114(d)(2)(C)(vi)). You can listen as often as you like while a show is in the archive.",
-  },
-  {
-    q: "Why are archived shows only up for two weeks, and why only whole shows?",
-    a: "An archived program must be at least five hours long and can't be offered for more than two weeks (§ 114(d)(2)(C)(iii)). A show that gets cut short, by a restart for example, isn't archived.",
-  },
-  {
-    q: "Why won't you play a whole album, or an hour of one artist?",
-    a: "The performance complement (§ 114(j)(13)) limits any three hours to 3 tracks from one album (2 in a row) and 4 by one artist (3 in a row). The station won't play a track that would exceed the limit, even if that means a show goes quiet for a moment.",
-  },
-  {
-    q: "Why does every song show its album?",
-    a: "The license requires each recording to be identified by title, album and featured artist while it plays (§ 114(d)(2)(C)(ix)).",
-  },
-  {
-    q: "Do artists get paid when I listen to the archive?",
-    a: "Yes. Every track you reach in an archived show counts as a performance in our monthly SoundExchange report, the same as a live play.",
-  },
-];
-
 declare module "hono" {
   interface ContextRenderer {
     (
@@ -479,13 +443,14 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
   return c.render(
     <main class="page page-about">
       <SiteHeader current="about" />
-      <h1 class="display">About {SITE_TITLE}</h1>
+      <h1 class="display">About</h1>
       <p class="lead">A nonprofit alternative to Spotify's AI playlists.</p>
       <section class="prose" aria-label="Introduction">
         <p>
           About a third of Spotify's listeners are on playlists made by an algorithm or an AI. We want to
-          replace them with radio: a few <a href="/">shows</a> a day, each programmed by a person, on one
-          station around the clock. No ads, no account, no tracking, and every play pays the artist.
+          replace them with a single radio station, programmed by people, and an archive of its{" "}
+          <a href="/">shows</a>, one for each genre, that you can stream around the clock. No ads, no account,
+          no tracking, and every play pays the artist.
         </p>
       </section>
       <section class="prose" aria-labelledby="about-law-way">
@@ -559,17 +524,6 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
             </li>
           ))}
         </ul>
-      </section>
-      <section class="prose faq" aria-labelledby="about-faq">
-        <h2 id="about-faq" class="label">
-          Questions
-        </h2>
-        {FAQ.map((q) => (
-          <>
-            <h3>{q.q}</h3>
-            <p>{q.a}</p>
-          </>
-        ))}
       </section>
       <section class="prose" aria-labelledby="about-listen">
         <h2 id="about-listen" class="label">

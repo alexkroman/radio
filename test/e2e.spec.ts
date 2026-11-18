@@ -79,7 +79,7 @@ test("a DJ page has their profile, shows and links", async ({ page }) => {
 
 test("the About page has the stream", async ({ page }) => {
   await page.goto("/about");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("About Mazes Radio");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("About");
   await expect(page.getByRole("link", { name: /\/stream$/ })).toHaveAttribute("href", "/stream");
   await expect(page.locator(".streams")).toContainText("MP3, 256 kbps");
 });

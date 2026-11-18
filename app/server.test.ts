@@ -406,7 +406,7 @@ describe("about", () => {
     );
   });
 
-  test("links each statute the station plays under, and answers questions about them", async () => {
+  test("links each statute the station plays under", async () => {
     const html = await (await page("/about")).text();
     for (const url of [
       "https://www.law.cornell.edu/uscode/text/17/114#d_2",
@@ -422,7 +422,6 @@ describe("about", () => {
     ])
       expect(html).toContain(`href="${url}"`);
     expect(html).toContain("Every show, kept so you can hear it again");
-    expect(html).toContain("<h3>Why does a show&#39;s page list what has played on air");
   });
 });
 

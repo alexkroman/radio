@@ -6,6 +6,7 @@ import { expect, test } from "@playwright/test";
 import {
   BASE,
   icyTitle,
+  listen,
   loggedPlays,
   LOGGED_OUT,
   month,
@@ -241,6 +242,19 @@ test("security headers are set and the server banner is stripped", async ({ requ
 });
 
 test("SoundExchange report counts plays from every show with file tags", async ({ page, request }) => {
+  // Someone listening while default's two tracks and night's play.
+  const stop = listen("/stream");
+  await onAir("default");
+  await expect
+    .poll(
+      async () =>
+        new Set(
+          (await loggedPlays()).filter((p) => p.show === "default" && p.listeners > 0).map((p) => p.title),
+        ).size,
+      { timeout: 120_000 },
+    )
+    .toBe(2);
+  await onAir("night");
   await page.goto("/about");
   await page.getByRole("link", { name: "reports", exact: true }).click();
   await expect(page.locator(`a[href="/reports/${month}"]`)).toBeVisible();
@@ -259,6 +273,7 @@ test("SoundExchange report counts plays from every show with file tags", async (
     );
     expect(text).toMatch(/^\^MAZES RADIO\^\|\^A\^\|\^GAMMA\^\|\^MIDNIGHT\^\|\^\^\|\^\^\|\^\^\|\d+$/m);
   }).toPass({ timeout: 80_000 });
+  stop();
 });
 
 test("player plays the stream using only self-hosted assets", async ({ page }) => {

@@ -49,18 +49,14 @@ export function parsePlays(text: string, plays: Play[] = []): Play[] {
   return plays;
 }
 
-// Every play in a log: a month's ("YYYY-MM"), or a show's channel's that
-// month ("YYYY-MM.<show>").
+// Every play in a month ("YYYY-MM"): on the station and the shows' own
+// streams (every YYYY-MM*.jsonl).
 export async function monthPlays(month: string): Promise<Play[]> {
-  return parsePlays(await readFile(file(month), "utf8").catch(() => ""));
-}
-
-// Every play in a month on the shows' own channels.
-export async function channelPlays(month: string): Promise<Play[]> {
-  const logs = (await readdir(PLAYS).catch(() => [] as string[]))
-    .filter((f) => f.startsWith(`${month}.`) && f.endsWith(".jsonl") && f !== `${month}.jsonl`)
-    .map((f) => f.slice(0, -".jsonl".length));
-  return (await Promise.all(logs.map(monthPlays))).flat();
+  const logs = (await readdir(PLAYS).catch(() => [] as string[])).filter(
+    (f) => f.startsWith(month) && f.endsWith(".jsonl"),
+  );
+  const texts = await Promise.all(logs.map((f) => readFile(`${PLAYS}/${f}`, "utf8").catch(() => "")));
+  return texts.flatMap((text) => parsePlays(text));
 }
 
 // The logs pages read (this month's and last, the station's and the

@@ -305,16 +305,7 @@ current_track = ref(no_track)
 
 # A sidecar line: a track at an offset (seconds) in a block's file.
 def sidecar_line(offset, t) =
-  line =
-    {
-      offset = offset,
-      title = t.title,
-      artist = t.artist,
-      album = t.album,
-      label = t.label,
-      isrc = t.isrc,
-      cover = t.cover
-    }
+  line = t.{offset = offset}
   "#{json.stringify(compact=true, line)}\n"
 end
 
@@ -413,20 +404,7 @@ def play_log(mount, suffix) =
       n = listeners(mount)
       if last() >= 0. then write(last(), {time = last(), listeners_at_end = n}) end
       last := start
-      write(
-        start,
-        {
-          time = start,
-          show = show,
-          artist = t.artist,
-          title = t.title,
-          album = t.album,
-          label = t.label,
-          isrc = t.isrc,
-          cover = t.cover,
-          listeners = n
-        }
-      )
+      write(start, t.{time = start, show = show, listeners = n})
     end
 end
 
@@ -913,22 +891,17 @@ def block_stream(f) =
           catch _ do
             []
           end
+
+        # Each line: its offset, and the track (as track_info gives it).
         tracks :=
           list.filter_map(
             fun (l) ->
               try
+                let json.parse (o : {offset: float}) = l
                 let json.parse (t :
-                  {
-                    offset: float,
-                    title: string,
-                    artist: string,
-                    album: string,
-                    label: string,
-                    isrc: string,
-                    cover: string
-                  }
+                  {title: string, artist: string, album: string, label: string, isrc: string, cover: string}
                 ) = l
-                t
+                (o.offset, t)
               catch _ do
                 null
               end,
@@ -945,15 +918,15 @@ def block_stream(f) =
     fun () ->
       begin
         pos = blocks.elapsed()
-        started = list.filter(fun (t) -> t.offset <= pos, tracks())
+        started = list.filter(fun (ot) -> fst(ot) <= pos, tracks())
         if
           started != []
         then
-          t = list.last(started)
+          let (offset, t) = list.last(started)
           if
-            t.offset != named()
+            offset != named()
           then
-            named := t.offset
+            named := offset
             blocks.insert_metadata([("title", t.title), ("artist", t.artist), ("album", t.album)])
             log_play(time(), slug, t)
           end

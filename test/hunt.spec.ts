@@ -44,6 +44,8 @@ test("the player picks up the playing track for the lock screen", async ({ page 
 });
 
 test("quotes and backslashes survive the log, the page and the report", async ({ page, request }) => {
+  // Reported once someone hears it.
+  const stop = listen("/stream");
   await onAir("odd");
   await expect
     .poll(async () => (await loggedPlays()).find((p) => p.show === "odd"))
@@ -51,7 +53,12 @@ test("quotes and backslashes survive the log, the page and the report", async ({
   await page.goto("/odd");
   await expect(page.locator("#np .np-track")).toHaveText(ODD_TITLE);
   await expect(page.locator("#np .np-artist")).toHaveText(ODD_ARTIST);
-  expect(await performances(request, 'Q "THE" ARTIST', "BACK\\SLASH \"QUOTES\" & 'TICKS'")).toBeDefined();
+  await expect
+    .poll(() => performances(request, 'Q "THE" ARTIST', "BACK\\SLASH \"QUOTES\" & 'TICKS'"), {
+      timeout: 90_000,
+    })
+    .toBeGreaterThan(0);
+  stop();
 });
 
 test.describe(() => {

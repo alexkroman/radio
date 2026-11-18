@@ -1,7 +1,7 @@
 // SoundExchange reports, mounted at /reports (linked from the site nav): the
 // last 12 months, each a Report of Use from the play log at /reports/<YYYY-MM>.
 import { Hono } from "hono";
-import { channelPlays, monthOf, monthPlays, type Track } from "./plays.ts";
+import { monthOf, monthPlays, type Track } from "./plays.ts";
 import { SiteHeader } from "./ui.tsx";
 
 const SERVICE = "MAZES RADIO";
@@ -22,12 +22,12 @@ const field = (v: string | number) =>
 
 // One row per song across all shows and their own streams, counting each
 // play's listeners (the more of its counts as it started and as it ended:
-// app/plays.ts). A song nobody heard is listed with 0. ISRCs come from tags
+// app/plays.ts). ISRCs come from tags
 // written by scripts/import.sh (beet mbsync).
 async function report(month: string): Promise<string> {
   const songs = new Map<string, Track & { count: number }>();
-  const [station, streams] = await Promise.all([monthPlays(month), channelPlays(month)]);
-  for (const p of [...station, ...streams]) {
+  // Only what someone heard.
+  for (const p of (await monthPlays(month)).filter((p) => p.listeners > 0)) {
     const key = `${p.artist}\n${p.title}`;
     const song = songs.get(key) ?? { ...p, count: 0 };
     song.count += p.listeners;

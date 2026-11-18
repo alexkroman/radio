@@ -38,7 +38,13 @@ test("an unchanged page or asset is 304 through Caddy's compression", async ({ r
 });
 
 test("report keeps unicode and the whole title when it contains a pipe", async ({ request }) => {
-  await expect.poll(() => performances(request, "ZOË ÑANDÚ", "CAFÉ  OLÉ <B>")).toBeDefined();
+  // Reported once someone hears it.
+  const stop = listen("/stream");
+  await onAir("edge");
+  await expect
+    .poll(() => performances(request, "ZOË ÑANDÚ", "CAFÉ  OLÉ <B>"), { timeout: 90_000 })
+    .toBeGreaterThan(0);
+  stop();
 });
 
 test("a track without cover art shows the placeholder", async ({ page, request }) => {

@@ -337,12 +337,11 @@ describe("reports", () => {
     const rows = (await res.text()).trim().split("\n");
     expect(rows[0]).toMatch(/^\^NAME_OF_SERVICE\^\|/);
     // Midnight: 2 on the station, 4 on night's stream. Nobody heard Unheard
-    // (on default's stream): listed with 0.
+    // (on default's stream): not listed.
     expect(rows.slice(1).filter((r) => !r.includes("^ZED^"))).toEqual([
       "^MAZES RADIO^|^A^|^GAMMA^|^MIDNIGHT^|^US1234567890^|^ALBUM^|^LABEL^|6",
       "^MAZES RADIO^|^A^|^BETA & BAND^|^SECOND WIND^|^US1234567890^|^ALBUM^|^LABEL^|5",
       "^MAZES RADIO^|^A^|^ALPHA ARTIST^|^FIRST LIGHT^|^US1234567890^|^ALBUM^|^LABEL^|3",
-      "^MAZES RADIO^|^A^|^NOBODY^|^UNHEARD^|^US1234567890^|^ALBUM^|^LABEL^|0",
     ]);
   });
 

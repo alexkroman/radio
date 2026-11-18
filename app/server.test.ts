@@ -160,9 +160,9 @@ describe("pages", () => {
     expect(html).toContain('<div id="player" data-title="Mazes Radio"></div>');
   });
 
-  test("a show page has its hours, and its track only while on air", async () => {
+  test("a show page has its hours and history, and plays only its own stream", async () => {
     // At 18:00 (UTC, the tests' TZ) today: default's hours (0-3) aren't due,
-    // so its page says when it's next on. (Night stays on air: the newest play.)
+    // so the hours are its next. (Night stays on air: the newest play.)
     const today = new Date();
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 18));
@@ -178,8 +178,11 @@ describe("pages", () => {
     // Its own channel, around the clock.
     expect(off).toContain('href="/stream/default"');
     expect(off).toMatch(/Fixture Default Stream URL: <a class="url" href="\/stream\/default"/);
+    // On air or not, no track on air and no button for the station's stream.
     const on = await (await page("/night")).text();
-    expect(on).toMatch(/np-track">Midnight/);
+    expect(on).not.toContain('class="np-track"');
+    expect(on).not.toContain('data-play="/stream"');
+    expect(on).toContain('data-play="/stream/night"');
   });
 
   test("a DJ page lists their shows", async () => {

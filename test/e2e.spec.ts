@@ -141,21 +141,26 @@ test("the About page has the stream", async ({ page }) => {
   await expect(page.locator(".streams")).toContainText("MP3, 256 kbps");
 });
 
-test("a show on air has its track; one off air, when it's next on", async ({ page }) => {
+test("a show page has its hours and its own history, and plays only its own stream", async ({ page }) => {
   await onAir("night");
+  await page.goto("/");
+  await waitForTrack(page, "Midnight");
+  await expect(page.locator("#np .np-artist")).toHaveText("Gamma");
+  // On air, its page still has no track on air and no button for the station.
   await page.goto("/night");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Fixture Night");
   await expect(page.locator(".title-block")).toContainText(/Daily \d{1,2}:00 [AP]M–\d{1,2}:00 [AP]M/);
-  await waitForTrack(page, "Midnight");
-  await expect(page.locator("#np .np-artist")).toHaveText("Gamma");
-
-  // Off air: no track over the history.
-  await onAir("default");
-  await page.goto("/night");
-  await expect(page.locator("#np .np-track")).toHaveCount(0);
+  await expect(page.locator("#np")).toHaveCount(0);
+  await expect(page.locator('main button[data-play="/stream"]')).toHaveCount(0);
+  await expect(page.getByRole("main").getByRole("button", { name: "Play Fixture Night" })).toHaveAttribute(
+    "data-play",
+    "/stream/night",
+  );
   await expect(page.locator("#history")).toContainText("Midnight");
+
+  await onAir("default");
   await page.goto("/default");
-  await waitForTrack(page, /First Light|Second Wind/);
+  await expect(page.locator("#history")).toContainText(/First Light|Second Wind/);
   await expect(page.locator("main")).not.toContainText("Midnight");
 
   // "&" must show once, unescaped.
@@ -386,7 +391,6 @@ test("a refresh still in flight when you leave a show page isn't swapped into th
   await Promise.race([done, page.waitForTimeout(3000)]);
   await page.waitForTimeout(500); // htmx swaps and settles within ~20 ms of the response
   // Checked once: the default page's own refresh would soon put it right again.
-  expect(await page.locator("#np .np-track").count()).toBe(0);
   expect(await page.locator("#history").textContent()).not.toContain("Midnight");
 });
 

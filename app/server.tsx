@@ -540,9 +540,9 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
 
 app.get(`/:slug{${SLUG}}`, async (c) => {
   const slug = c.req.param("slug");
-  const [show, shows, recent] = await Promise.all([getShow(slug), getShows(), recentPlays(6, slug)]);
+  const [show, shows, recent] = await Promise.all([getShow(slug), getShows(), recentPlays(5, slug)]);
   if (!show) return c.notFound();
-  const [{ show: on, play }, past, streams] = await Promise.all([
+  const [{ show: on }, past, streams] = await Promise.all([
     onAir(shows),
     pastAirings(show.slug),
     archivedShows(),
@@ -570,7 +570,6 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
           <Markdown class="subtitle" html={show.description} />
           <DjCredit djs={show.djs} class="title-credit" />
         </header>
-        <div id="np">{isOn && <NowPlaying play={play} />}</div>
       </section>
       {stream && (
         <section class="past-shows" aria-labelledby="show-channel">
@@ -606,7 +605,7 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
           </ol>
         )}
       </section>
-      <History plays={(isOn ? recent.slice(1) : recent).slice(0, 5)} />
+      <History plays={recent} />
       {stream && (
         <StreamUrl
           host={c.req.header("host") ?? ""}
@@ -614,7 +613,7 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
           label={`${show.title} Stream URL`}
         />
       )}
-      <Poll path={`/${show.slug}`} ids={["np", "past", "history"]} />
+      <Poll path={`/${show.slug}`} ids={["past", "history"]} />
     </main>,
     { title: show.title },
   );

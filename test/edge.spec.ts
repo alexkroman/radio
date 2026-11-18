@@ -6,7 +6,7 @@ import { listen, loggedPlays, onAir, performances, streamHead, waitForTrack } fr
 
 test("titles with unicode, pipes and HTML show exactly as tagged", async ({ page }) => {
   await onAir("edge");
-  await page.goto("/edge");
+  await page.goto("/");
   await waitForTrack(page, "Café | Olé <b>");
   // With its album, which the license requires along with title and artist.
   await expect(page.locator("#np .np-artist")).toHaveText("Zoë Ñandú · Édition | Spéciale");
@@ -49,7 +49,7 @@ test("report keeps unicode and the whole title when it contains a pipe", async (
 
 test("a track without cover art shows the placeholder", async ({ page, request }) => {
   await onAir("plain");
-  await page.goto("/plain");
+  await page.goto("/");
   await waitForTrack(page, "Untitled Thing");
   expect((await (await request.get("/now.json")).json()).cover).toBe("");
   await expect(page.locator("#np img")).toHaveCount(0);
@@ -72,7 +72,6 @@ test("a show with no music folder plays silence and renders", async ({ page }) =
   });
   await page.goto("/empty");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Empty");
-  await expect(page.locator("#np .np-track")).toHaveCount(0);
   await expect(page.locator("#history")).toContainText("Nothing played yet.");
 });
 

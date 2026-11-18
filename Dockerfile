@@ -21,7 +21,7 @@ COPY --from=build /app/dist dist
 USER node
 CMD ["node", "dist/server.js"]
 
-FROM mcr.microsoft.com/playwright:v1.65.0-noble AS e2e
+FROM mcr.microsoft.com/playwright:v1.65.1-noble AS e2e
 WORKDIR /app
 COPY --from=deps /app/node_modules node_modules
 COPY package.json playwright.config.ts tsconfig.json ./

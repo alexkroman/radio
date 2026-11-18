@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { request as https } from "node:https";
 import { type APIRequestContext, expect, type Page } from "@playwright/test";
 import { IcecastMetadataReader } from "icecast-metadata-js";
-import type { Play } from "../app/plays.ts";
+import { parseJsonl, type Play } from "../app/plays.ts";
 
 export const BASE = process.env.BASE_URL ?? "https://localhost";
 export const SITE_PASSWORD = process.env.SITE_PASSWORD ?? "";
@@ -126,13 +126,7 @@ export function icyTitle(path: string): Promise<string> {
 // skipping a line that is still being written.
 export async function loggedPlays(channel?: string): Promise<Play[]> {
   const text = await readFile(`/plays/${month}${channel ? `.${channel}` : ""}.jsonl`, "utf8").catch(() => "");
-  return text.split("\n").flatMap((l) => {
-    try {
-      return l ? [JSON.parse(l) as Play] : [];
-    } catch {
-      return [];
-    }
-  });
+  return parseJsonl<Play>(text);
 }
 
 // Put a show on air (radio.liq's onair, which test/compose.yml enables), and

@@ -56,6 +56,11 @@ const LAWS = [
     what: "no advance schedule of songs or artists. Our schedule names shows, never what they'll play.",
   },
   {
+    cite: "§ 114(d)(2)(C)(iii)",
+    url: `${USC}/114#d_2_C_iii`,
+    what: "archived programs must be at least five hours long and available for no more than two weeks. Each show's own stream plays only its recorded shows that meet both; shorter recordings are never played, and old ones come down automatically.",
+  },
+  {
     cite: "§ 114(d)(2)(C)(vi)",
     url: `${USC}/114#d_2_C_vi`,
     what: "nothing that helps listeners copy the music. There are no downloads, and no seeking or skipping.",
@@ -73,7 +78,7 @@ const LAWS = [
   {
     cite: "17 U.S.C. § 112(e)",
     url: `${USC}/112#e`,
-    what: "the copies a station makes in order to broadcast, such as the buffers that carry each stream.",
+    what: "the copies a station makes in order to broadcast. This covers the recordings of its shows.",
   },
   {
     cite: "37 C.F.R. Part 380",
@@ -83,7 +88,7 @@ const LAWS = [
   {
     cite: "37 C.F.R. Part 370",
     url: `${CFR}/part-370`,
-    what: "reports of use. Every performance, on the station or a show's channel, is reported to SoundExchange each month with the number of listeners. Ours are public.",
+    what: "reports of use. Every performance, on the station or a show's own stream, is reported to SoundExchange each month with the number of listeners. Ours are public.",
   },
 ];
 
@@ -99,7 +104,11 @@ const FAQ = [
   },
   {
     q: "Why can't I download a show?",
-    a: "The license requires that we not help listeners make copies (§ 114(d)(2)(C)(vi)). Each show plays around the clock on its own stream instead.",
+    a: "The license requires that we not help listeners make copies (§ 114(d)(2)(C)(vi)). Instead, each show's own stream plays its recent shows around the clock.",
+  },
+  {
+    q: "Why does a show's stream play only whole shows from the last two weeks?",
+    a: "An archived program must be at least five hours long and can't be offered for more than two weeks (§ 114(d)(2)(C)(iii)). A show that gets cut short, by a restart for example, isn't kept.",
   },
   {
     q: "Why won't you play a whole album, or an hour of one artist?",
@@ -223,9 +232,11 @@ const StreamUrl = ({
   </footer>
 );
 
-// A show's own channel: its music around the clock.
+// A show's own stream: its archived shows, in a loop (radio.liq block_stream).
 const channel = (show: Show) => `/stream/${show.slug}`;
-const ChannelButton = ({ show }: { show: Show }) => <PlayButton src={channel(show)} title={show.title} />;
+const ChannelButton = ({ show }: { show: Show }) => (
+  <PlayButton src={channel(show)} title={show.title} now={`/${show.slug}/now.json`} />
+);
 
 // The show on air: the newest play's (the schedule's until anything has played).
 async function onAir(shows: Show[]) {
@@ -381,7 +392,7 @@ const ShowList = ({ shows }: { shows: Show[] }) => {
         <h2 id="shows-heading" class="section-label">
           Shows
         </h2>
-        <p class="section-note">Each one also streams on its own, around the clock.</p>
+        <p class="section-note">Each one's recent shows play on its own stream, around the clock.</p>
       </div>
       <ol class="item-list">
         {scheduled(shows).map((show) => (
@@ -523,14 +534,16 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
           Every show, around the clock
         </h2>
         <p>
-          Radio used to be gone once its hours were over. Here, every show also has a stream of its own that
-          never stops: its music, picked the same way, at any hour. Missed this morning's show? Play it
+          Radio used to be gone once its hours were over. Here, every show is recorded in full as it goes out,
+          and each show has a stream of its own that plays its recent shows, one after another in no set
+          order, around the clock. Missed this morning's show? Its stream is playing it, or one like it,
           tonight. Each track's title, album and artist appear as it plays, and a show's page lists when it
           was on the station over the last two weeks.
         </p>
         <p>
-          A show's stream plays the way radio does, with no skipping, rewinding or downloading, and its plays
-          pay artists just as the station's do.
+          A show's stream plays the way radio does: whole shows of at least five hours, none older than two
+          weeks, with no skipping, rewinding or downloading. Those are the license's conditions for archived
+          programs, and keeping them means its plays pay artists just as the station's do.
         </p>
       </section>
       <section class="prose" aria-labelledby="about-not">
@@ -595,8 +608,8 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
           Listening
         </h2>
         <p>
-          Press play on any page, or open the stream address in a radio app or VLC. Each show also streams on
-          its own around the clock: its address is at the foot of its page.
+          Press play on any page, or open the stream address in a radio app or VLC. Each show also has its own
+          stream of its recent shows, around the clock: its address is at the foot of its page.
         </p>
         <dl class="streams">
           <div>
@@ -691,7 +704,7 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
           <h2 id="show-channel" class="label">
             Around the clock
           </h2>
-          <p class="section-note">This show's music, on a stream of its own.</p>
+          <p class="section-note">Its recent shows, one after another, on a stream of its own.</p>
         </div>
         <ol class="item-list">
           <li class="item show-item">
@@ -720,11 +733,7 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
         )}
       </section>
       <History plays={(isOn ? recent.slice(1) : recent).slice(0, 5)} />
-      <StreamUrl
-        host={c.req.header("host") ?? ""}
-        path={`/stream/${show.slug}`}
-        label={`${show.title}, 24/7`}
-      />
+      <StreamUrl host={c.req.header("host") ?? ""} path={channel(show)} label={`${show.title}, 24/7`} />
       <Poll path={`/${show.slug}`} ids={["np", "past", "history"]} />
     </main>,
     { title: show.title },

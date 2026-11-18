@@ -1,5 +1,5 @@
 # End-to-end overlay for compose.yml (run with test/e2e.sh): the real stack on
-# fixture shows/music, with shows/music/logs/covers/plays in throwaway volumes
+# fixture shows/music, with shows/music/logs/covers/plays/archive in throwaway volumes
 # (shows and music so e2e.sh can change them, as a deploy does), nothing
 # published to the host, and a Playwright container driving it.
 services:
@@ -15,20 +15,26 @@ services:
       - |
         [ -e /music/.seeded ] && exit
         cp -r /fixture-shows/. /shows/ && cp -r /fixture-music/. /music/ && cp -r /fixture-covers/. /covers/
-        chmod -R a+rX /shows /music
+        # Two finished archive blocks of the night show (14 s each, untagged)
+        # with their track sidecars, for night's own stream.
+        mkdir -p /archive && cp -r /fixture-archive/. /archive/
+        chmod -R a+rX /shows /music /archive
         touch /music/.seeded
     volumes:
       - e2e-shows:/shows
       - e2e-music:/music
       - e2e-covers:/covers
+      - e2e-archive:/archive
       - ./test/fixtures/shows:/fixture-shows:ro
       - ./test/fixtures/music:/fixture-music:ro
       - ./test/fixtures/covers:/fixture-covers:ro
+      - ./test/fixtures/archive:/fixture-archive:ro
   init:
     volumes:
       - e2e-logs:/logs
       - e2e-covers:/covers
       - e2e-plays:/plays
+      - e2e-archive:/archive
     depends_on:
       seed: { condition: service_completed_successfully }
   icecast:
@@ -37,20 +43,34 @@ services:
       - e2e-shows:/shows:ro
   liquidsoap:
     # The tests put the show they need on air (radio.liq onair; test/helpers.ts),
-    # and shrink the complement's three hours to 30 s.
+    # and shrink the times: the complement's three hours to 30 s, a block's
+    # tail to 5 s, and the shortest archived block from five hours to 150 s
+    # (over the minute radio.liq takes to see an hours change, plus a track
+    # finishing before the next show starts), and the longest a show's last
+    # track can run past its hours from 20 min to 60 s (the tracks are short).
     environment:
       ONAIR_PORT: 7000
       COMPLEMENT_WINDOW: 30
+      ARCHIVE_TAIL: 5
+      ARCHIVE_MIN_SECONDS: 150
+      ARCHIVE_OVERRUN: 60
     volumes:
       - e2e-shows:/shows:ro
       - e2e-music:/music:ro
       - e2e-covers:/covers:ro
       - e2e-plays:/plays
+      - e2e-archive:/archive
   app:
     volumes:
       - e2e-shows:/shows:ro
       - e2e-covers:/covers:ro
       - e2e-plays:/plays:ro
+  # Two blocks a show, so night's stream has two to pick from.
+  archive-prune:
+    environment:
+      ARCHIVE_KEEP: 2
+    volumes:
+      - e2e-archive:/archive
   caddy:
     ports: !reset []
     volumes:
@@ -66,8 +86,9 @@ services:
       SITE_PASSWORD: ${SITE_PASSWORD}
     volumes:
       - ./test-results:/app/test-results
-      # For the specs to check the reports against.
+      # For the specs to check the reports and the archive against.
       - e2e-plays:/plays:ro
+      - e2e-archive:/archive:ro
     depends_on:
       caddy: { condition: service_started }
       liquidsoap: { condition: service_started }
@@ -78,3 +99,4 @@ volumes:
   e2e-logs: {}
   e2e-covers: {}
   e2e-plays: {}
+  e2e-archive: {}

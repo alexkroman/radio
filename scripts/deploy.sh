@@ -82,7 +82,7 @@ rs --delete shows "$HOST:radio/"
 # Pre-create bind-mounted dirs so Docker doesn't create them as root on first
 # run. The images are built (step 2), so `up` only swaps in what changed.
 $SSH "$HOST" 'cd radio &&
-  mkdir -p music plays logs covers &&
+  mkdir -p music plays logs covers archive &&
   docker compose up -d --no-build --remove-orphans &&
   sh scripts/reconcile.sh'
 rs --delete --delete-excluded music "$HOST:radio/"

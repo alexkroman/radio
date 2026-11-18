@@ -27,33 +27,39 @@ test("the station is one MP3 stream", async () => {
   }).toPass({ timeout: 60_000 });
 });
 
-test("each show streams on its own around the clock, on and off air, logging its own plays", async ({
+test("each show's own stream loops its archived blocks, naming each track, and logs its own plays", async ({
   page,
 }) => {
-  await onAir("night");
-  // Edge's channel plays edge, though night is on the station.
+  await onAir("default");
+  // Night's stream plays night's archived blocks (test/fixtures/archive:
+  // Midnight, then Second Wind), though default is on the station.
   await expect(async () => {
-    expect(await streamHead("/stream/edge")).toEqual({
+    expect(await streamHead("/stream/night")).toEqual({
       status: 200,
       type: "audio/mpeg",
       bytes: expect.any(Number),
     });
   }).toPass({ timeout: 60_000 });
   await expect
-    .poll(() => icyTitle("/stream/edge"), { timeout: 60_000 })
-    .toBe("Zoë Ñandú - Café | Olé <b> (Édition | Spéciale)");
-  await expect.poll(async () => (await loggedPlays("edge")).length, { timeout: 60_000 }).toBeGreaterThan(0);
-  expect(new Set((await loggedPlays("edge")).map((p) => p.show))).toEqual(new Set(["edge"]));
-  // Its plays aren't the station's: night stays on air.
-  expect((await loggedPlays()).at(-1)?.show).toBe("night");
+    .poll(() => icyTitle("/stream/night"), { timeout: 60_000 })
+    .toMatch(/^(Gamma - Midnight|Beta & Band - Second Wind)$/);
+  // Each track as it comes up, from the blocks' sidecars, over and over.
+  await expect
+    .poll(async () => (await loggedPlays("night")).map((p) => p.title).join(), { timeout: 60_000 })
+    .toMatch(/Midnight,Second Wind,Midnight/);
+  expect(new Set((await loggedPlays("night")).map((p) => p.show))).toEqual(new Set(["night"]));
+  // Its plays aren't the station's: default stays on air.
+  expect((await loggedPlays()).at(-1)?.show).toBe("default");
   await page.goto("/");
-  await expect(page.locator("#on-air h2")).toHaveText("Fixture Night");
-  // The show's page links its channel.
-  await page.goto("/edge");
-  await expect(page.locator("footer").getByRole("link", { name: /\/stream\/edge$/ })).toHaveAttribute(
+  await expect(page.locator("#on-air h2")).toHaveText("Fixture Default");
+  // The show's page links its stream.
+  await page.goto("/night");
+  await expect(page.locator("footer").getByRole("link", { name: /\/stream\/night$/ })).toHaveAttribute(
     "href",
-    "/stream/edge",
+    "/stream/night",
   );
+  // A show with no archived block yet streams silence.
+  expect((await streamHead("/stream/edge")).status).toBe(200);
   // No channel for what isn't a show.
   expect((await streamHead("/stream/nope")).status).toBe(404);
 });

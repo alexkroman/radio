@@ -64,18 +64,20 @@ const PauseIcon = ({ size }: { size: number }) => (
   </svg>
 );
 
-// Plays the station's stream (whatever is on air), or a show's own channel
-// (src /stream/<slug>, with its title). The client (app/client.ts) finds
+// Plays the station's stream (whatever is on air), or a show's own stream
+// (src /stream/<slug>, with its title and its now.json). The client (app/client.ts) finds
 // these by data-play and shows the pause state on every one for what's
 // playing.
 export const PlayButton = ({
   large,
   src = "/stream",
   title = SITE_TITLE,
+  now = "/now.json",
 }: {
   large?: boolean;
   src?: string;
   title?: string;
+  now?: string; // its track playing, for the player bar and lock screen
 }) => {
   const size = large ? 20 : 14;
   return (
@@ -84,6 +86,7 @@ export const PlayButton = ({
       class={large ? "play play-lg" : "play"}
       data-play={src}
       data-title={title}
+      data-now={now}
       aria-label={`Play ${title}`}
     >
       <PlayIcon size={size} d={large ? "M4.5 2.5v9l7.5-4.5z" : "M4 2.5v9l7.5-4.5z"} />

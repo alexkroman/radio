@@ -41,18 +41,20 @@ services:
       - -c
       - |
         set -e
-        chown -R 10001:10001 /data /logs /covers /plays
-        chmod -R u+rwX,g+rwX /logs /covers /plays /data
-        chmod g+s /logs /covers /plays
+        mkdir -p /archive/recording /archive/blocks /archive/short /archive/tracks
+        chown -R 10001:10001 /data /logs /covers /plays /archive
+        chmod -R u+rwX,g+rwX /logs /covers /plays /data /archive
+        chmod g+s /logs /covers /plays /archive /archive/recording /archive/blocks /archive/short /archive/tracks
     volumes:
       - caddy:/data
       - ./logs:/logs
       - ./covers:/covers
       - ./plays:/plays
+      - ./archive:/archive
     restart: "no"
 
-  # Serves the streams (mounts /stream and /stream/<show>), with UTF-8 track metadata, extra
-  # buffering for slow connections and a silent fallback so listeners stay
+  # Serves the streams (mounts /stream and /stream/<show>), with UTF-8 track
+  # metadata, extra buffering for slow connections and a silent fallback so listeners stay
   # connected through a Liquidsoap restart: see icecast/config.sh, which also
   # reloads the config without dropping anyone.
   icecast:
@@ -86,14 +88,16 @@ services:
     volumes:
       - ./logs:/var/log/icecast
       - ./icecast:/icecast:ro
-      # The shows, for their channels' mounts (icecast/config.sh).
+      # The shows, for their streams' mounts (icecast/config.sh).
       - ./shows:/shows:ro
     depends_on:
       init: { condition: service_completed_successfully }
 
   # The 24/7 stream, playing the shows on their schedule (radio.liq), and each
-  # show's own channel, sent to Icecast; writes the play logs
-  # (plays/YYYY-MM.jsonl, and plays/YYYY-MM.<show>.jsonl for the channels). TZ is the schedule's time zone (.env).
+  # show's own stream, looping its archived blocks, sent to Icecast; writes
+  # the play logs (plays/YYYY-MM.jsonl, and plays/YYYY-MM.<show>.jsonl for the
+  # shows' streams) and records each show block to archive/. TZ is the
+  # schedule's time zone (.env).
   liquidsoap:
     <<: [*hardening, *logging]
     group_add: ["10001"]
@@ -109,6 +113,7 @@ services:
       - ./music:/music:ro
       - ./covers:/covers:ro
       - ./plays:/plays
+      - ./archive:/archive
     depends_on:
       init: { condition: service_completed_successfully }
       icecast: { condition: service_started }
@@ -133,6 +138,24 @@ services:
       - ./shows:/shows:ro
       - ./covers:/covers:ro
       - ./plays:/plays:ro
+    depends_on:
+      init: { condition: service_completed_successfully }
+
+  # Deletes archive blocks before they've been up two weeks, all but the
+  # newest ARCHIVE_KEEP of each show, and blocks too short to archive
+  # (scripts/prune-archive.sh): at start, then every hour (nightly included),
+  # so a finished block's predecessor goes within the hour.
+  archive-prune:
+    <<: [*hardening, *logging]
+    user: "10001:10001"
+    restart: unless-stopped
+    image: busybox:1.38.0
+    command: ["sh", "-c", "while :; do sh /prune-archive.sh; sleep 3600; done"]
+    environment:
+      ARCHIVE_KEEP: ${ARCHIVE_KEEP:-1}
+    volumes:
+      - ./scripts/prune-archive.sh:/prune-archive.sh:ro
+      - ./archive:/archive
     depends_on:
       init: { condition: service_completed_successfully }
 

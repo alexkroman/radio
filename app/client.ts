@@ -26,12 +26,10 @@ const session = navigator.mediaSession;
 const station = document.getElementById("player")!.dataset.title!;
 // What the player plays: the station (/stream), or a show's own channel
 // (/stream/<slug>). Set by a tap.
-type Source = { src: string; title: string };
-const LIVE: Source = { src: "/stream", title: station };
+type Source = { src: string; title: string; now: string };
+const LIVE: Source = { src: "/stream", title: station, now: "/now.json" };
 let source = LIVE;
 const live = () => source.src === LIVE.src;
-// A channel's now.json: /stream/<slug> → /<slug>/now.json.
-const channelNow = (src: string) => `${src.replace(/^\/stream/, "")}/now.json`;
 // Whether it's playing: set on a tap, cleared when it stops.
 let playing = false;
 // A track: title, artist, album (all three shown while it plays, as the
@@ -105,7 +103,7 @@ async function poll() {
       .then((r) => (r.ok ? r.text() : undefined))
       .catch(() => undefined);
   const src = source.src;
-  const [json, channel] = await Promise.all([get("/now.json"), live() ? undefined : get(channelNow(src))]);
+  const [json, channel] = await Promise.all([get("/now.json"), live() ? undefined : get(source.now)]);
   if (source.src === src && channel) channelTrack = JSON.parse(channel) as Track;
   if (!json || json === nowJson) return sync();
   const first = !nowJson;
@@ -183,7 +181,8 @@ for (const action of ["seekto", "seekforward", "seekbackward", "previoustrack", 
 document.addEventListener("click", (e) => {
   const button = (e.target as Element).closest<HTMLButtonElement>("button[data-play]");
   if (!button) return;
-  toggle({ src: button.dataset.play!, title: button.dataset.title! });
+  const { play: src, title, now } = button.dataset;
+  toggle({ src: src!, title: title!, now: now! });
 });
 
 document.addEventListener("htmx:beforeRequest", (e) => {

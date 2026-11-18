@@ -296,6 +296,7 @@ describe("about", () => {
       "https://www.law.cornell.edu/uscode/text/17/114#d_2",
       "https://www.law.cornell.edu/uscode/text/17/114#j_13",
       "https://www.law.cornell.edu/uscode/text/17/114#d_2_C_ii",
+      "https://www.law.cornell.edu/uscode/text/17/114#d_2_C_iii",
       "https://www.law.cornell.edu/uscode/text/17/114#d_2_C_vi",
       "https://www.law.cornell.edu/uscode/text/17/114#d_2_C_ix",
       "https://www.law.cornell.edu/uscode/text/17/114#g_2",

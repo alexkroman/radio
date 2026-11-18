@@ -106,12 +106,6 @@ test("every play in the run kept the performance complement", async () => {
   const plays = await loggedPlays();
   expect(plays.length).toBeGreaterThan(20);
   expect(complementViolations(plays, COMPLEMENT_WINDOW)).toEqual([]);
-  // And on each show's own channel, a channel of its own.
-  for (const show of ["complement", "default", "edge", "night", "odd"]) {
-    const own = await loggedPlays(show);
-    expect(own.length, show).toBeGreaterThan(0);
-    expect(complementViolations(own, COMPLEMENT_WINDOW), show).toEqual([]);
-  }
 });
 
 // Last: it locks this client out of logging in for a while.

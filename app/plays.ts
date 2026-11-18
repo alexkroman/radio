@@ -1,6 +1,7 @@
 // The play log: Liquidsoap appends one JSON line per play to
-// /plays/YYYY-MM.jsonl (radio.liq), in local time (TZ).
-import { open, readFile } from "node:fs/promises";
+// /plays/YYYY-MM.jsonl (radio.liq), in local time (TZ); each show's own
+// channel (/stream/<show>) logs to /plays/YYYY-MM.<show>.jsonl.
+import { open, readdir, readFile } from "node:fs/promises";
 
 const PLAYS = process.env.PLAYS_DIR ?? "/plays";
 
@@ -37,6 +38,15 @@ const parse = parseJsonl<Play>;
 // Every play in a month ("YYYY-MM").
 export async function monthPlays(month: string): Promise<Play[]> {
   return parse(await readFile(file(month), "utf8").catch(() => ""));
+}
+
+// Every play in a month on the shows' own channels.
+export async function channelPlays(month: string): Promise<Play[]> {
+  const files = (await readdir(PLAYS).catch(() => [] as string[])).filter(
+    (f) => f.startsWith(`${month}.`) && f.endsWith(".jsonl") && f !== `${month}.jsonl`,
+  );
+  const texts = await Promise.all(files.map((f) => readFile(`${PLAYS}/${f}`, "utf8").catch(() => "")));
+  return texts.flatMap(parse);
 }
 
 // The last ~256 KB of this month's log (plenty for a show page's history),

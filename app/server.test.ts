@@ -49,6 +49,14 @@ beforeAll(async () => {
   process.env.PLAYS_DIR = dir;
   month = (await import("./plays.ts")).monthOf(new Date());
   await writeFile(join(dir, `${month}.jsonl`), PLAYS.map((p) => JSON.stringify(p)).join("\n") + "\n");
+  // The shows' own channels (/stream/<show>): newer than the station's last
+  // play, but not on air; heard by their listeners only.
+  const channel = (show: string, plays: Play[]) =>
+    writeFile(join(dir, `${month}.${show}.jsonl`), plays.map((p) => JSON.stringify(p)).join("\n") + "\n");
+  await channel("night", [
+    play({ time: now - 10, show: "night", artist: "Gamma", title: "Midnight", listeners: 4 }),
+  ]);
+  await channel("default", [play({ time: now, artist: "Nobody", title: "Unheard", listeners: 0 })]);
   // Archive blocks (sparse files: only their size matters). 256 kbps is
   // 32,000 bytes a second; archived programs are at least 5 hours.
   const archive = await mkdtemp(join(tmpdir(), "archive-"));
@@ -203,6 +211,7 @@ describe("pages", () => {
     expect(html).toMatch(/<h2 class="display"><a href="\/night">Fixture Night<\/a>/);
     expect(html).toMatch(/np-track">Midnight/);
     expect(html).toContain('href="/stream"');
+    expect(html).not.toContain("Unheard");
     expect(html).toContain("Second Wind");
     expect(html).toContain('<div id="player" data-title="Mazes Radio"></div>');
   });
@@ -222,6 +231,10 @@ describe("pages", () => {
     expect(off).toContain("Second Wind");
     expect(off).toContain("First Light");
     expect(off).not.toContain("Midnight");
+    expect(off).not.toContain("Unheard");
+    // Its own channel, around the clock.
+    expect(off).toContain('href="/stream/default"');
+    expect(off).toMatch(/Fixture Default, 24\/7: <a class="url" href="\/stream\/default"/);
     const on = await (await page("/night")).text();
     expect(on).toMatch(/np-track">Midnight/);
     expect(on).not.toContain("Off air");
@@ -437,15 +450,15 @@ describe("reports", () => {
     expect((await req(`/reports/${month}`)).status).toBe(401);
   });
 
-  test("the SoundExchange report counts each live play's listeners (at least 1) and each track archive plays reached", async () => {
+  test("the SoundExchange report counts each live play's listeners (at least 1 on the station) and each track archive plays reached", async () => {
     const res = await page(`/reports/${month}`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-disposition")).toMatch(/^attachment; filename="MAZESRADIO01/);
     const rows = (await res.text()).trim().split("\n");
     expect(rows[0]).toMatch(/^\^NAME_OF_SERVICE\^\|/);
     expect(rows.slice(1)).toEqual([
+      "^MAZES RADIO^|^A^|^GAMMA^|^MIDNIGHT^|^US1234567890^|^ALBUM^|^LABEL^|7",
       "^MAZES RADIO^|^A^|^ALPHA ARTIST^|^FIRST LIGHT^|^US1234567890^|^ALBUM^|^LABEL^|3",
-      "^MAZES RADIO^|^A^|^GAMMA^|^MIDNIGHT^|^US1234567890^|^ALBUM^|^LABEL^|3",
       "^MAZES RADIO^|^A^|^ODD ONE^|^TRACK A^|^^|^^|^^|3",
       "^MAZES RADIO^|^A^|^BETA & BAND^|^SECOND WIND^|^US1234567890^|^ALBUM^|^LABEL^|2",
       "^MAZES RADIO^|^A^|^ODD ONE^|^TRACK B^|^^|^^|^^|2",

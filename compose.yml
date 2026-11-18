@@ -70,12 +70,13 @@ services:
       ICECAST_SOURCE_PASSWORD: &password ${PASSWORD:?Set PASSWORD in .env}
       ICECAST_ADMIN_PASSWORD: *password
       ICECAST_RELAY_PASSWORD: *password
-      # The Liquidsoap source and its silence fallback, plus a spare for a
-      # restarting Liquidsoap whose old connection lingers (the image's default
-      # is 2). Icecast logs an error at start unless the client limit below is
+      # The Liquidsoap sources (the station and a channel per show), with room
+      # for each one's silence fallback and for a restarting Liquidsoap whose
+      # old connections linger (the image's default is 2): enough for 10
+      # shows. Icecast logs an error at start unless the client limit below is
       # more than twice this ("Client limit (200) is too small for given source
-      # limit (100)"), so keep MAX_LISTENERS over 8.
-      ICECAST_MAX_SOURCES: 4
+      # limit (100)"), so keep MAX_LISTENERS over 80.
+      ICECAST_MAX_SOURCES: 40
       # Shown on Icecast's status pages (not public: Caddy only exposes the
       # streams). Unset, Icecast warns at every start.
       ICECAST_ADMIN_EMAIL: admin@${DOMAIN:-localhost}
@@ -89,12 +90,15 @@ services:
       - ./icecast:/icecast:ro
       # Finished archive blocks, served at /archive/<file> (icecast/config.sh).
       - ./archive:/archive:ro
+      # The shows, for their channels' mounts (icecast/config.sh).
+      - ./shows:/shows:ro
     depends_on:
       init: { condition: service_completed_successfully }
 
-  # The 24/7 stream, playing the shows on their schedule (radio.liq), sent to
-  # Icecast; writes the play log (plays/YYYY-MM.jsonl) and records each show
-  # block to archive/. TZ is the schedule's time zone (.env).
+  # The 24/7 stream, playing the shows on their schedule (radio.liq), and each
+  # show's own channel, sent to Icecast; writes the play logs
+  # (plays/YYYY-MM.jsonl, and plays/YYYY-MM.<show>.jsonl for the channels) and
+  # records each show block to archive/. TZ is the schedule's time zone (.env).
   liquidsoap:
     <<: [*hardening, *logging]
     group_add: ["10001"]

@@ -33,13 +33,18 @@ enable_autocue_metadata()
 # warns "Time limit exceeded" for a track that takes longer.
 settings.request.timeout := 45.
 
-# One 24/7 MP3 stream, Icecast mount /stream (public at /stream via Caddy),
-# playing the shows on a daily schedule. Every shows/<slug>.md is a show,
-# playing music/<slug>/ on shuffle during its `hours:` (front matter, see
-# show_hours); each play is appended to /plays/YYYY-MM.jsonl (read by the app's
-# pages and report). Hours edits apply within a minute; adding or removing a
-# show needs a Liquidsoap restart (no listener is dropped), which
+# The station: one 24/7 MP3 stream, Icecast mount /stream (public at /stream
+# via Caddy), playing the shows on a daily schedule. Every shows/<slug>.md is
+# a show, playing music/<slug>/ on shuffle during its `hours:` (front matter,
+# see show_hours); each play is appended to /plays/YYYY-MM.jsonl (read by the
+# app's pages and report). Hours edits apply within a minute; adding or
+# removing a show needs a Liquidsoap restart (no listener is dropped), which
 # scripts/reconcile.sh does when needed.
+#
+# And a channel per show: its music around the clock, mount /stream/<slug>
+# (public at /stream/<slug>, linked from the show's page), with a playlist,
+# performance complement and play log (/plays/YYYY-MM.<slug>.jsonl, for the
+# reports) of its own. A channel isn't archived and doesn't count as on air.
 
 # A show's hours, from `hours: <start>-<end>` in its front matter: whole hours
 # on a 24-hour clock in local time (TZ), the end not included; 22-6 runs past
@@ -144,8 +149,8 @@ def safe_recode(s) =
 end
 
 # The sound recording performance complement (17 U.S.C. 114(j)(13)), a
-# condition of the statutory license, across the station (one channel): in
-# any three hours, at most 4 tracks by one featured artist (3 in a row) and 3
+# condition of the statutory license, per channel (the station, and each
+# show's own): in any three hours, at most 4 tracks by one featured artist (3 in a row) and 3
 # from one album (2 in a row). A candidate that would break it is never
 # picked: if a show has nothing else, it plays silence until it can. Checked
 # on what has played (on_track) plus what's picked and not yet played: this
@@ -165,19 +170,26 @@ def complement_entry(uri, m) =
   }
 end
 
-# Played tracks, newest first ({time, artists, album}): written only by the
-# shows' on_track, which all run on the one clock's thread.
-complement_played = ref([])
-
-# Picked tracks not yet played, oldest first ({show, seq, file, artists,
-# album}). Each show keeps its own (show() below): its picks are written only
-# by its playlist's check_next, which runs on another thread than on_track, so
-# no list here is written from two threads (Liquidsoap has no mutex: a
-# read-then-write from each could drop the other's change). A getter per
-# show, registered as the shows are built at startup.
-complement_shows = ref([])
-def complement_pending() =
-  list.flatten(list.map(fun (pending) -> pending(), complement_shows()))
+# A channel's complement: `played`, its played tracks, newest first ({time,
+# artists, album}): written only by its shows' on_track, which all run on the
+# one clock's thread. `shows`, its picked tracks not yet played, oldest first
+# ({show, seq, file, artists, album}). Each show keeps its own (show() below):
+# its picks are written only by its playlist's check_next, which runs on
+# another thread than on_track, so no list here is written from two threads
+# (Liquidsoap has no mutex: a read-then-write from each could drop the other's
+# change). A getter per show, registered as the shows are built at startup.
+def complement_channel() =
+  played = ref([])
+  shows = ref([])
+  {
+    played = fun () -> played(),
+    set_played = fun (l) -> played := l,
+    shows = fun () -> shows(),
+    add_show = fun (pending) -> shows := list.append(shows(), [pending])
+  }
+end
+def complement_pending(ch) =
+  list.flatten(list.map(fun (pending) -> pending(), ch.shows()))
 end
 
 # Whether a candidate track (request metadata) for show slug keeps the complement.
@@ -186,16 +198,17 @@ def complement_key(p) =
   (p.artists, p.album)
 end
 
-def complement_allows(slug, uri, m) =
+def complement_allows(ch, slug, uri, m) =
   c = complement_entry(uri, m)
   now = time()
-  played = list.filter(fun (p) -> p.time > now - complement_window, complement_played())
-  own = list.filter(fun (p) -> p.show == slug, complement_pending())
-  others = list.filter(fun (p) -> p.show != slug, complement_pending())
+  pending = complement_pending(ch)
+  played = list.filter(fun (p) -> p.time > now - complement_window, ch.played())
+  own = list.filter(fun (p) -> p.show == slug, pending)
+  others = list.filter(fun (p) -> p.show != slug, pending)
 
   # Everything that counts in the window, and the tracks in the order they
   # play before the candidate, newest first.
-  everything = list.append(list.map(complement_key, played), list.map(complement_key, complement_pending()))
+  everything = list.append(list.map(complement_key, played), list.map(complement_key, pending))
   before = list.append(list.rev(list.map(complement_key, own)), list.map(complement_key, played))
   def rec run(matches, ls) =
     if ls != [] and matches(list.hd(ls)) then 1 + run(matches, list.tl(ls)) else 0 end
@@ -228,13 +241,14 @@ end
 
 # A track starts playing: it's played (the list of picks is its show's, in
 # show() below).
-def complement_played_now(m, now) =
+def complement_played_now(ch, m, now) =
   c = complement_entry(list.assoc(default="", "filename", m), m)
-  complement_played :=
+  ch.set_played(
     {time = now, artists = c.artists, album = c.album}::list.filter(
       fun (p) -> p.time > now - complement_window,
-      complement_played()
+      ch.played()
     )
+  )
 end
 
 # The archive: the program as broadcast (`radio`, the final bus, so anything
@@ -392,8 +406,11 @@ def file_tags(uri) =
   end
 end
 
-# A show's source.
-def show(f) =
+# A show's source, on a channel (ch, its complement): the station's, which
+# records the archive and logs to /plays/YYYY-MM.jsonl, or the show's own
+# (~channel=true), which logs to /plays/YYYY-MM.<slug>.jsonl. `mount`: the
+# Icecast mount its listeners are counted on.
+def show(ch, ~channel=false, ~mount, f) =
   slug = slug_of(f)
 
   # Artist separation, beyond the complement: reject a candidate if any of
@@ -417,11 +434,7 @@ def show(f) =
   def pending() =
     list.filter(fun (p) -> p.seq > started(), picks())
   end
-  complement_shows :=
-    list.append(
-      complement_shows(),
-      [fun () -> list.map(fun (p) -> {show = p.show, artists = p.artists, album = p.album}, pending())]
-    )
+  ch.add_show(fun () -> list.map(fun (p) -> {show = p.show, artists = p.artists, album = p.album}, pending()))
   def started_now(m) =
     filename = list.assoc(default="", "filename", m)
     match = list.filter(fun (p) -> p.file == filename, pending())
@@ -435,7 +448,7 @@ def show(f) =
     artists = artists_of(list.assoc(default="", "artist", m))
     name = path.basename(uri)
     if
-      not complement_allows(slug, uri, m)
+      not complement_allows(ch, slug, uri, m)
     then
       log.info(
         label=slug,
@@ -446,10 +459,11 @@ def show(f) =
       # complement holds every one back it would spin through them, thousands
       # a second, starving the stream's clock (it falls behind, and the
       # archive records slower than real time). A pause per refusal keeps that
-      # to a few a second. It runs on the playlist's own thread, not the
-      # clock's, and the next track is picked while this one plays, so it
-      # costs no audio.
-      sleep(0.1)
+      # to a few a second. It runs on a scheduler queue, not the clock's
+      # thread, and the next track is picked while this one plays, so it
+      # costs no audio; but the queue is held until a candidate is allowed
+      # (see generic_queues below).
+      thread.pause(0.1)
       false
     elsif
       rejected() < 20 and list.exists(fun (a) -> list.mem(a, recent_artists()), artists)
@@ -487,9 +501,9 @@ def show(f) =
       begin
         now = time()
         started_now(m)
-        complement_played_now(m, now)
+        complement_played_now(ch, m, now)
         starts := list.prefix(10, (list.assoc(default="", "filename", m), now)::starts())
-        archive_track(slug, m, now)
+        if not channel then archive_track(slug, m, now) end
       end
   )
 
@@ -511,13 +525,11 @@ def show(f) =
             label = t.label,
             isrc = t.isrc,
             cover = t.cover,
-            listeners = listeners("stream")
+            listeners = listeners(mount)
           }
-        file.write(
-          append=true,
-          data="#{json.stringify(compact=true, play)}\n",
-          "/plays/#{time.string('%Y-%m')}.jsonl"
-        )
+        month = "#{time.string('%Y-%m')}"
+        log_file = channel ? "#{month}.#{slug}" : month
+        file.write(append=true, data="#{json.stringify(compact=true, play)}\n", "/plays/#{log_file}.jsonl")
       end
   )
 
@@ -532,6 +544,14 @@ def show(f) =
 end
 
 shows = file.ls(absolute=true, sorted=true, pattern="*.md", "/shows")
+
+# A playlist the complement holds back keeps one of the scheduler's generic
+# queues busy until it can play (check_next above): a show's channel can be
+# held for hours if it has few artists or albums. The queues also prepare
+# every track and run the asynchronous on_track (the play log), so with the
+# default 5 a few held channels starved the station. One per playlist (the
+# station's and the channel's, per show), and the default 5 besides.
+settings.scheduler.generic_queues := 2 * list.length(shows) + 5
 
 # Each show's hours, by slug, re-read every minute so an edit applies without
 # a restart. Not while the show files differ from the ones it started with: a
@@ -630,12 +650,12 @@ end
 # played at all: it picks up where it left off (and logs nothing meanwhile).
 # Hours no show has, or a show with nothing to play (no music, or every file
 # fails), play silence (mksafe), so listeners stay connected.
-music = switch(track_sensitive=true, list.map(fun (f) -> (on_air(slug_of(f)), show(f)), shows))
-music = crossfade(duration=12., fade_in=6., fade_out=6., music)
-
-# Limiter catches peaks from tracks autocue boosted and crossfade overlaps.
-radio = limit(mksafe(music))
-radio = metadata.map(fun (m) -> list.map(fun (kv) -> (fst(kv), safe_recode(snd(kv))), m), radio)
+station = complement_channel()
+music =
+  switch(
+    track_sensitive=true,
+    list.map(fun (f) -> (on_air(slug_of(f)), show(station, mount="stream", f)), shows)
+  )
 
 # The in-stream title players show: "Artist - Title (Album)". The license
 # requires identifying each track's title, album and featured artist while it
@@ -663,25 +683,47 @@ def icy_song(m) =
     ]
   end
 end
-radio = metadata.map(update=true, icy_song, radio)
 
 # Encoders get only the metadata keys listed here: add "song", or Icecast
 # would build its own "Artist - Title".
 settings.encoder.metadata.export := list.append(settings.encoder.metadata.export(), ["song"])
 
-# icecast/silence.mp3 (Icecast's fallback while this restarts; see
-# icecast/config.sh) is the same format: change both together.
-output.icecast(
-  %mp3(bitrate = 256),
-  encoding="UTF-8",
-  # Only "song" ("Artist - Title"), which Icecast shows players as the
-  # StreamTitle. Sending artist and title too made Icecast warn on every
-  # track that it got "song" but also "artist" and/or "title".
-  icy_metadata=["song"],
-  host="icecast",
-  password=environment.get("PASSWORD"),
-  mount="stream",
+# A channel's final bus, sent to Icecast mount `mount` (returned, for the
+# archive): crossfaded, never failing, limited, with its metadata in UTF-8 and
+# the ICY title. icecast/silence.mp3 (Icecast's fallback while this restarts;
+# see icecast/config.sh) is the same format: change both together.
+def broadcast((mount:string), music) =
+  music = crossfade(duration=12., fade_in=6., fade_out=6., music)
+
+  # Limiter catches peaks from tracks autocue boosted and crossfade overlaps.
+  radio = limit(mksafe(music))
+  radio = metadata.map(fun (m) -> list.map(fun (kv) -> (fst(kv), safe_recode(snd(kv))), m), radio)
+  radio = metadata.map(update=true, icy_song, radio)
+  output.icecast(
+    id=mount,
+    %mp3(bitrate = 256),
+    encoding="UTF-8",
+    # Only "song" ("Artist - Title"), which Icecast shows players as the
+    # StreamTitle. Sending artist and title too made Icecast warn on every
+    # track that it got "song" but also "artist" and/or "title".
+    icy_metadata=["song"],
+    host="icecast",
+    password=environment.get("PASSWORD"),
+    mount=mount,
+    radio
+  )
   radio
+end
+radio = broadcast("stream", music)
+
+# Each show's own channel: its music around the clock.
+list.iter(
+  fun (f) ->
+    begin
+      mount = "stream/#{slug_of(f)}"
+      ignore(broadcast(mount, show(complement_channel(), channel=true, mount=mount, f)))
+    end,
+  shows
 )
 
 # "YYYY-MM-DD" for a local date.

@@ -143,10 +143,11 @@ export function icyTitle(path: string): Promise<string> {
   });
 }
 
-// Every play logged this month (the e2e container mounts the play log),
+// Every play logged this month (the e2e container mounts the play log), on
+// the station or, given a show, on its own channel (/stream/<show>),
 // skipping a line that is still being written.
-export async function loggedPlays(): Promise<Play[]> {
-  const text = await readFile(`/plays/${month}.jsonl`, "utf8").catch(() => "");
+export async function loggedPlays(channel?: string): Promise<Play[]> {
+  const text = await readFile(`/plays/${month}${channel ? `.${channel}` : ""}.jsonl`, "utf8").catch(() => "");
   return text.split("\n").flatMap((l) => {
     try {
       return l ? [JSON.parse(l) as Play] : [];

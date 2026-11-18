@@ -2,8 +2,8 @@
 
 A small internet radio station: stock open-source services plus one small TypeScript app.
 
-- **Liquidsoap** plays one 24/7 stream, each show at its hours of the day, on shuffle with automatic cue points, loudness levelling and crossfades, appends every play (tags and listener count) to a monthly log, `plays/YYYY-MM.jsonl`, and records each show block to `archive/`.
-- **Icecast** serves the stream, with track titles (UTF-8) in the stream for players like VLC, and the archive's recorded blocks.
+- **Liquidsoap** plays one 24/7 stream, each show at its hours of the day, on shuffle with automatic cue points, loudness levelling and crossfades, appends every play (tags and listener count) to a monthly log, `plays/YYYY-MM.jsonl`, and records each show block to `archive/`. Each show also has a 24/7 stream of its own, its channel.
+- **Icecast** serves the streams, with track titles (UTF-8) in the stream for players like VLC, and the archive's recorded blocks.
 - **`app/`** ([Hono](https://hono.dev)) serves what's on air, the schedule, the show pages and the SoundExchange reports (from the play log). Its browser code (htmx, fonts) is bundled from npm, so nothing loads from a CDN, and plays the stream in a plain `<audio>` element.
 - **Caddy** provides HTTPS and is the only public entry point.
 - **Docker** restarts any service that crashes.
@@ -39,7 +39,7 @@ A track that goes silent for 10 seconds (a hidden track after minutes of silence
 
 ## Shows
 
-The station is one 24/7 stream at `/stream`. Each `shows/<slug>.md` is a show: it plays `music/<slug>/` on shuffle during its hours, and has a page at `/<slug>`. Slugs are lowercase letters, digits and hyphens. The front matter sets the title and hours; the body is the description shown on the page:
+The station is one 24/7 stream at `/stream`. Each `shows/<slug>.md` is a show: it plays `music/<slug>/` on shuffle during its hours, and has a page at `/<slug>`. Each show is also a channel of its own at `/stream/<slug>`, linked from the foot of its page: its music around the clock, with its own shuffle, performance complement and play log (`plays/YYYY-MM.<slug>.jsonl`). A channel isn't archived and doesn't change what's on air. Each takes about as much CPU as the station does, and Icecast takes up to 10 shows (`ICECAST_MAX_SOURCES` in `compose.yml`). Slugs are lowercase letters, digits and hyphens. The front matter sets the title and hours; the body is the description shown on the page:
 
 ```md
 ---
@@ -111,24 +111,25 @@ scripts/archive-plays.sh backup/logs/access.log*
 
 The station plays music under the statutory license for noncommercial webcasting (17 U.S.C. § 114(d)(2), § 112(e); 37 C.F.R. Parts 380 and 370). `/about` links each provision and answers listeners' questions about them. What the code does to keep its conditions:
 
-- **Performance complement** (§ 114(j)(13)): `radio.liq` refuses any track that would make more than 4 by one artist (3 in a row) or 3 from one album (2 in a row) in three hours, across the station. A show with nothing else plays silence until it can. `app/complement.ts` checks a play log the same way (the e2e suite checks every play).
+- **Performance complement** (§ 114(j)(13)): `radio.liq` refuses any track that would make more than 4 by one artist (3 in a row) or 3 from one album (2 in a row) in three hours, on the station and on each show's channel. A show with nothing else plays silence until it can. `app/complement.ts` checks a play log the same way (the e2e suite checks every play).
 - **No advance announcements** (§ 114(d)(2)(C)(ii)): the schedule names shows, never tracks; archive blocks list no tracks.
 - **Archived programs** (§ 114(d)(2)(C)(iii)): at least five hours, down before two weeks (above).
 - **No copying** (§ 114(d)(2)(C)(vi)): no downloads, no seeking.
 - **Track identification** (§ 114(d)(2)(C)(ix)): title, artist and album while each track plays, on the site, the lock screen and the stream's ICY title (`Artist - Title (Album)`).
-- **Reports of use** (37 C.F.R. Part 370): `/reports`, live and archive performances.
+- **Reports of use** (37 C.F.R. Part 370): `/reports`, live and archive performances. A play on a show's channel counts its listeners when it started (none, nothing).
 
 Not in code: filing the Notice of Use with the Copyright Office, paying SoundExchange, and anything a lawyer would add.
 
 ## Where things are
 
-| URL                          | What's there                                        |
-| ---------------------------- | --------------------------------------------------- |
-| `https://localhost/`         | What's on air, the player, schedule                 |
-| `https://localhost/<slug>`   | A show's hours, now playing, past episodes, history |
-| `https://localhost/stream`   | The stream for apps and VLC                         |
-| `https://localhost/djs/<dj>` | A DJ's profile and shows                            |
-| `https://localhost/reports`  | Monthly SoundExchange reports                       |
+| URL                               | What's there                                        |
+| --------------------------------- | --------------------------------------------------- |
+| `https://localhost/`              | What's on air, the player, schedule                 |
+| `https://localhost/<slug>`        | A show's hours, now playing, past episodes, history |
+| `https://localhost/stream`        | The stream for apps and VLC                         |
+| `https://localhost/stream/<slug>` | A show's own 24/7 stream                            |
+| `https://localhost/djs/<dj>`      | A DJ's profile and shows                            |
+| `https://localhost/reports`       | Monthly SoundExchange reports                       |
 
 Set `SITE_PASSWORD` in `.env` to put the show pages behind a login form; the stream stays public so apps can play it. After 10 wrong passwords from one address, logins are refused for 15 minutes. Nothing else is public.
 

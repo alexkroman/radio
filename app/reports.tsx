@@ -2,7 +2,7 @@
 // last 12 months, each a Report of Use from the play log at /reports/<YYYY-MM>.
 import { Hono } from "hono";
 import { archivePerformances } from "./archive-plays.ts";
-import { monthOf, monthPlays, type Track } from "./plays.ts";
+import { channelPlays, monthOf, monthPlays, type Track } from "./plays.ts";
 import { SiteHeader } from "./ui.tsx";
 
 const SERVICE = "MAZES RADIO";
@@ -21,8 +21,10 @@ const HEADER = [
 const field = (v: string | number) =>
   typeof v === "number" ? String(v) : `^${v.toUpperCase().replace(/[|^]/g, "")}^`;
 
-// One row per song across all shows and the archive. Each live play counts
-// its listeners (at least 1); each archive play counts once for each track of
+// One row per song across all shows, their channels and the archive. Each
+// live play on the station counts its listeners (at least 1); each on a
+// show's channel counts its listeners (a channel plays around the clock, and
+// is mostly heard by no one); each archive play counts once for each track of
 // the block it reached (app/archive-plays.ts). ISRCs come from tags written
 // by scripts/import.sh (beet mbsync).
 async function report(month: string): Promise<string> {
@@ -34,6 +36,7 @@ async function report(month: string): Promise<string> {
     songs.set(key, song);
   };
   for (const p of await monthPlays(month)) add(p, Math.max(p.listeners, 1));
+  for (const p of await channelPlays(month)) if (p.listeners > 0) add(p, p.listeners);
   for (const t of await archivePerformances(month)) add(t, 1);
   const rows: (string | number)[][] = [HEADER];
   const sorted = [...songs.values()].sort(

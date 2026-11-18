@@ -17,7 +17,9 @@
 # stream's source (/stream) is gone its listeners get silence.mp3 (looped; same
 # 256 kbps MP3 format as radio.liq's output), and fallback-override moves them
 # back when it returns, so players stay connected instead of dropping. Icecast
-# 2.5 ignores fallbacks on the default mount, so /stream gets its own <mount>.
+# 2.5 ignores fallbacks on the default mount, so /stream gets its own <mount>,
+# and so does each show's channel, /stream/<slug> (one per shows/<slug>.md:
+# reconcile.sh reloads this on every deploy, so a new show's has it).
 set -eu
 here=$(dirname "$0")
 web=/tmp/web
@@ -31,7 +33,10 @@ cp "$here/silence.mp3" "$web/fallback.mp3"
 # GET /archive/<show>-<YYYY-MM-DD>.mp3 (with Range, so a dropped player
 # resumes). The recording in progress isn't reachable.
 ln -sfn /archive/blocks "$web/archive"
-mounts='<mount type="normal"><mount-name>/stream</mount-name><fallback-mount>/fallback.mp3</fallback-mount><fallback-override>all</fallback-override></mount>'
+mounts=
+for mount in /stream $(for f in /shows/*.md; do [ -e "$f" ] && basename "$f" .md | sed 's|^|/stream/|'; done); do
+  mounts="$mounts<mount type=\"normal\"><mount-name>$mount</mount-name><fallback-mount>/fallback.mp3</fallback-mount><fallback-override>all</fallback-override></mount>"
+done
 # Access logs: kept when rotated (logarchive: access.log.<date> at 10 MB,
 # instead of one access.log.old), as archive plays are counted from them.
 # Seed Icecast's random numbers from /dev/urandom and /proc; without it, it

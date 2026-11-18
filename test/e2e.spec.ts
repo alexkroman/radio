@@ -5,6 +5,8 @@
 import { expect, test } from "@playwright/test";
 import {
   BASE,
+  icyTitle,
+  loggedPlays,
   LOGGED_OUT,
   month,
   onAir,
@@ -23,6 +25,37 @@ test("the station is one MP3 stream", async () => {
       bytes: expect.any(Number),
     });
   }).toPass({ timeout: 60_000 });
+});
+
+test("each show streams on its own around the clock, on and off air, logging its own plays", async ({
+  page,
+}) => {
+  await onAir("night");
+  // Edge's channel plays edge, though night is on the station.
+  await expect(async () => {
+    expect(await streamHead("/stream/edge")).toEqual({
+      status: 200,
+      type: "audio/mpeg",
+      bytes: expect.any(Number),
+    });
+  }).toPass({ timeout: 60_000 });
+  await expect
+    .poll(() => icyTitle("/stream/edge"), { timeout: 60_000 })
+    .toBe("Zoë Ñandú - Café | Olé <b> (Édition | Spéciale)");
+  await expect.poll(async () => (await loggedPlays("edge")).length, { timeout: 60_000 }).toBeGreaterThan(0);
+  expect(new Set((await loggedPlays("edge")).map((p) => p.show))).toEqual(new Set(["edge"]));
+  // Its plays aren't the station's: night stays on air.
+  expect((await loggedPlays()).at(-1)?.show).toBe("night");
+  await page.goto("/");
+  await expect(page.locator("#on-air h2")).toHaveText("Fixture Night");
+  // The show's page links its channel.
+  await page.goto("/edge");
+  await expect(page.locator("footer").getByRole("link", { name: /\/stream\/edge$/ })).toHaveAttribute(
+    "href",
+    "/stream/edge",
+  );
+  // No channel for what isn't a show.
+  expect((await streamHead("/stream/nope")).status).toBe(404);
 });
 
 test("home page has what's on", async ({ page }) => {

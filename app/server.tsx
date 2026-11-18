@@ -2,7 +2,8 @@
 // page (/<slug>), the track on air (/now.json), DJ pages (/djs/<dj>),
 // /about, and the SoundExchange reports (/reports). Shows are
 // shows/<slug>.md (app/shows.ts), with their DJs and hours in the front matter;
-// Liquidsoap plays them on their hours on the one stream, /stream (via Caddy).
+// Liquidsoap plays them on their hours on the station's stream, /stream (via
+// Caddy), and each around the clock on its own, /stream/<slug>.
 import { archive, BLOCK, type Block, day, duration, inArchive, trackAt } from "./archive.ts";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
@@ -233,10 +234,19 @@ const NowPlaying = ({ play, status = true }: { play?: Play; status?: boolean }) 
   </section>
 );
 
-// The stream's address, for a radio app, at the foot of the home page.
-const StreamUrl = ({ host }: { host: string }) => (
+// A stream's address, for a radio app, at the foot of the home page (the
+// station's) and a show's page (its own channel's, around the clock).
+const StreamUrl = ({
+  host,
+  path = "/stream",
+  label = "Stream URL",
+}: {
+  host: string;
+  path?: string;
+  label?: string;
+}) => (
   <footer class="footer">
-    Stream URL: <a class="url" href="/stream" hx-boost="false">{`${host}/stream`}</a>
+    {label}: <a class="url" href={path} hx-boost="false">{`${host}${path}`}</a>
   </footer>
 );
 
@@ -642,7 +652,10 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
         <h2 id="about-listen" class="label">
           Listening
         </h2>
-        <p>Press play on any page, or open the stream address in a radio app or VLC.</p>
+        <p>
+          Press play on any page, or open the stream address in a radio app or VLC. Each show also streams on
+          its own around the clock: its address is at the foot of its page.
+        </p>
         <dl class="streams">
           <div>
             <dt class="label">Stream</dt>
@@ -748,6 +761,11 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
         </section>
       )}
       <History plays={(isOn ? recent.slice(1) : recent).slice(0, 5)} />
+      <StreamUrl
+        host={c.req.header("host") ?? ""}
+        path={`/stream/${show.slug}`}
+        label={`${show.title}, 24/7`}
+      />
       <Poll path={`/${show.slug}`} ids={["np", "history"]} />
     </main>,
     { title: show.title },

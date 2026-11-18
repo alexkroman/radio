@@ -29,11 +29,12 @@
 	}
 	log_skip @htmx
 
-	# Public: the stream at /stream (Icecast mount /stream; GET and HEAD only,
+	# Public: the stream at /stream, and each show's channel at
+	# /stream/<show> (the Icecast mounts of those names; GET and HEAD only,
 	# so no one can publish a source); everything else is the Node app.
 	@stream {
 		method GET HEAD
-		path /stream
+		path_regexp ^/stream(/[a-z0-9-]+)?$
 	}
 	# Public: an archive block, /archive/<show>-<YYYY-MM-DD>.mp3, a file
 	# Icecast serves (icecast/config.sh). GET only. Range passes, so a player

@@ -320,6 +320,10 @@ app.get("/", async (c) => {
     recentPlays(6),
     archivedShows(),
   ]);
+  // What's playing on each show's own stream.
+  const playing = new Map(
+    await Promise.all([...streams].map(async (s) => [s, await latestPlay(s)] as const)),
+  );
   return c.render(
     <main class="page page-station page-home">
       <SiteHeader home />
@@ -343,7 +347,7 @@ app.get("/", async (c) => {
           <NowPlaying play={play} status={false} />
         </div>
       </section>
-      <ShowList shows={shows} streams={streams} />
+      <ShowList shows={shows} streams={streams} playing={playing} />
       <History plays={recent.slice(1)} />
       <StreamUrl host={c.req.header("host") ?? ""} />
       <Poll path="/" ids={["on-air", "np", "shows", "history"]} />
@@ -353,8 +357,17 @@ app.get("/", async (c) => {
 
 // The shows, in the order they're on from now (the one on now first): each one's own stream's play
 // button (once it has an archived block) to the left of its name (linked to
-// its page) over its description, then its hours.
-const ShowList = ({ shows, streams }: { shows: Show[]; streams: Set<string> }) => {
+// its page) over its description and the track playing on its stream, then
+// its hours.
+const ShowList = ({
+  shows,
+  streams,
+  playing,
+}: {
+  shows: Show[];
+  streams: Set<string>;
+  playing: Map<string, Play | undefined>;
+}) => {
   const now = new Date();
   return (
     <section id="shows" class="shows-list" aria-labelledby="shows-heading">
@@ -376,6 +389,7 @@ const ShowList = ({ shows, streams }: { shows: Show[]; streams: Set<string> }) =
                 {show.title}
               </a>
               <Markdown class="station-desc" html={show.description} />
+              <StreamTrack play={playing.get(show.slug)} />
             </span>
             <span class="item-date">
               <Hours show={show} now={now} />
@@ -386,6 +400,20 @@ const ShowList = ({ shows, streams }: { shows: Show[]; streams: Set<string> }) =
     </section>
   );
 };
+
+// The track playing on a show's own stream: its cover, then title — artist ·
+// album (all three, as the statutory license has us show).
+const StreamTrack = ({ play }: { play?: Play }) =>
+  play ? (
+    <span class="stream-track">
+      <Cover play={play} size="cover-40" />
+      <span class="h-text">
+        <span class="h-track">{play.title}</span>
+        {play.artist && <span class="h-artist">{` — ${play.artist}`}</span>}
+        {play.album && <span class="h-artist album">{` · ${play.album}`}</span>}
+      </span>
+    </span>
+  ) : null;
 
 // "Sat, Nov 14": the station's day (TZ) an airing started.
 const day = (t: number) =>

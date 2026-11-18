@@ -155,9 +155,16 @@ describe("pages", () => {
     expect(html).toMatch(/<h2 class="display"><a href="\/night">Fixture Night<\/a>/);
     expect(html).toMatch(/np-track">Midnight/);
     expect(html).toContain('href="/stream"');
-    expect(html).not.toContain("Unheard");
     expect(html).toContain("Second Wind");
     expect(html).toContain('<div id="player" data-title="Mazes Radio"></div>');
+    // Each show's row has the track playing on its own stream, which isn't
+    // the station's: in the list, not on air or in the history.
+    const shows = html.slice(html.indexOf('id="shows"'), html.indexOf('id="history"'));
+    const row = (slug: string) => shows.slice(shows.indexOf(`href="/${slug}"`)).split("</li>")[0];
+    expect(row("default")).toMatch(/stream-track">.*h-track">Unheard<.*h-artist"> — Nobody</);
+    expect(html.replace(shows, "")).not.toContain("Unheard");
+    // Plain has no archived block, so no stream and nothing playing on it.
+    expect(row("plain")).not.toContain("stream-track");
   });
 
   test("a show page has its hours and history, and plays only its own stream", async () => {

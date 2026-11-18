@@ -612,7 +612,6 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
           <h2 id="show-past" class="label">
             Past shows
           </h2>
-          <p class="section-note">On the station, the last two weeks.</p>
         </div>
         {past.length === 0 ? (
           <p class="muted">Not on the station in the last two weeks.</p>

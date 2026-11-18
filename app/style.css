@@ -518,10 +518,6 @@ img.cover {
   color: var(--color-muted);
 }
 
-.until {
-  color: var(--color-muted);
-}
-
 /* stylelint-disable-next-line no-descending-specificity -- unrelated links */
 .hero .display a {
   text-decoration: none;

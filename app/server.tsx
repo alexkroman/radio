@@ -127,17 +127,6 @@ const Hours = ({ show, now }: { show: Show; now: Date }) => {
   ) : null;
 };
 
-// "until 11:00 PM": when the show on air's hours end.
-const Until = ({ show, now }: { show: Show; now: Date }) => {
-  const slot = nextSlot(show, now);
-  return slot && slot.start <= now ? (
-    <span class="until">
-      {" until "}
-      <Time at={slot.end} />
-    </span>
-  ) : null;
-};
-
 // A show as a row (a DJ's shows): its hours, name and mood on one line;
 // "On air" when it is, else (once it has an archived block) its own stream's
 // play button, so a listener can pick another show to suit the mood. (The
@@ -331,17 +320,11 @@ app.get("/", async (c) => {
     recentPlays(6),
     archivedShows(),
   ]);
-  const now = new Date();
   return c.render(
     <main class="page page-station page-home">
       <SiteHeader home />
       <section class="hero" aria-label="On air">
         <header id="on-air" class="hero-head">
-          <p class="label on-air-label">
-            <span class="dot" aria-hidden="true" />
-            On air
-            {show && <Until show={show} now={now} />}
-          </p>
           {show ? (
             <>
               <h2 class="display">

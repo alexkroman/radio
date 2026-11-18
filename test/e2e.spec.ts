@@ -90,6 +90,8 @@ test("home page has what's on", async ({ page }) => {
     "data-play",
     "/stream/night",
   );
+  // Plain has no archived block, so nothing to play on its own stream yet.
+  await expect(page.locator('#shows button[data-play="/stream/plain"]')).toHaveCount(0);
   await expect(page.locator("footer").getByRole("link", { name: /\/stream$/ })).toHaveAttribute(
     "href",
     "/stream",

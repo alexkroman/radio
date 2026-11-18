@@ -363,6 +363,12 @@ img.cover {
   color: var(--color-muted);
 }
 
+/* Where a show's play button goes, in a list, until it has an archived block. */
+.play-space {
+  flex: none;
+  width: var(--tap);
+}
+
 /* A show's channel, playable from its row (above the row's link). */
 .station-play {
   position: relative;
@@ -989,7 +995,8 @@ img.cover {
     gap: 2px 12px;
   }
 
-  .item .play {
+  .item .play,
+  .item .play-space {
     grid-area: play;
   }
 

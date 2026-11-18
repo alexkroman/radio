@@ -138,6 +138,9 @@ services:
       - ./shows:/shows:ro
       - ./covers:/covers:ro
       - ./plays:/plays:ro
+      # Which shows have archived blocks, so a play button for each one's own
+      # stream (app/archive.ts).
+      - ./archive:/archive:ro
     depends_on:
       init: { condition: service_completed_successfully }
 

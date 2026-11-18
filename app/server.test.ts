@@ -1,6 +1,6 @@
 // The app in-process (app.request), on test/fixtures/shows and a play log
 // written here; env from vitest.config.ts.
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, describe, expect, test, vi } from "vitest";
@@ -57,6 +57,13 @@ beforeAll(async () => {
   // The modules read PLAYS_DIR when loaded.
   const dir = await mkdtemp(join(tmpdir(), "plays-"));
   process.env.PLAYS_DIR = dir;
+  // Archived blocks (only their names matter): default's and night's, so only
+  // they have anything on their own streams.
+  const archive = await mkdtemp(join(tmpdir(), "archive-"));
+  process.env.ARCHIVE_DIR = archive;
+  await mkdir(join(archive, "blocks"));
+  for (const f of ["default-2026-11-14.mp3", "night-2026-11-13.mp3", "nope-2026-11-14.mp3", "notes.txt"])
+    await writeFile(join(archive, "blocks", f), "");
   const { monthOf } = await import("./plays.ts");
   month = monthOf(new Date());
   // Each play in its month's log.
@@ -230,7 +237,7 @@ describe("pages", () => {
 });
 
 describe("channels and past shows", () => {
-  test("the home page lists the shows, each with its channel's play button", async () => {
+  test("the home page lists the shows, each with an archived block with its own stream's play button", async () => {
     const html = await (await page("/")).text();
     const list = html.slice(html.indexOf('id="shows"'), html.indexOf('id="history"'));
     expect(list).toContain("Shows");
@@ -238,6 +245,9 @@ describe("channels and past shows", () => {
     expect(plays).toContainEqual(["/stream/night", "Fixture Night"]);
     expect(plays).toContainEqual(["/stream/default", "Fixture Default"]);
     expect(plays.every(([src]) => src!.startsWith("/stream/"))).toBe(true);
+    // Quiet has no block: its stream would be silence, so no button, but it's listed.
+    expect(list).toContain(">Quiet");
+    expect(list).not.toContain("/stream/quiet");
   });
 
   test("a show's page plays its channel and lists its airings of the last two weeks, newest first", async () => {
@@ -252,7 +262,11 @@ describe("channels and past shows", () => {
     // Night's airing that ended 3 days ago is past; the one on air now isn't over.
     const night = await (await page("/night")).text();
     expect([...night.matchAll(/class="item-length">([^<]+)</g)].map((m) => m[1])).toEqual(["1 track"]);
-    expect(await (await page("/quiet")).text()).toContain("Not on the station in the last two weeks.");
+    const quiet = await (await page("/quiet")).text();
+    expect(quiet).toContain("Not on the station in the last two weeks.");
+    // No archived block: nothing to play on its own stream.
+    expect(quiet).not.toContain("Around the clock");
+    expect(quiet).not.toContain("/stream/quiet");
   });
 
   test("a DJ page's shows play their channels", async () => {

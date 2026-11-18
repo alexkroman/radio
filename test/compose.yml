@@ -68,6 +68,7 @@ services:
       - e2e-shows:/shows:ro
       - e2e-covers:/covers:ro
       - e2e-plays:/plays:ro
+      - e2e-archive:/archive:ro
   # Two blocks a show, so night's stream has two to pick from.
   archive-prune:
     environment:

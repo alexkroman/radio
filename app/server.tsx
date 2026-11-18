@@ -5,6 +5,7 @@
 // shows/<slug>.md (app/shows.ts), with their DJs and hours in the front matter;
 // Liquidsoap plays them on their hours on the station's stream, /stream (via
 // Caddy), and each around the clock on its own, /stream/<slug>.
+import { archivedShows } from "./archive.ts";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -170,9 +171,20 @@ const Until = ({ show, now }: { show: Show; now: Date }) => {
 };
 
 // A show as a row (a DJ's shows): its hours, name and mood on one line;
-// "On air" when it is, else its channel's play button, so a listener can
-// pick another show to suit the mood. (The DJs are on the show's page.)
-const ShowRow = ({ show, now, onAir }: { show: Show; now: Date; onAir: boolean }) => (
+// "On air" when it is, else (once it has an archived block) its own stream's
+// play button, so a listener can pick another show to suit the mood. (The
+// DJs are on the show's page.)
+const ShowRow = ({
+  show,
+  now,
+  onAir,
+  stream,
+}: {
+  show: Show;
+  now: Date;
+  onAir: boolean;
+  stream: boolean;
+}) => (
   <article class={onAir ? "station row row-on" : "station row"}>
     <span class="station-hours">
       <Hours show={show} now={now} />
@@ -189,9 +201,11 @@ const ShowRow = ({ show, now, onAir }: { show: Show; now: Date; onAir: boolean }
         On air
       </span>
     ) : (
-      <span class="station-play">
-        <ChannelButton show={show} />
-      </span>
+      stream && (
+        <span class="station-play">
+          <ChannelButton show={show} />
+        </span>
+      )
     )}
   </article>
 );
@@ -233,6 +247,7 @@ const StreamUrl = ({
 );
 
 // A show's own stream: its archived shows, in a loop (radio.liq block_stream).
+// Offered only once it has one (app/archive.ts): until then it's silence.
 const channel = (show: Show) => `/stream/${show.slug}`;
 const ChannelButton = ({ show }: { show: Show }) => (
   <PlayButton src={channel(show)} title={show.title} now={`/${show.slug}/now.json`} status="24/7" />
@@ -343,7 +358,11 @@ app.route("/reports", reports);
 
 app.get("/", async (c) => {
   const shows = await getShows();
-  const [{ show, play }, recent] = await Promise.all([onAir(shows), recentPlays(6)]);
+  const [{ show, play }, recent, streams] = await Promise.all([
+    onAir(shows),
+    recentPlays(6),
+    archivedShows(),
+  ]);
   const now = new Date();
   return c.render(
     <main class="page page-station page-home">
@@ -373,7 +392,7 @@ app.get("/", async (c) => {
           <NowPlaying play={play} status={false} />
         </div>
       </section>
-      <ShowList shows={shows} />
+      <ShowList shows={shows} streams={streams} />
       <History plays={recent.slice(1)} />
       <StreamUrl host={c.req.header("host") ?? ""} />
       <Poll path="/" ids={["on-air", "np", "history"]} />
@@ -381,10 +400,10 @@ app.get("/", async (c) => {
   );
 });
 
-// The shows, in the order of their hours: each one's channel's play button
-// to the left of its name (linked to its page) over its description, then
-// its hours.
-const ShowList = ({ shows }: { shows: Show[] }) => {
+// The shows, in the order of their hours: each one's own stream's play
+// button (once it has an archived block) to the left of its name (linked to
+// its page) over its description, then its hours.
+const ShowList = ({ shows, streams }: { shows: Show[]; streams: Set<string> }) => {
   const now = new Date();
   return (
     <section id="shows" class="shows-list" aria-labelledby="shows-heading">
@@ -397,7 +416,11 @@ const ShowList = ({ shows }: { shows: Show[] }) => {
       <ol class="item-list">
         {scheduled(shows).map((show) => (
           <li class="item show-item">
-            <ChannelButton show={show} />
+            {streams.has(show.slug) ? (
+              <ChannelButton show={show} />
+            ) : (
+              <span class="play-space" aria-hidden="true" />
+            )}
             <span class="item-info">
               <a class="item-title" href={`/${show.slug}`}>
                 {show.title}
@@ -580,7 +603,12 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
   const slug = c.req.param("slug");
   const [show, shows, recent] = await Promise.all([getShow(slug), getShows(), recentPlays(6, slug)]);
   if (!show) return c.notFound();
-  const [{ show: on, play }, past] = await Promise.all([onAir(shows), pastAirings(show.slug)]);
+  const [{ show: on, play }, past, streams] = await Promise.all([
+    onAir(shows),
+    pastAirings(show.slug),
+    archivedShows(),
+  ]);
+  const stream = streams.has(show.slug);
   const isOn = on?.slug === show.slug;
   const now = new Date();
   const next = nextSlot(show, now);
@@ -626,22 +654,24 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
           )}
         </div>
       </section>
-      <section class="past-shows" aria-labelledby="show-channel">
-        <div class="section-head">
-          <h2 id="show-channel" class="label">
-            Around the clock
-          </h2>
-          <p class="section-note">Its recent shows, one after another, on a stream of its own.</p>
-        </div>
-        <ol class="item-list">
-          <li class="item show-item">
-            <ChannelButton show={show} />
-            <span class="item-info">
-              <span class="item-title">{`${show.title}, 24/7`}</span>
-            </span>
-          </li>
-        </ol>
-      </section>
+      {stream && (
+        <section class="past-shows" aria-labelledby="show-channel">
+          <div class="section-head">
+            <h2 id="show-channel" class="label">
+              Around the clock
+            </h2>
+            <p class="section-note">Its recent shows, one after another, on a stream of its own.</p>
+          </div>
+          <ol class="item-list">
+            <li class="item show-item">
+              <ChannelButton show={show} />
+              <span class="item-info">
+                <span class="item-title">{`${show.title}, 24/7`}</span>
+              </span>
+            </li>
+          </ol>
+        </section>
+      )}
       <section id="past" class="past-shows" aria-labelledby="show-past">
         <div class="section-head">
           <h2 id="show-past" class="label">
@@ -660,7 +690,9 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
         )}
       </section>
       <History plays={(isOn ? recent.slice(1) : recent).slice(0, 5)} />
-      <StreamUrl host={c.req.header("host") ?? ""} path={channel(show)} label={`${show.title}, 24/7`} />
+      {stream && (
+        <StreamUrl host={c.req.header("host") ?? ""} path={channel(show)} label={`${show.title}, 24/7`} />
+      )}
       <Poll path={`/${show.slug}`} ids={["np", "past", "history"]} />
     </main>,
     { title: show.title },
@@ -670,7 +702,7 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
 app.get(`/djs/:dj{${SLUG}}`, async (c) => {
   const [dj, shows] = await Promise.all([getDj(c.req.param("dj")), getShows()]);
   if (!dj) return c.notFound();
-  const { show: on } = await onAir(shows);
+  const [{ show: on }, streams] = await Promise.all([onAir(shows), archivedShows()]);
   const now = new Date();
   return c.render(
     <main class="page page-dj">
@@ -689,7 +721,7 @@ app.get(`/djs/:dj{${SLUG}}`, async (c) => {
         </h2>
         <div id="dj-shows-list" class="rows">
           {dj.shows.map((s) => (
-            <ShowRow show={s} now={now} onAir={s.slug === on?.slug} />
+            <ShowRow show={s} now={now} onAir={s.slug === on?.slug} stream={streams.has(s.slug)} />
           ))}
         </div>
       </section>

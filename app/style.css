@@ -630,13 +630,6 @@ img.cover {
   color: var(--color-ink);
 }
 
-/* ── About: questions ── */
-.faq h3 {
-  margin: 20px 0 4px;
-  font: var(--type-track);
-  font-weight: 600;
-}
-
 /* ── Lists: the shows on the home page, a show's past airings ── */
 .past-shows {
   display: flex;

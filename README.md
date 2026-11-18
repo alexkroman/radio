@@ -108,7 +108,7 @@ A show's page lists when it was on the station over the last two weeks: each str
 
 ## The statutory license
 
-The station plays music under the statutory license for noncommercial webcasting (17 U.S.C. § 114(d)(2), § 112(e); 37 C.F.R. Parts 380 and 370). `/about` links each provision and answers listeners' questions about them. What the code does to keep its conditions:
+The station plays music under the statutory license for noncommercial webcasting (17 U.S.C. § 114(d)(2), § 112(e); 37 C.F.R. Parts 380 and 370). `/about` links each provision. What the code does to keep its conditions:
 
 - **Performance complement** (§ 114(j)(13)): `radio.liq` refuses any track that would make more than 4 by one artist (3 in a row) or 3 from one album (2 in a row) in three hours, on the station. A show with nothing else plays silence until it can. `app/complement.ts` checks a play log the same way (the e2e suite checks every play).
 - **No advance announcements** (§ 114(d)(2)(C)(ii)): the schedule names shows, never tracks.

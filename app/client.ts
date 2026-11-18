@@ -9,10 +9,11 @@ import "./style.css";
 import htmx from "htmx.org";
 import { mountBar, setBar } from "./bar.tsx";
 
-// The browser plays the station's one MP3 stream itself, in every browser: a
-// tap sets the element's URL and calls play() in the tap, as iOS requires. (A
-// player that decoded the stream into WebAudio left AirPlay speakers silent.)
-// The track and show on air come from /now.json.
+// The browser plays the streams itself, in every browser: a tap sets the
+// element's URL and calls play() in the tap, as iOS requires. (A player that
+// decoded the stream into WebAudio left AirPlay speakers silent.) The track
+// playing comes from the stream's now.json: /now.json for the station,
+// /<slug>/now.json for a show's own.
 const audio = new Audio();
 // AirPlay (a WiiM, say, picked in Control Center) gets the page's audio as the
 // phone's output, like any app's, rather than Safari handing the element
@@ -23,37 +24,28 @@ audio.setAttribute("x-webkit-airplay", "deny");
 const session = navigator.mediaSession;
 // The station's name (#player's data; app.js is deferred, so the page is there).
 const station = document.getElementById("player")!.dataset.title!;
-// What the player plays: the live stream, or an archive block (/archive/...,
-// played from the beginning, or where it was paused; `then`, the show's
-// earlier blocks, play after it). Set by a tap.
-type Source = { src: string; title: string; then?: Source[] };
-const LIVE: Source = { src: "/stream", title: station };
+// What the player plays: the station (/stream), or a show's own stream
+// (/stream/<slug>), with where to ask what's playing on it and its status
+// label. Set by a tap (a play button's data).
+type Source = { src: string; title: string; now: string; status: string };
+const LIVE: Source = { src: "/stream", title: station, now: "/now.json", status: "Live" };
 let source = LIVE;
 const live = () => source.src === LIVE.src;
 // Whether it's playing: set on a tap, cleared when it stops.
 let playing = false;
 // A track: title, artist, album (all three shown while it plays, as the
-// statutory license requires) and cover.
-type Track = { track: string; artist: string; album: string; cover: string };
-const NO_TRACK: Track = { track: "", artist: "", album: "", cover: "" };
-// The track on air and its show's title, from /now.json (and that JSON).
-type Now = Track & { title: string };
-let now: Now = { ...NO_TRACK, title: "" };
-let nowJson = "";
-// The track playing in an archive block, from the block's now.json (by how
-// far into it the player is), and when the next starts (seconds into the
-// block; undefined once it's the last). Unknown until fetched.
-let blockTrack = NO_TRACK;
-let blockUntil: number | undefined;
-let blockFetched = false;
+// statutory license requires) and cover, and its show's title.
+type Now = { track: string; artist: string; album: string; cover: string; title: string };
+const NOTHING: Now = { track: "", artist: "", album: "", cover: "", title: "" };
+// The track playing on the source (its now.json; unknown until fetched).
+let now = NOTHING;
+// The station's now.json as last fetched: when it changes, a page showing
+// what's on air refreshes.
+let onAirJson = "";
 // What was last put on the lock screen.
 let lockKey = "";
 // When a dropped stream stops being retried (0: not retrying).
 let retryUntil = 0;
-// How far into the archive block the player last was, and where it picks up
-// again after a drop or a pause (0: from the beginning).
-let blockAt = 0;
-let resumeAt = 0;
 
 function localTimes() {
   document.querySelectorAll("time[datetime]").forEach((el) => {
@@ -76,68 +68,44 @@ function sync() {
     el.textContent = playing && live() ? "Listening live" : "Live";
   });
   document.body.classList.toggle("playing", playing);
-  const track: Track = live() ? now : blockTrack;
-  setBar({
-    ...NO_TRACK,
-    ...(live() || playing ? track : {}),
-    station: source.title,
-    title: live() ? now.title || station : source.title,
-    live: live(),
-    playing,
-  });
+  setBar({ ...now, title: now.title || source.title, station: source.title, status: source.status, playing });
   // The lock screen, when what's playing changes.
   if (!playing) return;
-  const key = `${source.src}\n${track.track}\n${track.artist}\n${track.album}`;
-  if ((live() && !track.track) || key === lockKey) return;
+  const key = `${source.src}\n${now.track}\n${now.artist}\n${now.album}`;
+  if (key === lockKey) return;
   lockKey = key;
   session.metadata = new MediaMetadata(
-    track.track
+    now.track
       ? {
-          title: track.track,
-          artist: track.artist,
-          album: track.album,
-          artwork: track.cover ? [{ src: track.cover, type: "image/jpeg" }] : [],
+          title: now.track,
+          artist: now.artist,
+          album: now.album,
+          artwork: now.cover ? [{ src: now.cover, type: "image/jpeg" }] : [],
         }
       : { title: source.title, artist: station },
   );
 }
 
-// While an archive block plays: the track playing in it, by how far in the
-// player is (it plays on from where it starts, without seeking), fetched when it
-// starts and again when that track ends. Only that track: the block's track
-// list is never fetched.
-let blockFetching = false;
-async function pollBlock() {
-  const src = source.src;
-  if (!playing || live() || audio.paused || blockFetching) return;
-  const t = audio.currentTime;
-  if (blockFetched && (blockUntil === undefined || t < blockUntil)) return;
-  blockFetching = true;
-  const res = await fetch(`${src.replace(/\.mp3$/, "")}/now.json?t=${Math.floor(t)}`)
-    .then((r) => (r.ok ? (r.json() as Promise<Track & { until?: number }>) : undefined))
-    .catch(() => undefined);
-  blockFetching = false;
-  if (source.src !== src) return;
-  blockFetched = true;
-  // Unknown (the block was just pruned, the network's down): show no track
-  // rather than a stale one, and ask again in 15 s.
-  if (res) ({ until: blockUntil, ...blockTrack } = res);
-  else [blockTrack, blockUntil] = [NO_TRACK, t + 15];
-  sync();
-}
-setInterval(() => void pollBlock(), 1_000);
-
-// The one poll, every 15 s: the track on air, for the player bar and the
-// lock screen. When it changes, a page showing it refreshes itself (ui.tsx Poll).
+// The one poll, every 15 s: the track playing on the source, for the player
+// bar and the lock screen, and the station's, so a page showing what's on
+// air refreshes itself when it changes (ui.tsx Poll).
 async function poll() {
-  const json = await fetch("/now.json")
-    .then((r) => (r.ok ? r.text() : undefined))
-    .catch(() => undefined);
-  if (!json || json === nowJson) return;
-  const first = !nowJson;
-  nowJson = json;
-  now = JSON.parse(json) as Now;
+  const get = (url: string) =>
+    fetch(url)
+      .then((r) => (r.ok ? r.text() : undefined))
+      .catch(() => undefined);
+  const { src, now: url } = source;
+  // A show's own stream only while it plays (its track stays shown when paused).
+  const [onAir, own] = await Promise.all([
+    get(LIVE.now),
+    url === LIVE.now || !playing ? undefined : get(url),
+  ]);
+  const json = url === LIVE.now ? onAir : own;
+  if (source.src === src && json) now = JSON.parse(json) as Now;
   sync();
+  if (!onAir || onAir === onAirJson) return;
+  const first = !onAirJson;
+  onAirJson = onAir;
   if (!first && document.getElementById("poll")) htmx.trigger("#poll", "refresh");
 }
 setInterval(() => void poll(), 15_000);
@@ -152,16 +120,15 @@ function playSource() {
 }
 
 function start(to: Source) {
-  // The block it was on, paused: where it was. Anything else: the beginning.
-  blockAt = resumeAt = !live() && to.src === source.src ? blockAt : 0;
+  const changed = to.src !== source.src;
   source = to;
-  blockTrack = NO_TRACK;
-  blockFetched = false;
+  if (changed) now = NOTHING;
   playing = true;
   sync();
   retryUntil = 0;
   // Synchronously, in the tap: iOS allows play() only there.
   playSource();
+  if (changed) void poll();
 }
 
 function stop() {
@@ -179,43 +146,19 @@ const toggle = (to: Source) => (playing && source.src === to.src ? stop() : star
 audio.addEventListener("playing", () => {
   retryUntil = 0;
   if (playing) session.playbackState = "playing";
-  void pollBlock();
 });
-// Back to the live stream, paused.
-function backToLive() {
-  source = LIVE;
-  stop();
-}
-// The stream dropped (a server restart, a network change): reconnect for up
-// to two minutes. iOS allows play() on an element a tap has started. An
-// archive block picks up where it was (the server takes ranges; the browser
-// resumes a short blip that way itself); given up on, it goes back to the
-// live stream, paused.
+// The stream dropped (a server restart, a network change) or ended:
+// reconnect for up to two minutes. iOS allows play() on an element a tap has
+// started.
 function dropped() {
   if (!playing) return;
   retryUntil ||= Date.now() + 120_000;
-  if (Date.now() > retryUntil) return live() ? stop() : backToLive();
-  if (!live()) resumeAt ||= blockAt;
+  if (Date.now() > retryUntil) return stop();
   const src = source.src;
   setTimeout(() => playing && source.src === src && retryUntil && playSource(), 3000);
 }
 audio.addEventListener("error", dropped);
-audio.addEventListener("timeupdate", () => {
-  if (!live() && !retryUntil && audio.currentTime > 0) blockAt = audio.currentTime;
-});
-audio.addEventListener("loadedmetadata", () => {
-  if (!live() && resumeAt) audio.currentTime = resumeAt;
-  resumeAt = 0;
-});
-// An archive block that ends goes on to the show's block before it (iOS
-// allows play() on an element a tap has started); after the last, back to
-// live, paused. The live stream ending is a drop.
-audio.addEventListener("ended", () => {
-  if (!playing || live()) return dropped();
-  const [next, ...rest] = source.then ?? [];
-  if (next) start({ ...next, then: rest });
-  else backToLive();
-});
+audio.addEventListener("ended", dropped);
 // Paused by the system (a call, Siri, unplugged headphones), not by a tap.
 audio.addEventListener("pause", () => setTimeout(() => playing && audio.paused && !retryUntil && stop()));
 
@@ -234,8 +177,8 @@ for (const action of ["seekto", "seekforward", "seekbackward", "previoustrack", 
 document.addEventListener("click", (e) => {
   const button = (e.target as Element).closest<HTMLButtonElement>("button[data-play]");
   if (!button) return;
-  const then = JSON.parse(button.dataset.then ?? "[]") as Source[];
-  toggle({ src: button.dataset.play!, title: button.dataset.title!, then });
+  const { play: src, title, now: url, status } = button.dataset;
+  toggle({ src: src!, title: title!, now: url!, status: status! });
 });
 
 document.addEventListener("htmx:beforeRequest", (e) => {

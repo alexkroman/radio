@@ -92,11 +92,4 @@ rs --delete --delete-excluded covers "$HOST:radio/"
 # backup/plays/. Never deletes, and never touches the local plays/.
 mkdir -p backup/plays
 rsync -rt -e "$SSH" "$HOST:radio/plays/" backup/plays/
-# Likewise Icecast's access logs, where archive plays are counted
-# (scripts/archive-plays.sh backup/logs/access.log*).
-mkdir -p backup/logs
-rsync -rt -e "$SSH" --include='access.log*' --exclude='*' "$HOST:radio/logs/" backup/logs/
-# And the archive's track sidecars, which the reports read archive plays with.
-mkdir -p backup/archive/tracks
-rsync -rt -e "$SSH" "$HOST:radio/archive/tracks/" backup/archive/tracks/
 echo "Deployed to $IP"

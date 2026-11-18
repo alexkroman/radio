@@ -161,7 +161,7 @@ h2.label {
   color: var(--color-ink);
 }
 
-/* A home section's label (Latest episodes, Just played): small caps, set apart. */
+/* A home section's label (Shows, Just played): small caps, set apart. */
 .section-label {
   font: var(--type-section);
   letter-spacing: 0.08em;
@@ -292,36 +292,6 @@ img.cover {
   display: block;
 }
 
-/* A show's last episode, as a pill: outlined, then filled once started. */
-.pill {
-  width: auto;
-  gap: 8px;
-  padding: 0 16px;
-  border-color: var(--color-outline);
-  border-radius: var(--radius-pill);
-  font: var(--type-label);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.pill.current {
-  border-color: var(--color-ink);
-  background: var(--color-ink);
-  color: var(--color-on-fill);
-}
-
-.pill-paused,
-.pill-playing,
-.pill.current .pill-idle,
-.pill.playing .pill-text {
-  display: none;
-}
-
-.pill.current .pill-paused,
-.pill.playing .pill-playing {
-  display: inline;
-}
-
 /* ── Shows: a row each (the schedule, a DJ's shows) ── */
 .station {
   position: relative;
@@ -393,9 +363,14 @@ img.cover {
   color: var(--color-muted);
 }
 
-/* A show's last archived block, playable from the schedule (above the
-   row's link). */
-.station-archive {
+/* Where a show's play button goes, in a list, until it has an archived block. */
+.play-space {
+  flex: none;
+  width: var(--tap);
+}
+
+/* A show's channel, playable from its row (above the row's link). */
+.station-play {
   position: relative;
   z-index: 1;
   flex: none;
@@ -494,7 +469,7 @@ img.cover {
   color: var(--color-muted);
 }
 
-/* ── Home: the show on air, then the latest episodes ── */
+/* ── Home: the show on air, then the shows ── */
 .page-home {
   gap: 64px;
 }
@@ -584,8 +559,8 @@ img.cover {
   color: var(--color-muted);
 }
 
-/* On the home page the show on air is a compact card, so the episodes
-   and the shows are in view with it. */
+/* On the home page the show on air is a compact card, so the shows are in
+   view with it. */
 .page-home .hero {
   gap: 20px;
   padding: 24px;
@@ -615,7 +590,7 @@ img.cover {
 }
 
 /* The shows as a listing, in the order they start: hours, then name and
-   mood on one line, then On air or the last episode. */
+   mood on one line, then On air or its channel's play button. */
 .rows {
   border-top: 1px solid var(--color-hairline);
 }
@@ -655,20 +630,20 @@ img.cover {
   color: var(--color-ink);
 }
 
-/* ── Archive: a show's past episodes, on its page ── */
-.archive-show {
+/* ── Lists: the shows on the home page, a show's past airings ── */
+.past-shows {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.archive-blocks {
+.item-list {
   list-style: none;
   padding: 0;
   border-top: 1px solid var(--color-hairline);
 }
 
-.archive-block {
+.item {
   display: flex;
   align-items: center;
   gap: 16px;
@@ -676,56 +651,52 @@ img.cover {
   border-bottom: 1px solid var(--color-hairline-soft);
 }
 
-.archive-block:last-child {
+.item:last-child {
   border-bottom: 0;
   padding-bottom: 0;
 }
 
-.archive-title {
+.item-title {
   flex: 1 1 auto;
   min-width: 0;
   font: var(--type-track);
   font-weight: 500;
 }
 
-.archive-date,
-.archive-length {
+.item-date,
+.item-length {
   flex: none;
   font: var(--type-time);
   font-variant-numeric: tabular-nums;
   color: var(--color-muted);
 }
 
-.archive-length {
+.item-length {
   width: 88px;
   text-align: right;
 }
 
-/* ── Home: each show's latest episode ── */
-.episodes {
+/* ── Home: the shows, each with its channel ── */
+.shows-list {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
 /* stylelint-disable-next-line no-descending-specificity -- unrelated links */
-.episode .archive-title {
+.show-item .item-title {
   font: var(--type-station-name);
   font-size: 22px;
   font-stretch: 85%;
   text-decoration: none;
 }
 
-.episode .archive-title:hover {
+.show-item .item-title:hover {
   color: var(--color-link-hover);
 }
 
-.episode-number {
-  color: var(--color-muted);
-}
-
 /* The show's name over its description. */
-.episode-info {
+.item-info {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -994,7 +965,7 @@ img.cover {
     padding-inline: 24px;
   }
 
-  /* The hours over the name, the last episode beside it when it fits. */
+  /* The hours over the name, the play button beside it when it fits. */
   .row .station-hours {
     width: 100%;
   }
@@ -1008,7 +979,7 @@ img.cover {
   }
 
   /* Play button, then the title over its date and length. */
-  .archive-block {
+  .item {
     display: grid;
     grid-template-columns: var(--tap) auto minmax(0, 1fr);
     grid-template-areas:
@@ -1017,23 +988,32 @@ img.cover {
     gap: 2px 12px;
   }
 
-  .archive-block .play {
+  .item .play,
+  .item .play-space {
     grid-area: play;
   }
 
-  .archive-title,
-  .episode-info {
+  .item-title,
+  .item-info {
     grid-area: title;
   }
 
-  .archive-date {
+  .item-date {
     grid-area: date;
   }
 
-  .archive-length {
+  .item-length {
     grid-area: length;
     width: auto;
     text-align: left;
+  }
+
+  /* A past airing has no play button. */
+  .item-past {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "title title"
+      "date length";
   }
 
   .hero .np-block {

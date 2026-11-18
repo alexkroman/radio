@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { request as https } from "node:https";
 import { type APIRequestContext, expect, type Page } from "@playwright/test";
 import { IcecastMetadataReader } from "icecast-metadata-js";
-import type { Play } from "../app/plays.ts";
+import { parsePlays, type Play } from "../app/plays.ts";
 
 export const BASE = process.env.BASE_URL ?? "https://localhost";
 export const SITE_PASSWORD = process.env.SITE_PASSWORD ?? "";
@@ -76,28 +76,6 @@ export function mp3Format(bytes: Buffer): { kbps: number; sampleRate: number; ch
   return undefined;
 }
 
-// A whole response: status, headers and body.
-export function get(path: string, headers: Record<string, string> = {}, method = "GET") {
-  return new Promise<{ status?: number; headers: Record<string, unknown>; body: Buffer }>(
-    (resolve, reject) => {
-      const req = https(
-        new URL(path, BASE),
-        { method, headers, rejectUnauthorized: false, timeout: 30_000 },
-        (res) => {
-          const chunks: Buffer[] = [];
-          res.on("data", (c: Buffer) => chunks.push(c));
-          res.on("end", () =>
-            resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }),
-          );
-        },
-      );
-      req.on("timeout", () => req.destroy(new Error(`timeout reading ${path}`)));
-      req.on("error", reject);
-      req.end();
-    },
-  );
-}
-
 // Stay connected to a stream (discarding audio) until the returned function is called.
 export function listen(path: string): () => void {
   const req = https(new URL(path, BASE), { rejectUnauthorized: false }, (res) => res.resume());
@@ -106,15 +84,15 @@ export function listen(path: string): () => void {
   return () => req.destroy();
 }
 
-// Performances counted for a song in this month's report (0 if absent).
+// Performances counted for a song in this month's report (undefined if it isn't listed).
 export async function performances(
   request: APIRequestContext,
   artist: string,
   title: string,
-): Promise<number> {
+): Promise<number | undefined> {
   const text = await (await request.get(`/reports/${month}`)).text();
   const row = text.split("\n").find((l) => l.startsWith(`^MAZES RADIO^|^A^|^${artist}^|^${title}^|`));
-  return row ? Number(row.split("|").at(-1)) : 0;
+  return row ? Number(row.split("|").at(-1)) : undefined;
 }
 
 // The first StreamTitle in a stream's in-band (ICY) metadata, as players see it.
@@ -143,17 +121,12 @@ export function icyTitle(path: string): Promise<string> {
   });
 }
 
-// Every play logged this month (the e2e container mounts the play log),
-// skipping a line that is still being written.
-export async function loggedPlays(): Promise<Play[]> {
-  const text = await readFile(`/plays/${month}.jsonl`, "utf8").catch(() => "");
-  return text.split("\n").flatMap((l) => {
-    try {
-      return l ? [JSON.parse(l) as Play] : [];
-    } catch {
-      return [];
-    }
-  });
+// Every play logged this month (the e2e container mounts the play log), on
+// the station or, given a show, on its own stream (/stream/<show>), with its
+// end line folded in, skipping a line that is still being written.
+export async function loggedPlays(channel?: string): Promise<Play[]> {
+  const text = await readFile(`/plays/${month}${channel ? `.${channel}` : ""}.jsonl`, "utf8").catch(() => "");
+  return parsePlays(text);
 }
 
 // Put a show on air (radio.liq's onair, which test/compose.yml enables), and
@@ -178,12 +151,6 @@ export const player = (page: Page) =>
   page.evaluate(() => {
     const a = (window as unknown as { audio: HTMLAudioElement }).audio;
     return { src: a.getAttribute("src"), playing: !a.paused && a.readyState >= 3 };
-  });
-// The lock screen's title, artist and album (navigator.mediaSession).
-export const lockScreen = (page: Page) =>
-  page.evaluate(() => {
-    const m = navigator.mediaSession.metadata;
-    return m && { title: m.title, artist: m.artist, album: m.album };
   });
 
 export const playerState = async (page: Page) => ((await player(page)).playing ? "playing" : "stopped");

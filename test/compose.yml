@@ -16,8 +16,11 @@ services:
         [ -e /music/.seeded ] && exit
         cp -r /fixture-shows/. /shows/ && cp -r /fixture-music/. /music/ && cp -r /fixture-covers/. /covers/
         # Two finished archive blocks of the night show (14 s each, untagged)
-        # with their track sidecars, for the archive tests.
+        # with their track sidecars, for night's own stream, and one of edge
+        # (night's audio, under its own sidecar: one track, all accents and
+        # markup) for edge's.
         mkdir -p /archive && cp -r /fixture-archive/. /archive/
+        cp /archive/blocks/night-2026-11-14.mp3 /archive/blocks/edge-2026-11-14.mp3
         chmod -R a+rX /shows /music /archive
         touch /music/.seeded
     volumes:
@@ -40,7 +43,7 @@ services:
   icecast:
     volumes:
       - e2e-logs:/var/log/icecast
-      - e2e-archive:/archive:ro
+      - e2e-shows:/shows:ro
   liquidsoap:
     # The tests put the show they need on air (radio.liq onair; test/helpers.ts),
     # and shrink the times: the complement's three hours to 30 s, a block's
@@ -61,15 +64,12 @@ services:
       - e2e-plays:/plays
       - e2e-archive:/archive
   app:
-    # Two blocks a show, so a block can go on to the one before.
-    environment:
-      ARCHIVE_KEEP: 2
     volumes:
       - e2e-shows:/shows:ro
       - e2e-covers:/covers:ro
       - e2e-plays:/plays:ro
       - e2e-archive:/archive:ro
-      - e2e-logs:/logs:ro
+  # Two blocks a show, so night's stream has two to pick from.
   archive-prune:
     environment:
       ARCHIVE_KEEP: 2
@@ -90,9 +90,8 @@ services:
       SITE_PASSWORD: ${SITE_PASSWORD}
     volumes:
       - ./test-results:/app/test-results
-      - e2e-plays:/plays:ro
       # For the specs to check the reports and the archive against.
-      - e2e-logs:/logs:ro
+      - e2e-plays:/plays:ro
       - e2e-archive:/archive:ro
     depends_on:
       caddy: { condition: service_started }

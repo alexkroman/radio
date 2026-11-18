@@ -63,7 +63,7 @@
 
   /* Sizes */
   --tap: 44px; /* minimum touch target; small play buttons */
-  --col-time: 136px; /* the times column of the schedule and Just played */
+  --col-time: 136px; /* the times column of the schedule */
   --play-lg: 72px; /* station page play button */
 }
 

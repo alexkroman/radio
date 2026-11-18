@@ -746,11 +746,6 @@ img.cover {
   color: var(--color-muted);
 }
 
-/* stylelint-disable-next-line no-descending-specificity -- unrelated times */
-.history .time {
-  width: calc(var(--col-time) + 8px);
-}
-
 /* ── DJ page ── */
 .profile {
   display: flex;

@@ -76,7 +76,7 @@ heard() {
 edit_files() { dc run --rm --no-deps -T seed sh -c "$1"; }
 # Times Icecast has moved listeners from the fallback back to the stream.
 returns() {
-  dc exec -T icecast grep -c 'passing [1-9][0-9]* listeners from "/fallback.mp3" to "/stream"' \
+  dc exec -T icecast grep -c 'passing [1-9][0-9]* listeners from "/fallback-stream.mp3" to "/stream"' \
     /var/log/icecast/error.log || true
 }
 returned() { [ "$(returns)" -gt "$1" ]; }

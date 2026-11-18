@@ -18,17 +18,23 @@
 # 256 kbps MP3 format as radio.liq's output), and fallback-override moves them
 # back when it returns, so players stay connected instead of dropping. Icecast
 # 2.5 ignores fallbacks on the default mount, so /stream gets its own <mount>,
-# and so does each show's channel, /stream/<slug> (one per shows/<slug>.md:
-# reconcile.sh reloads this on every deploy, so a new show's has it).
+# and so does each show's own stream, /stream/<slug> (one per shows/<slug>.md:
+# reconcile.sh reloads this on every deploy, so a new show's has it). Each
+# has a fallback of its own (/fallback-stream.mp3, /fallback-stream-<slug>.mp3):
+# when a stream returns, fallback-override moves everyone on its fallback to
+# it, so with one shared fallback the first stream back took every stream's
+# listeners.
 set -eu
 here=$(dirname "$0")
 web=/tmp/web
 mkdir -p "$web"
 cp -R /usr/share/icecast/web/. "$web/"
-cp "$here/silence.mp3" "$web/fallback.mp3"
 mounts=
-for mount in /stream $(for f in /shows/*.md; do [ -e "$f" ] && basename "$f" .md | sed 's|^|/stream/|'; done); do
-  mounts="$mounts<mount type=\"normal\"><mount-name>$mount</mount-name><fallback-mount>/fallback.mp3</fallback-mount><fallback-override>all</fallback-override></mount>"
+for f in /stream /shows/*.md; do
+  case $f in /shows/*) [ -e "$f" ] || continue && mount=/stream/$(basename "$f" .md) ;; *) mount=$f ;; esac
+  fallback=/fallback$(printf %s "$mount" | tr / -).mp3
+  cp "$here/silence.mp3" "$web$fallback"
+  mounts="$mounts<mount type=\"normal\"><mount-name>$mount</mount-name><fallback-mount>$fallback</fallback-mount><fallback-override>all</fallback-override></mount>"
 done
 # Seed Icecast's random numbers from /dev/urandom and /proc; without it, it
 # warns at every start and uses libigloo's defaults.

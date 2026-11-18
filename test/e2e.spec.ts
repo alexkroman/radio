@@ -446,7 +446,7 @@ test.describe("logged out", () => {
       "/admin/stats",
       "/admin/listmounts",
       "/admin/metadata",
-      "/fallback.mp3",
+      "/fallback-stream.mp3",
       "/default.md",
       "/stream/../status-json.xsl",
       "/style.css",

@@ -325,7 +325,7 @@ def track_info(slug, m) =
     isrc = tag(or_tag="tsrc", "isrc"),
     cover =
       # An archived track's, given (block_stream), else the file's if there is one.
-      list.assoc(default=file.exists("/covers/#{cover}") ? cover : "", "cover", m)
+      list.assoc(default=file.exists("/covers/#{cover}") ? cover : "", "archive_cover", m)
   }
 end
 
@@ -403,9 +403,12 @@ def play_log(mount, suffix) =
   end
   fun (start, show, t) ->
     begin
-      n = listeners(mount)
-      if last() >= 0. then write(last(), {time = last(), listeners_at_end = n}) end
+      # Which play this one ends, claimed before the listener count's HTTP
+      # call, so two tracks starting close together each end their own.
+      ended = last()
       last := start
+      n = listeners(mount)
+      if ended >= 0. then write(ended, {time = ended, listeners_at_end = n}) end
       write(start, t.{time = start, show = show, listeners = n})
     end
 end
@@ -885,17 +888,28 @@ def block_stream(f) =
         lines
       )
     q = fun (v) -> "\"#{string.escape(encoding='ascii', v)}\""
-    def uri(i) =
-      let (offset, t) = list.nth(tracks, i)
-      cue_out = i + 1 < list.length(tracks) ? ",liq_cue_out=#{q(string(fst(list.nth(tracks, i + 1))))}" : ""
-      "annotate:liq_cue_in=#{q(string(offset))}#{cue_out},title=#{q(t.title)},artist=#{q(t.artist)},album=#{
-        q(t.album)
-      },label=#{q(t.label)},isrc=#{q(t.isrc)},cover=#{q(t.cover)}:#{block}"
+
+    # Each track, cut at its offset and the next's (the last, to the end).
+    def rec uris(ts) =
+      if
+        ts == []
+      then
+        []
+      else
+        let (offset, t) = list.hd(ts)
+        rest = list.tl(ts)
+        cue_out = rest == [] ? "" : ",liq_cue_out=#{q(string(fst(list.hd(rest))))}"
+        "annotate:liq_cue_in=#{q(string(offset))}#{cue_out},title=#{q(t.title)},artist=#{q(t.artist)},album=#{
+          q(t.album)
+        },label=#{q(t.label)},isrc=#{q(t.isrc)},archive_cover=#{q(t.cover)}:#{block}"::uris(rest)
+      end
     end
-    list.init(list.length(tracks), uri)
+    uris(tracks)
   end
 
   def next() =
+    # A block pruned while it plays: its tracks to come are gone too.
+    if not file.exists(last()) then queue := [] end
     if
       queue() == []
     then

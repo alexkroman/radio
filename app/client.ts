@@ -95,7 +95,11 @@ async function poll() {
       .then((r) => (r.ok ? r.text() : undefined))
       .catch(() => undefined);
   const { src, now: url } = source;
-  const [onAir, own] = await Promise.all([get(LIVE.now), url === LIVE.now ? undefined : get(url)]);
+  // A show's own stream only while it plays (its track stays shown when paused).
+  const [onAir, own] = await Promise.all([
+    get(LIVE.now),
+    url === LIVE.now || !playing ? undefined : get(url),
+  ]);
   const json = url === LIVE.now ? onAir : own;
   if (source.src === src && json) now = JSON.parse(json) as Now;
   sync();

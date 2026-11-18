@@ -61,11 +61,14 @@ export async function monthPlays(month: string): Promise<Play[]> {
 
 // The logs pages read (this month's and last, the station's and the
 // channels'), as far as they've been read: a log that grows is read only from
-// there, up to its last whole line.
-const logs = new Map<string, { size: number; plays: Play[] }>();
-async function readLog(name: string): Promise<Play[]> {
+// there, up to its last whole line, its plays appended. `size`, how far it's
+// been read, says whether it has changed.
+type Log = { size: number; plays: Play[] };
+const NO_LOG: Log = { size: 0, plays: [] };
+const logs = new Map<string, Log>();
+async function readLog(name: string): Promise<Log> {
   const fh = await open(file(name)).catch(() => undefined);
-  if (!fh) return [];
+  if (!fh) return NO_LOG;
   try {
     const { size } = await fh.stat();
     let hit = logs.get(name);
@@ -73,13 +76,14 @@ async function readLog(name: string): Promise<Play[]> {
     if (size > hit.size) {
       const { buffer } = await fh.read(Buffer.alloc(size - hit.size), 0, size - hit.size, hit.size);
       const whole = buffer.lastIndexOf(0x0a) + 1;
-      hit = { size: hit.size + whole, plays: parsePlays(buffer.toString("utf8", 0, whole), [...hit.plays]) };
+      parsePlays(buffer.toString("utf8", 0, whole), hit.plays);
+      hit.size += whole;
     }
     logs.set(name, hit);
     // Older months' logs aren't read again.
     const months = recentMonths();
     for (const k of logs.keys()) if (!months.includes(k.slice(0, 7))) logs.delete(k);
-    return hit.plays;
+    return hit;
   } finally {
     await fh.close();
   }
@@ -92,8 +96,8 @@ const recentMonths = (now = new Date()) => [
 ];
 
 // This month's plays, on the station or a show's own channel.
-const recent = (channel?: string) =>
-  readLog(channel ? `${monthOf(new Date())}.${channel}` : monthOf(new Date()));
+const recent = async (channel?: string) =>
+  (await readLog(channel ? `${monthOf(new Date())}.${channel}` : monthOf(new Date()))).plays;
 
 // The newest plays, newest first: a show's, or the station's.
 export async function recentPlays(limit: number, show?: string): Promise<Play[]> {
@@ -116,14 +120,16 @@ export type Airing = { show: string; start: number; end: number; tracks: number 
 
 // Every show's airings over last month and this, oldest first (the one on air
 // now left out: it isn't over), by show; worked out again only when the logs grow.
-let airings: { plays: Play[][]; byShow: Map<string, Airing[]> } | undefined;
+let airings: { sizes: string; byShow: Map<string, Airing[]> } | undefined;
 async function airingsByShow(): Promise<Map<string, Airing[]>> {
-  const plays = await Promise.all(recentMonths().map(readLog));
-  if (airings?.plays.every((p, i) => p === plays[i])) return airings.byShow;
+  const names = recentMonths();
+  const months = await Promise.all(names.map(readLog));
+  const sizes = months.map((m, i) => `${names[i]}:${m.size}`).join();
+  if (airings?.sizes === sizes) return airings.byShow;
   const byShow = new Map<string, Airing[]>();
   let current: Airing | undefined;
   // The log is written in order, so the months are too.
-  for (const p of plays.flat()) {
+  for (const p of months.flatMap((m) => m.plays)) {
     if (current?.show === p.show) {
       current.tracks++;
       current.end = p.time;
@@ -135,7 +141,7 @@ async function airingsByShow(): Promise<Map<string, Airing[]>> {
     }
     current = { show: p.show, start: p.time, end: p.time, tracks: 1 };
   }
-  airings = { plays, byShow };
+  airings = { sizes, byShow };
   return byShow;
 }
 

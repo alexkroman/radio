@@ -72,7 +72,7 @@ test("each show's own stream loops its archived blocks, naming each track, and l
     "/stream/night",
   );
   // A show with no archived block yet streams silence.
-  expect((await streamHead("/stream/edge")).status).toBe(200);
+  expect((await streamHead("/stream/plain")).status).toBe(200);
   // No channel for what isn't a show.
   expect((await streamHead("/stream/nope")).status).toBe(404);
 });

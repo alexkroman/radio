@@ -25,6 +25,16 @@ test("in-stream (ICY) metadata is the current track, in UTF-8", async () => {
   await expect.poll(() => icyTitle("/stream")).toBe(`${ODD_ARTIST} - ${ODD_TITLE}`);
 });
 
+test("a show's own stream names an archived track in UTF-8, as the station does", async () => {
+  // Edge's archived block (test/compose.yml): its one track, from its sidecar.
+  await expect
+    .poll(() => icyTitle("/stream/edge"), { timeout: 60_000 })
+    .toBe("Zoë Ñandú - Café | Olé <b> (Édition | Spéciale)");
+  await expect
+    .poll(async () => (await loggedPlays("edge")).at(-1), { timeout: 60_000 })
+    .toMatchObject({ artist: "Zoë Ñandú", title: "Café | Olé <b>", album: "Édition | Spéciale" });
+});
+
 test("the player picks up the playing track for the lock screen", async ({ page }) => {
   await onAir("edge");
   await page.goto("/edge");

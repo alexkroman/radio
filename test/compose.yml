@@ -16,8 +16,11 @@ services:
         [ -e /music/.seeded ] && exit
         cp -r /fixture-shows/. /shows/ && cp -r /fixture-music/. /music/ && cp -r /fixture-covers/. /covers/
         # Two finished archive blocks of the night show (14 s each, untagged)
-        # with their track sidecars, for night's own stream.
+        # with their track sidecars, for night's own stream, and one of edge
+        # (night's audio, under its own sidecar: one track, all accents and
+        # markup) for edge's.
         mkdir -p /archive && cp -r /fixture-archive/. /archive/
+        cp /archive/blocks/night-2026-11-14.mp3 /archive/blocks/edge-2026-11-14.mp3
         chmod -R a+rX /shows /music /archive
         touch /music/.seeded
     volumes:

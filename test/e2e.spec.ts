@@ -141,7 +141,7 @@ test("the About page has the stream", async ({ page }) => {
   await expect(page.locator(".streams")).toContainText("MP3, 256 kbps");
 });
 
-test("a show page has its hours and its own history, and plays only its own stream", async ({ page }) => {
+test("a show page has its hours, and plays only its own stream", async ({ page }) => {
   await onAir("night");
   await page.goto("/");
   await waitForTrack(page, "Midnight");
@@ -156,18 +156,12 @@ test("a show page has its hours and its own history, and plays only its own stre
     "data-play",
     "/stream/night",
   );
-  await expect(page.locator("#history")).toContainText("Midnight");
-
-  await onAir("default");
-  await page.goto("/default");
-  await expect(page.locator("#history")).toContainText(/First Light|Second Wind/);
-  await expect(page.locator("main")).not.toContainText("Midnight");
 
   // "&" must show once, unescaped.
-  await expect(async () => {
-    await page.reload();
-    await expect(page.locator("main")).toContainText("Beta & Band", { timeout: 1000 });
-  }).toPass();
+  await onAir("default");
+  await page.goto("/");
+  await waitForTrack(page, "Second Wind");
+  await expect(page.locator("#np .np-artist")).toContainText("Beta & Band");
   await expect(page.locator("main")).not.toContainText("&amp;");
 });
 
@@ -380,18 +374,22 @@ test("a refresh still in flight when you leave a show page isn't swapped into th
     await route.continue().catch(() => {});
   });
   await page.goto("/night");
+  const nightPast = await page.locator("#past").innerHTML();
   await page.locator("#poll").evaluate((el) => el.dispatchEvent(new Event("refresh")));
   await requested;
   // To another show's page by way of a DJ of both.
   await page.locator(".title-block .credit").getByRole("link", { name: "Ana Ruiz" }).click();
   await page.locator(".dj-shows").getByRole("link", { name: "Fixture Default", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Fixture Default");
+  const defaultPast = await page.locator("#past").innerHTML();
   const done = page.waitForEvent("requestfinished", (r) => r.url().endsWith("/night")).catch(() => {});
   release();
   await Promise.race([done, page.waitForTimeout(3000)]);
   await page.waitForTimeout(500); // htmx swaps and settles within ~20 ms of the response
   // Checked once: the default page's own refresh would soon put it right again.
-  expect(await page.locator("#history").textContent()).not.toContain("Midnight");
+  const past = await page.locator("#past").innerHTML();
+  expect(past).toBe(defaultPast);
+  if (nightPast !== defaultPast) expect(past).not.toBe(nightPast);
 });
 
 for (const [name, viewport] of [

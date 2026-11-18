@@ -99,14 +99,6 @@ const recentMonths = (now = new Date()) => [
 const recent = async (channel?: string) =>
   (await readLog(channel ? `${monthOf(new Date())}.${channel}` : monthOf(new Date()))).plays;
 
-// The newest plays, newest first: a show's, or the station's.
-export async function recentPlays(limit: number, show?: string): Promise<Play[]> {
-  return (await recent())
-    .filter((p) => !show || p.show === show)
-    .slice(-limit)
-    .reverse();
-}
-
 // The play on air now (the newest; its show is the show on air), or on a
 // show's own channel.
 export async function latestPlay(channel?: string): Promise<Play | undefined> {

@@ -147,7 +147,7 @@ describe("site login", () => {
 });
 
 describe("pages", () => {
-  test("the home page has the show and track on air and the station's history", async () => {
+  test("the home page has the show and track on air, and each show's stream's track", async () => {
     const res = await page("/");
     expect(res.status).toBe(200);
     const html = await res.text();
@@ -155,19 +155,21 @@ describe("pages", () => {
     expect(html).toMatch(/<h2 class="display"><a href="\/night">Fixture Night<\/a>/);
     expect(html).toMatch(/np-track">Midnight/);
     expect(html).toContain('href="/stream"');
-    expect(html).toContain("Second Wind");
     expect(html).toContain('<div id="player" data-title="Mazes Radio"></div>');
     // Each show's row has the track playing on its own stream, which isn't
-    // the station's: in the list, not on air or in the history.
-    const shows = html.slice(html.indexOf('id="shows"'), html.indexOf('id="history"'));
+    // the station's: in the list, not on air.
+    const shows = html.slice(
+      html.indexOf('id="shows"'),
+      html.indexOf("</section>", html.indexOf('id="shows"')),
+    );
     const row = (slug: string) => shows.slice(shows.indexOf(`href="/${slug}"`)).split("</li>")[0];
-    expect(row("default")).toMatch(/stream-track">.*h-track">Unheard<.*h-artist"> — Nobody</);
+    expect(row("default")).toMatch(/stream-track">.*st-track">Unheard<.*st-artist">Nobody</);
     expect(html.replace(shows, "")).not.toContain("Unheard");
     // Plain has no archived block, so no stream and nothing playing on it.
     expect(row("plain")).not.toContain("stream-track");
   });
 
-  test("a show page has its hours and history, and plays only its own stream", async () => {
+  test("a show page has its hours, and plays only its own stream", async () => {
     // At 18:00 (UTC, the tests' TZ) today: default's hours (0-3) aren't due,
     // so the hours are its next. (Night stays on air: the newest play.)
     const today = new Date();
@@ -178,8 +180,6 @@ describe("pages", () => {
       /Daily <span class="hours"><time class="time" datetime="[^"]+">12:00 AM<\/time>–<time class="time" datetime="[^"]+">3:00 AM</,
     );
     expect(off).not.toContain('class="np-track"');
-    expect(off).toContain("Second Wind");
-    expect(off).toContain("First Light");
     expect(off).not.toContain("Midnight");
     expect(off).not.toContain("Unheard");
     // Its own channel, around the clock.
@@ -245,7 +245,10 @@ describe("pages", () => {
 describe("channels and past shows", () => {
   test("the home page lists the shows, each with an archived block with its own stream's play button", async () => {
     const html = await (await page("/")).text();
-    const list = html.slice(html.indexOf('id="shows"'), html.indexOf('id="history"'));
+    const list = html.slice(
+      html.indexOf('id="shows"'),
+      html.indexOf("</section>", html.indexOf('id="shows"')),
+    );
     expect(list).toContain("Shows");
     const plays = [...list.matchAll(/data-play="([^"]+)" data-title="([^"]+)"/g)].map((m) => [m[1], m[2]]);
     expect(plays).toContainEqual(["/stream/night", "Fixture Night"]);
@@ -259,7 +262,7 @@ describe("channels and past shows", () => {
   test("a show's page plays its channel and lists its airings of the last two weeks, newest first", async () => {
     const html = await (await page("/default")).text();
     expect(html).toContain('data-play="/stream/default" data-title="Fixture Default"');
-    const past = html.slice(html.indexOf('id="past"'), html.indexOf('id="history"'));
+    const past = html.slice(html.indexOf('id="past"'), html.indexOf("</section>", html.indexOf('id="past"')));
     expect(past).toContain("Past shows");
     expect([...past.matchAll(/class="item-length">([^<]+)</g)].map((m) => m[1])).toEqual([
       "2 tracks",

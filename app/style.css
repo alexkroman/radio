@@ -694,6 +694,28 @@ img.cover {
   margin-top: 8px;
 }
 
+.st-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font: var(--type-small);
+}
+
+.st-track,
+.st-artist {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.st-track {
+  font-weight: 600;
+}
+
+.st-artist {
+  color: var(--color-muted);
+}
+
 /* The show's name over its description. */
 .item-info {
   display: flex;
@@ -701,44 +723,6 @@ img.cover {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-}
-
-.history {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.history ol {
-  list-style: none;
-  padding: 0;
-  border-top: 1px solid var(--color-hairline);
-}
-
-/* When, the cover, then title — artist on one line. */
-.history li {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--color-hairline-soft);
-}
-
-.h-text {
-  flex: 1 1 auto;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font: var(--type-nav);
-}
-
-.h-track {
-  font-weight: 600;
-}
-
-.h-artist {
-  color: var(--color-muted);
 }
 
 /* ── DJ page ── */
@@ -968,10 +952,6 @@ img.cover {
     flex-basis: 200px;
   }
 
-  .history .time {
-    width: 64px;
-  }
-
   /* Play button, then the title over its date and length. */
   .item {
     display: grid;
@@ -985,6 +965,11 @@ img.cover {
   .item .play,
   .item .play-space {
     grid-area: play;
+  }
+
+  /* Beside the show's name, at the top of its taller row. */
+  .show-item .play {
+    align-self: start;
   }
 
   .item-title,

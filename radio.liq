@@ -932,11 +932,11 @@ def block_stream(f) =
   end
   blocks = request.dynamic(id="blocks-#{slug}", retry_delay=60., next)
 
-  # The block playing: its tracks still to come, and how far into it the
-  # stream is (counted by frame: a new track resets the source's elapsed()).
+  # The block playing: its tracks still to come, and when it started, by
+  # the source's clock (time(): elapsed() and on_position count from the
+  # last track, and an inserted track is one).
   to_come = ref([])
-  played = ref(0.)
-  frame_length = settings.frame.duration()
+  started = ref(0.)
   blocks.on_track(
     synchronous=true,
     fun (m) ->
@@ -948,22 +948,19 @@ def block_stream(f) =
           # The first is the block's own tags; the rest are to come.
           ts = sidecar(block)
           to_come := if ts == [] then [] else list.tl(ts) end
-          played := 0.
+          started := blocks.time()
         end
       end
   )
   blocks.on_frame(
     synchronous=true,
     fun () ->
-      begin
-        played := played() + frame_length
-        if
-          to_come() != [] and played() >= fst(list.hd(to_come()))
-        then
-          t = snd(list.hd(to_come()))
-          to_come := list.tl(to_come())
-          blocks.insert_metadata(new_track=true, tags(t))
-        end
+      if
+        to_come() != [] and blocks.time() - started() >= fst(list.hd(to_come()))
+      then
+        t = snd(list.hd(to_come()))
+        to_come := list.tl(to_come())
+        blocks.insert_metadata(new_track=true, tags(t))
       end
   )
 

@@ -509,12 +509,12 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
           US law gives noncommercial stations a different deal. Under the statutory license for noncommercial
           webcasting, a station can play any released recording for a flat fee, as long as it stays radio: it
           broadcasts a show, and it can keep that show in an archive for listeners to play again for up to two
-          weeks. Shows, kept for two weeks, is exactly what you need to replace a playlist. And it's only open
-          to a station that isn't run for profit.
+          weeks. Shows, kept for two weeks, is exactly what you need to replace a playlist. The flat fee is
+          only open to a station that isn't run for profit.
         </p>
         <p>
-          So {SITE_TITLE} is a nonprofit, not as a pose but because the law that makes it possible is written
-          for nonprofits.
+          So {SITE_TITLE} is a nonprofit, not as a pose but because the license that makes it affordable is
+          written for nonprofits.
         </p>
       </section>
       <section class="prose" aria-labelledby="about-radio">

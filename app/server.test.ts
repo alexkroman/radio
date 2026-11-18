@@ -61,7 +61,13 @@ beforeAll(async () => {
   month = monthOf(new Date());
   // Each play in its month's log.
   const logs = new Map<string, string>();
-  for (const p of [...EARLIER, ...PLAYS]) {
+  // With end lines: Second Wind had 5 listeners by its end (none as it
+  // started), Midnight fewer by its end than its start.
+  const END: object[] = [
+    { time: now - 60, listeners_at_end: 5 },
+    { time: now - 30, listeners_at_end: 1 },
+  ];
+  for (const p of [...EARLIER, ...PLAYS.slice(0, 2), END[0]!, PLAYS[2]!, END[1]!] as { time: number }[]) {
     const m = monthOf(new Date(p.time * 1000));
     logs.set(m, `${logs.get(m) ?? ""}${JSON.stringify(p)}\n`);
   }
@@ -324,17 +330,19 @@ describe("reports", () => {
     expect((await req(`/reports/${month}`)).status).toBe(401);
   });
 
-  test("the SoundExchange report counts each play's listeners (at least 1 on the station)", async () => {
+  test("the SoundExchange report counts each play's listeners, the more of its start and end", async () => {
     const res = await page(`/reports/${month}`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-disposition")).toMatch(/^attachment; filename="MAZESRADIO01/);
     const rows = (await res.text()).trim().split("\n");
     expect(rows[0]).toMatch(/^\^NAME_OF_SERVICE\^\|/);
-    // Midnight: 2 on the station, 4 on night's channel; nobody heard default's channel.
+    // Midnight: 2 on the station, 4 on night's stream. Nobody heard Unheard
+    // (on default's stream): listed with 0.
     expect(rows.slice(1).filter((r) => !r.includes("^ZED^"))).toEqual([
       "^MAZES RADIO^|^A^|^GAMMA^|^MIDNIGHT^|^US1234567890^|^ALBUM^|^LABEL^|6",
+      "^MAZES RADIO^|^A^|^BETA & BAND^|^SECOND WIND^|^US1234567890^|^ALBUM^|^LABEL^|5",
       "^MAZES RADIO^|^A^|^ALPHA ARTIST^|^FIRST LIGHT^|^US1234567890^|^ALBUM^|^LABEL^|3",
-      "^MAZES RADIO^|^A^|^BETA & BAND^|^SECOND WIND^|^US1234567890^|^ALBUM^|^LABEL^|1",
+      "^MAZES RADIO^|^A^|^NOBODY^|^UNHEARD^|^US1234567890^|^ALBUM^|^LABEL^|0",
     ]);
   });
 

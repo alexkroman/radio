@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { request as https } from "node:https";
 import { type APIRequestContext, expect, type Page } from "@playwright/test";
 import { IcecastMetadataReader } from "icecast-metadata-js";
-import { parseJsonl, type Play } from "../app/plays.ts";
+import { parsePlays, type Play } from "../app/plays.ts";
 
 export const BASE = process.env.BASE_URL ?? "https://localhost";
 export const SITE_PASSWORD = process.env.SITE_PASSWORD ?? "";
@@ -84,15 +84,15 @@ export function listen(path: string): () => void {
   return () => req.destroy();
 }
 
-// Performances counted for a song in this month's report (0 if absent).
+// Performances counted for a song in this month's report (undefined if it isn't listed).
 export async function performances(
   request: APIRequestContext,
   artist: string,
   title: string,
-): Promise<number> {
+): Promise<number | undefined> {
   const text = await (await request.get(`/reports/${month}`)).text();
   const row = text.split("\n").find((l) => l.startsWith(`^MAZES RADIO^|^A^|^${artist}^|^${title}^|`));
-  return row ? Number(row.split("|").at(-1)) : 0;
+  return row ? Number(row.split("|").at(-1)) : undefined;
 }
 
 // The first StreamTitle in a stream's in-band (ICY) metadata, as players see it.
@@ -122,11 +122,11 @@ export function icyTitle(path: string): Promise<string> {
 }
 
 // Every play logged this month (the e2e container mounts the play log), on
-// the station or, given a show, on its own channel (/stream/<show>),
-// skipping a line that is still being written.
+// the station or, given a show, on its own stream (/stream/<show>), with its
+// end line folded in, skipping a line that is still being written.
 export async function loggedPlays(channel?: string): Promise<Play[]> {
   const text = await readFile(`/plays/${month}${channel ? `.${channel}` : ""}.jsonl`, "utf8").catch(() => "");
-  return parseJsonl<Play>(text);
+  return parsePlays(text);
 }
 
 // Put a show on air (radio.liq's onair, which test/compose.yml enables), and

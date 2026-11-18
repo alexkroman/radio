@@ -20,21 +20,19 @@ const HEADER = [
 const field = (v: string | number) =>
   typeof v === "number" ? String(v) : `^${v.toUpperCase().replace(/[|^]/g, "")}^`;
 
-// One row per song across all shows and their channels. Each play on the
-// station counts its listeners (at least 1); each on a show's channel counts
-// its listeners (a channel plays around the clock, and is mostly heard by no
-// one). ISRCs come from tags written
-// by scripts/import.sh (beet mbsync).
+// One row per song across all shows and their own streams, counting each
+// play's listeners (the more of its counts as it started and as it ended:
+// app/plays.ts). A song nobody heard is listed with 0. ISRCs come from tags
+// written by scripts/import.sh (beet mbsync).
 async function report(month: string): Promise<string> {
   const songs = new Map<string, Track & { count: number }>();
-  const add = (p: Track, n: number) => {
+  const [station, streams] = await Promise.all([monthPlays(month), channelPlays(month)]);
+  for (const p of [...station, ...streams]) {
     const key = `${p.artist}\n${p.title}`;
     const song = songs.get(key) ?? { ...p, count: 0 };
-    song.count += n;
+    song.count += p.listeners;
     songs.set(key, song);
-  };
-  for (const p of await monthPlays(month)) add(p, Math.max(p.listeners, 1));
-  for (const p of await channelPlays(month)) if (p.listeners > 0) add(p, p.listeners);
+  }
   const rows: (string | number)[][] = [HEADER];
   const sorted = [...songs.values()].sort(
     (a, b) => b.count - a.count || a.artist.localeCompare(b.artist) || a.title.localeCompare(b.title),

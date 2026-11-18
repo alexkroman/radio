@@ -392,6 +392,47 @@ def file_tags(uri) =
   end
 end
 
+# A stream's play log (/plays/YYYY-MM<suffix>.jsonl): f(start, show, t)
+# appends a play of track t (starting at `start`) with the stream's listeners
+# now, and before it, for the stream's play before it (just ended), an end
+# line with the same count, {time, listeners_at_end}. A play's performances
+# are the more of the two (app/plays.ts), so a listener who tunes in
+# mid-track counts for that track. Each line goes in its own play's month.
+def play_log(mount, suffix) =
+  last = ref(-1.)
+  def file_for(start) =
+    t = time.local(start)
+    pad = fun (n) -> n < 10 ? "0#{n}" : "#{n}"
+    "/plays/#{t.year}-#{pad(t.month)}#{suffix}.jsonl"
+  end
+  def write(start, line) =
+    file.write(append=true, data="#{json.stringify(compact=true, line)}\n", file_for(start))
+  end
+  fun (start, show, t) ->
+    begin
+      n = listeners(mount)
+      if last() >= 0. then write(last(), {time = last(), listeners_at_end = n}) end
+      last := start
+      write(
+        start,
+        {
+          time = start,
+          show = show,
+          artist = t.artist,
+          title = t.title,
+          album = t.album,
+          label = t.label,
+          isrc = t.isrc,
+          cover = t.cover,
+          listeners = n
+        }
+      )
+    end
+end
+
+# The station's play log, which every show's tracks go to while on air.
+station_log = play_log("stream", "")
+
 # A show's source.
 def show(f) =
   slug = slug_of(f)
@@ -499,26 +540,11 @@ def show(f) =
   tracks.on_track(
     synchronous=false,
     fun (m) ->
-      begin
-        t = track_info(slug, m)
-        play =
-          {
-            time = list.assoc(default=time(), list.assoc(default="", "filename", m), starts()),
-            show = slug,
-            artist = t.artist,
-            title = t.title,
-            album = t.album,
-            label = t.label,
-            isrc = t.isrc,
-            cover = t.cover,
-            listeners = listeners("stream")
-          }
-        file.write(
-          append=true,
-          data="#{json.stringify(compact=true, play)}\n",
-          "/plays/#{time.string('%Y-%m')}.jsonl"
-        )
-      end
+      station_log(
+        list.assoc(default=time(), list.assoc(default="", "filename", m), starts()),
+        slug,
+        track_info(slug, m)
+      )
   )
 
   # Loudness: autocue measures each track and sets liq_amplify (gain to reach
@@ -848,6 +874,7 @@ list.iter(recorder, shows)
 def block_stream(f) =
   slug = slug_of(f)
   mount = "stream/#{slug}"
+  log_play = play_log(mount, ".#{slug}")
   last = ref("")
   def next() =
     blocks =
@@ -928,23 +955,7 @@ def block_stream(f) =
           then
             named := t.offset
             blocks.insert_metadata([("title", t.title), ("artist", t.artist), ("album", t.album)])
-            play =
-              {
-                time = time(),
-                show = slug,
-                artist = t.artist,
-                title = t.title,
-                album = t.album,
-                label = t.label,
-                isrc = t.isrc,
-                cover = t.cover,
-                listeners = listeners(mount)
-              }
-            file.write(
-              append=true,
-              data="#{json.stringify(compact=true, play)}\n",
-              "/plays/#{time.string('%Y-%m')}.#{slug}.jsonl"
-            )
+            log_play(time(), slug, t)
           end
         end
       end

@@ -1,6 +1,9 @@
 // The play log: Liquidsoap appends one JSON line per play to
-// /plays/YYYY-MM.jsonl (radio.liq), in local time (TZ); each show's own
-// channel (/stream/<show>) logs to /plays/YYYY-MM.<show>.jsonl.
+// /plays/YYYY-MM.jsonl (radio.liq play_log), in local time (TZ); each show's
+// own stream (/stream/<show>) logs to /plays/YYYY-MM.<show>.jsonl. A play has
+// the stream's listeners as it started; when the next starts, an end line
+// ({time, listeners_at_end}) gives them as it ended. Its performances are the
+// more of the two.
 import { open, readdir, readFile } from "node:fs/promises";
 
 const PLAYS = process.env.PLAYS_DIR ?? "/plays";
@@ -17,14 +20,15 @@ export type Play = {
   label: string;
   isrc: string;
   cover: string; // "<show>/<stem>.jpg" relative path, or "" when no art was pre-extracted
-  listeners: number;
+  listeners: number; // the more of its two counts, once its end line is read
 };
+type EndLine = { time: number; listeners_at_end: number };
 
 export const monthOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 const file = (month: string) => `${PLAYS}/${month}.jsonl`;
 
 // JSON Lines (the play log), skipping a line that is still being written.
-export const parseJsonl = <T>(text: string): T[] =>
+const parseJsonl = <T>(text: string): T[] =>
   text.split("\n").flatMap((line) => {
     try {
       return line ? [JSON.parse(line) as T] : [];
@@ -32,12 +36,23 @@ export const parseJsonl = <T>(text: string): T[] =>
       return [];
     }
   });
-const parse = parseJsonl<Play>;
+// A log's plays, each with its end line folded in (appended to `plays`, a
+// log's plays read so far).
+export function parsePlays(text: string, plays: Play[] = []): Play[] {
+  for (const line of parseJsonl<Play | EndLine>(text)) {
+    if (!("listeners_at_end" in line)) plays.push(line);
+    else {
+      const play = plays.findLast((p) => p.time === line.time);
+      if (play) play.listeners = Math.max(play.listeners, line.listeners_at_end);
+    }
+  }
+  return plays;
+}
 
 // Every play in a log: a month's ("YYYY-MM"), or a show's channel's that
 // month ("YYYY-MM.<show>").
 export async function monthPlays(month: string): Promise<Play[]> {
-  return parse(await readFile(file(month), "utf8").catch(() => ""));
+  return parsePlays(await readFile(file(month), "utf8").catch(() => ""));
 }
 
 // Every play in a month on the shows' own channels.
@@ -62,7 +77,7 @@ async function readLog(name: string): Promise<Play[]> {
     if (size > hit.size) {
       const { buffer } = await fh.read(Buffer.alloc(size - hit.size), 0, size - hit.size, hit.size);
       const whole = buffer.lastIndexOf(0x0a) + 1;
-      hit = { size: hit.size + whole, plays: [...hit.plays, ...parse(buffer.toString("utf8", 0, whole))] };
+      hit = { size: hit.size + whole, plays: parsePlays(buffer.toString("utf8", 0, whole), [...hit.plays]) };
     }
     logs.set(name, hit);
     // Older months' logs aren't read again.

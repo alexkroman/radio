@@ -115,7 +115,7 @@ The station plays music under the statutory license for noncommercial webcasting
 - **Archived programs** (§ 114(d)(2)(C)(iii)): a show's stream plays only blocks of at least five hours, none up two weeks (above).
 - **No copying** (§ 114(d)(2)(C)(vi)): no downloads, no seeking.
 - **Track identification** (§ 114(d)(2)(C)(ix)): title, artist and album while each track plays, on the site, the lock screen and the stream's ICY title (`Artist - Title (Album)`).
-- **Reports of use** (37 C.F.R. Part 370): `/reports`, every play on the station and the shows' streams. A track on a show's stream counts the listeners when it came up (none, nothing).
+- **Reports of use** (37 C.F.R. Part 370): `/reports`, every play on the station and the shows' streams, each counting its stream's listeners: the more of the count as it started and as it ended (Liquidsoap logs the second when the next track starts, as an end line). A song nobody heard is listed with 0.
 
 Not in code: filing the Notice of Use with the Copyright Office, paying SoundExchange, and anything a lawyer would add.
 

@@ -39,9 +39,9 @@ type Now = { track: string; artist: string; album: string; cover: string; title:
 const NOTHING: Now = { track: "", artist: "", album: "", cover: "", title: "" };
 // The track playing on the source (its now.json; unknown until fetched).
 let now = NOTHING;
-// The station's now.json as last fetched: when it changes, a page showing
-// what's on air refreshes.
-let onAirJson = "";
+// Each watched now.json as last fetched: when one changes, a page showing
+// what's playing on it refreshes.
+let seen = new Map<string, string>();
 // What was last put on the lock screen.
 let lockKey = "";
 // When a dropped stream stops being retried (0: not retrying).
@@ -87,26 +87,41 @@ function sync() {
 }
 
 // The one poll, every 15 s: the track playing on the source, for the player
-// bar and the lock screen, and the station's, so a page showing what's on
-// air refreshes itself when it changes (ui.tsx Poll).
+// bar and the lock screen, and on each stream the page shows (its #poll's
+// data-watch), so it refreshes itself when one changes (ui.tsx Poll).
 async function poll() {
   const get = (url: string) =>
     fetch(url)
       .then((r) => (r.ok ? r.text() : undefined))
       .catch(() => undefined);
   const { src, now: url } = source;
-  // A show's own stream only while it plays (its track stays shown when paused).
-  const [onAir, own] = await Promise.all([
-    get(LIVE.now),
-    url === LIVE.now || !playing ? undefined : get(url),
-  ]);
-  const json = url === LIVE.now ? onAir : own;
+  const pollEl = document.getElementById("poll");
+  const watch = (pollEl?.dataset.watch ?? "").split(" ").filter(Boolean);
+  // The station's always (the bar shows it, paused); a show's own stream only
+  // while it plays (its track stays shown when paused).
+  const urls = [...new Set([LIVE.now, ...watch, ...(playing ? [url] : [])])];
+  const got = new Map(await Promise.all(urls.map(async (u) => [u, await get(u)] as const)));
+  const json = got.get(url);
   if (source.src === src && json) now = JSON.parse(json) as Now;
   sync();
-  if (!onAir || onAir === onAirJson) return;
-  const first = !onAirJson;
-  onAirJson = onAir;
-  if (!first && document.getElementById("poll")) htmx.trigger("#poll", "refresh");
+  // Refresh when a watched stream's track changed since the last poll (not
+  // on first sight: the page was rendered with it). A failed fetch keeps
+  // what was seen.
+  const changed = watch.some((u) => {
+    const j = got.get(u);
+    return j !== undefined && seen.has(u) && seen.get(u) !== j;
+  });
+  const next = new Map<string, string>();
+  for (const [u, j] of got) {
+    const before = seen.get(u);
+    if (j !== undefined) next.set(u, j);
+    else if (before !== undefined) next.set(u, before);
+  }
+  seen = next;
+  // The page's poll now (a link may have swapped the page meanwhile: a
+  // needless refresh then, at worst).
+  const current = document.getElementById("poll");
+  if (changed && current) htmx.trigger(current, "refresh");
 }
 setInterval(() => void poll(), 15_000);
 

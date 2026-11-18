@@ -889,6 +889,13 @@ def block_stream(f) =
       )
     q = fun (v) -> "\"#{string.escape(encoding='ascii', v)}\""
 
+    # Seek by the bitrate, not by reading the block up to the offset. A block
+    # is live-encoded constant 256 kbps with no seek header, so FFmpeg would
+    # otherwise read hundreds of MB, holding up the stream's clock (a pause
+    # at each track deep in a block), at each track's start; the offsets are
+    # bytes / 32000 already, so a seek by the bitrate lands right on them.
+    fastseek = "fflags=fastseek"
+
     # Each track, cut at its offset and the next's (the last, to the end).
     def rec uris(ts) =
       if
@@ -899,9 +906,11 @@ def block_stream(f) =
         let (offset, t) = list.hd(ts)
         rest = list.tl(ts)
         cue_out = rest == [] ? "" : ",liq_cue_out=#{q(string(fst(list.hd(rest))))}"
-        "annotate:liq_cue_in=#{q(string(offset))}#{cue_out},title=#{q(t.title)},artist=#{q(t.artist)},album=#{
-          q(t.album)
-        },label=#{q(t.label)},isrc=#{q(t.isrc)},archive_cover=#{q(t.cover)}:#{block}"::uris(rest)
+        "annotate:ffmpeg_options=#{q(fastseek)},liq_cue_in=#{q(string(offset))}#{cue_out},title=#{
+          q(t.title)
+        },artist=#{q(t.artist)},album=#{q(t.album)},label=#{q(t.label)},isrc=#{q(t.isrc)},archive_cover=#{
+          q(t.cover)
+        }:#{block}"::uris(rest)
       end
     end
     uris(tracks)

@@ -64,7 +64,7 @@ test("a track looks the same in the player on the station and on its show's stre
   const channel = await widgets(page);
 
   expect(live.status).toBe("Fixture Night · Live");
-  expect(channel.status).toBe("Fixture Night · 24/7");
+  expect(channel.status).toBe("Fixture Night · Replay");
   // Everything else is the same.
   expect({ ...channel, status: "" }).toEqual({ ...live, status: "" });
   expect(live.lock).toEqual({

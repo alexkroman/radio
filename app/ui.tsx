@@ -73,11 +73,13 @@ export const PlayButton = ({
   src = "/stream",
   title = SITE_TITLE,
   now = "/now.json",
+  status = "Live",
 }: {
   large?: boolean;
   src?: string;
   title?: string;
   now?: string; // its track playing, for the player bar and lock screen
+  status?: string; // the player bar's word for it
 }) => {
   const size = large ? 20 : 14;
   return (
@@ -87,6 +89,7 @@ export const PlayButton = ({
       data-play={src}
       data-title={title}
       data-now={now}
+      data-status={status}
       aria-label={`Play ${title}`}
     >
       <PlayIcon size={size} d={large ? "M4.5 2.5v9l7.5-4.5z" : "M4 2.5v9l7.5-4.5z"} />

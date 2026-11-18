@@ -235,7 +235,7 @@ const StreamUrl = ({
 // A show's own stream: its archived shows, in a loop (radio.liq block_stream).
 const channel = (show: Show) => `/stream/${show.slug}`;
 const ChannelButton = ({ show }: { show: Show }) => (
-  <PlayButton src={channel(show)} title={show.title} now={`/${show.slug}/now.json`} />
+  <PlayButton src={channel(show)} title={show.title} now={`/${show.slug}/now.json`} status="24/7" />
 );
 
 // The show on air: the newest play's (the schedule's until anything has played).
@@ -428,13 +428,6 @@ const AiringRow = ({ airing }: { airing: Airing }) => (
     <span class="item-length">{`${airing.tracks} ${airing.tracks === 1 ? "track" : "tracks"}`}</span>
   </li>
 );
-
-// The track playing on a show's channel, as /now.json is for the station.
-app.get(`/:slug{${SLUG}}/now.json`, async (c) => {
-  const show = await getShow(c.req.param("slug"));
-  if (!show) return c.notFound();
-  return c.json(nowTrack(await latestPlay(show.slug), show.title));
-});
 
 // Also at /manifesto, its old name: /about once answered with a 301 there,
 // which browsers cache and follow without asking, so for them /about still
@@ -799,11 +792,18 @@ app.get(`/djs/:dj{${SLUG}}/photo`, async (c) => {
   return (photo && (await serveStatic({ path: photo })(c, async () => {}))) || c.notFound();
 });
 
-// The track on air and its show: client.ts polls it for the player bar, the
-// lock screen and when to refresh the page.
-app.get("/now.json", async (c) => {
-  const { show, play } = await onAir(await getShows());
-  return c.json(nowTrack(play, show?.title ?? SITE_TITLE));
+// The track playing on a stream and its show's title: on the station
+// (/now.json, the show on air) or a show's own (/<slug>/now.json, its newest
+// play there). client.ts polls them for the player bar, the lock screen and
+// when to refresh the page.
+app.on("GET", ["/now.json", `/:slug{${SLUG}}/now.json`], async (c) => {
+  const slug = c.req.param("slug");
+  if (!slug) {
+    const { show, play } = await onAir(await getShows());
+    return c.json(nowTrack(play, show?.title ?? SITE_TITLE));
+  }
+  const show = await getShow(slug);
+  return show ? c.json(nowTrack(await latestPlay(slug), show.title)) : c.notFound();
 });
 
 // Per-track covers extracted by scripts/import.sh → covers/<show>/<stem>.jpg

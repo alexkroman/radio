@@ -323,7 +323,9 @@ def track_info(slug, m) =
     album = tag("album"),
     label = tag(or_tag="publisher", "label"),
     isrc = tag(or_tag="tsrc", "isrc"),
-    cover = file.exists("/covers/#{cover}") ? cover : ""
+    cover =
+      # An archived track's, given (block_stream), else the file's if there is one.
+      list.assoc(default=file.exists("/covers/#{cover}") ? cover : "", "cover", m)
   }
 end
 
@@ -844,95 +846,88 @@ list.iter(recorder, shows)
 # one after another, around the clock. These are the archived programs the
 # statutory license allows: at least five hours each (finish_block), and
 # none up two weeks (scripts/prune-archive.sh). Silence until the show has a
-# block. A block plays as recorded (no autocue: its levels and crossfades
-# are the broadcast's), and its sidecar names each track as it comes up: in
-# the stream's ICY title, and a line in the show's stream's play log,
-# /plays/YYYY-MM.<slug>.jsonl (for the site's player and the reports, with
-# the stream's listeners).
+# block. Each track in a block, from its sidecar, is its own request: the
+# block's file cut at the track's offset and the next's (liq_cue_in/out),
+# tagged with the track (annotate), so it's a track like the station's: in
+# the ICY title, and in the show's stream's play log,
+# /plays/YYYY-MM.<slug>.jsonl (play_log, as the station's), when it starts.
+# No autocue: a block plays as recorded, with the broadcast's levels and
+# crossfades.
 def block_stream(f) =
   slug = slug_of(f)
   mount = "stream/#{slug}"
   log_play = play_log(mount, ".#{slug}")
   last = ref("")
-  def next() =
-    blocks =
-      list.filter(
-        fun (b) -> slug_of_block(b) == slug,
-        file.ls(absolute=true, sorted=true, pattern="*.mp3", archive_blocks)
+
+  # The tracks of the block playing still to come, as request URIs.
+  queue = ref([])
+
+  # A block's tracks, as request URIs.
+  def segments(block) =
+    lines =
+      try
+        string.split(separator="\n", file.contents(sidecar_path(slug_of(block))))
+      catch _ do
+        []
+      end
+    tracks =
+      list.filter_map(
+        fun (l) ->
+          try
+            let json.parse (o : {offset: float}) = l
+            let json.parse (t :
+              {title: string, artist: string, album: string, label: string, isrc: string, cover: string}
+            ) = l
+            (o.offset, t)
+          catch _ do
+            null
+          end,
+        lines
       )
-    others = list.filter(fun (b) -> b != last(), blocks)
-    pick = others == [] ? blocks : others
+    q = fun (v) -> "\"#{string.escape(encoding='ascii', v)}\""
+    def uri(i) =
+      let (offset, t) = list.nth(tracks, i)
+      cue_out = i + 1 < list.length(tracks) ? ",liq_cue_out=#{q(string(fst(list.nth(tracks, i + 1))))}" : ""
+      "annotate:liq_cue_in=#{q(string(offset))}#{cue_out},title=#{q(t.title)},artist=#{q(t.artist)},album=#{
+        q(t.album)
+      },label=#{q(t.label)},isrc=#{q(t.isrc)},cover=#{q(t.cover)}:#{block}"
+    end
+    list.init(list.length(tracks), uri)
+  end
+
+  def next() =
     if
-      pick == []
+      queue() == []
+    then
+      blocks =
+        list.filter(
+          fun (b) -> slug_of_block(b) == slug,
+          file.ls(absolute=true, sorted=true, pattern="*.mp3", archive_blocks)
+        )
+      others = list.filter(fun (b) -> b != last(), blocks)
+      pick = others == [] ? blocks : others
+      if
+        pick != []
+      then
+        b = list.nth(pick, random.int(min=0, max=list.length(pick)))
+        last := b
+        queue := segments(b)
+      end
+    end
+    if
+      queue() == []
     then
       null
     else
-      b = list.nth(pick, random.int(min=0, max=list.length(pick)))
-      last := b
-      request.create("annotate:liq_disable_autocue=\"true\":#{b}")
+      u = list.hd(queue())
+      queue := list.tl(queue())
+      request.create(excluded_metadata_resolvers=["autocue"], u)
     end
   end
   blocks = request.dynamic(id="blocks-#{slug}", retry_delay=60., next)
 
-  # The block playing's tracks (its sidecar), and the offset of the one last
-  # named (-1: none yet).
-  tracks = ref([])
-  named = ref(-1.)
-  blocks.on_track(
-    synchronous=true,
-    fun (m) ->
-      begin
-        lines =
-          try
-            string.split(
-              separator="\n",
-              file.contents(sidecar_path(slug_of(list.assoc(default="", "filename", m))))
-            )
-          catch _ do
-            []
-          end
-
-        # Each line: its offset, and the track (as track_info gives it).
-        tracks :=
-          list.filter_map(
-            fun (l) ->
-              try
-                let json.parse (o : {offset: float}) = l
-                let json.parse (t :
-                  {title: string, artist: string, album: string, label: string, isrc: string, cover: string}
-                ) = l
-                (o.offset, t)
-              catch _ do
-                null
-              end,
-            lines
-          )
-        named := -1.
-      end
-  )
-  blocks = insert_metadata(blocks)
-
-  # Each second: when the next track in the block has come up, name it.
-  thread.run(
-    every=1.,
-    fun () ->
-      begin
-        pos = blocks.elapsed()
-        started = list.filter(fun (ot) -> fst(ot) <= pos, tracks())
-        if
-          started != []
-        then
-          let (offset, t) = list.last(started)
-          if
-            offset != named()
-          then
-            named := offset
-            blocks.insert_metadata([("title", t.title), ("artist", t.artist), ("album", t.album)])
-            log_play(time(), slug, t)
-          end
-        end
-      end
-  )
+  # Asynchronous, so the listener count's HTTP call never holds up the stream.
+  blocks.on_track(synchronous=false, fun (m) -> log_play(time(), slug, track_info(slug, m)))
   to_icecast(mount, metadata.map(update=true, icy_song, mksafe(blocks)))
 end
 list.iter(block_stream, shows)

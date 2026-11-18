@@ -8,12 +8,12 @@
 import { render, useLayoutEffect, useRef, useState } from "hono/jsx/dom";
 
 // station: what the button plays (the site's name, or a show's title for its
-// channel); title: the show on air, or the channel's show; live: the station,
-// not a channel.
+// own stream); title: the show playing; status: "Live", or "24/7" on a
+// show's own stream.
 export type BarState = {
   station: string;
   title: string;
-  live: boolean;
+  status: string;
   track: string;
   artist: string;
   album: string;
@@ -70,7 +70,7 @@ function Bar({ onToggle }: { onToggle: () => void }) {
         <span id="bar-track">{parts.join(" · ")}</span>
         <span class="bar-status">
           {s.playing && <span class="dot" aria-hidden="true" />}
-          <span>{`${s.title} · ${s.live ? "Live" : "24/7"}`}</span>
+          <span>{`${s.title} · ${s.status}`}</span>
         </span>
       </div>
       <button

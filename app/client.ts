@@ -12,8 +12,8 @@ import { mountBar, setBar } from "./bar.tsx";
 // The browser plays the streams itself, in every browser: a tap sets the
 // element's URL and calls play() in the tap, as iOS requires. (A player that
 // decoded the stream into WebAudio left AirPlay speakers silent.) The track
-// and show on air come from /now.json; on a show's own channel, from its
-// /<slug>/now.json.
+// playing comes from the stream's now.json: /now.json for the station,
+// /<slug>/now.json for a show's own.
 const audio = new Audio();
 // AirPlay (a WiiM, say, picked in Control Center) gets the page's audio as the
 // phone's output, like any app's, rather than Safari handing the element
@@ -24,24 +24,24 @@ audio.setAttribute("x-webkit-airplay", "deny");
 const session = navigator.mediaSession;
 // The station's name (#player's data; app.js is deferred, so the page is there).
 const station = document.getElementById("player")!.dataset.title!;
-// What the player plays: the station (/stream), or a show's own channel
-// (/stream/<slug>). Set by a tap.
-type Source = { src: string; title: string; now: string };
-const LIVE: Source = { src: "/stream", title: station, now: "/now.json" };
+// What the player plays: the station (/stream), or a show's own stream
+// (/stream/<slug>), with where to ask what's playing on it and its status
+// label. Set by a tap (a play button's data).
+type Source = { src: string; title: string; now: string; status: string };
+const LIVE: Source = { src: "/stream", title: station, now: "/now.json", status: "Live" };
 let source = LIVE;
 const live = () => source.src === LIVE.src;
 // Whether it's playing: set on a tap, cleared when it stops.
 let playing = false;
 // A track: title, artist, album (all three shown while it plays, as the
-// statutory license requires) and cover.
-type Track = { track: string; artist: string; album: string; cover: string };
-const NO_TRACK: Track = { track: "", artist: "", album: "", cover: "" };
-// The track on air and its show's title, from /now.json (and that JSON).
-type Now = Track & { title: string };
-let now: Now = { ...NO_TRACK, title: "" };
-let nowJson = "";
-// The track playing on the channel being played (unknown until fetched).
-let channelTrack = NO_TRACK;
+// statutory license requires) and cover, and its show's title.
+type Now = { track: string; artist: string; album: string; cover: string; title: string };
+const NOTHING: Now = { track: "", artist: "", album: "", cover: "", title: "" };
+// The track playing on the source (its now.json; unknown until fetched).
+let now = NOTHING;
+// The station's now.json as last fetched: when it changes, a page showing
+// what's on air refreshes.
+let onAirJson = "";
 // What was last put on the lock screen.
 let lockKey = "";
 // When a dropped stream stops being retried (0: not retrying).
@@ -68,48 +68,40 @@ function sync() {
     el.textContent = playing && live() ? "Listening live" : "Live";
   });
   document.body.classList.toggle("playing", playing);
-  const track: Track = live() ? now : channelTrack;
-  setBar({
-    ...NO_TRACK,
-    ...(live() || playing ? track : {}),
-    station: source.title,
-    title: live() ? now.title || station : source.title,
-    live: live(),
-    playing,
-  });
+  setBar({ ...now, title: now.title || source.title, station: source.title, status: source.status, playing });
   // The lock screen, when what's playing changes.
   if (!playing) return;
-  const key = `${source.src}\n${track.track}\n${track.artist}\n${track.album}`;
-  if ((live() && !track.track) || key === lockKey) return;
+  const key = `${source.src}\n${now.track}\n${now.artist}\n${now.album}`;
+  if (key === lockKey) return;
   lockKey = key;
   session.metadata = new MediaMetadata(
-    track.track
+    now.track
       ? {
-          title: track.track,
-          artist: track.artist,
-          album: track.album,
-          artwork: track.cover ? [{ src: track.cover, type: "image/jpeg" }] : [],
+          title: now.track,
+          artist: now.artist,
+          album: now.album,
+          artwork: now.cover ? [{ src: now.cover, type: "image/jpeg" }] : [],
         }
       : { title: source.title, artist: station },
   );
 }
 
-// The one poll, every 15 s: the track on air, for the player bar and the
-// lock screen (and, while a channel plays, the track on it). When the track
-// on air changes, a page showing it refreshes itself (ui.tsx Poll).
+// The one poll, every 15 s: the track playing on the source, for the player
+// bar and the lock screen, and the station's, so a page showing what's on
+// air refreshes itself when it changes (ui.tsx Poll).
 async function poll() {
   const get = (url: string) =>
     fetch(url)
       .then((r) => (r.ok ? r.text() : undefined))
       .catch(() => undefined);
-  const src = source.src;
-  const [json, channel] = await Promise.all([get("/now.json"), live() ? undefined : get(source.now)]);
-  if (source.src === src && channel) channelTrack = JSON.parse(channel) as Track;
-  if (!json || json === nowJson) return sync();
-  const first = !nowJson;
-  nowJson = json;
-  now = JSON.parse(json) as Now;
+  const { src, now: url } = source;
+  const [onAir, own] = await Promise.all([get(LIVE.now), url === LIVE.now ? undefined : get(url)]);
+  const json = url === LIVE.now ? onAir : own;
+  if (source.src === src && json) now = JSON.parse(json) as Now;
   sync();
+  if (!onAir || onAir === onAirJson) return;
+  const first = !onAirJson;
+  onAirJson = onAir;
   if (!first && document.getElementById("poll")) htmx.trigger("#poll", "refresh");
 }
 setInterval(() => void poll(), 15_000);
@@ -126,13 +118,13 @@ function playSource() {
 function start(to: Source) {
   const changed = to.src !== source.src;
   source = to;
-  if (changed) channelTrack = NO_TRACK;
+  if (changed) now = NOTHING;
   playing = true;
   sync();
   retryUntil = 0;
   // Synchronously, in the tap: iOS allows play() only there.
   playSource();
-  if (changed && !live()) void poll();
+  if (changed) void poll();
 }
 
 function stop() {
@@ -181,8 +173,8 @@ for (const action of ["seekto", "seekforward", "seekbackward", "previoustrack", 
 document.addEventListener("click", (e) => {
   const button = (e.target as Element).closest<HTMLButtonElement>("button[data-play]");
   if (!button) return;
-  const { play: src, title, now } = button.dataset;
-  toggle({ src: src!, title: title!, now: now! });
+  const { play: src, title, now: url, status } = button.dataset;
+  toggle({ src: src!, title: title!, now: url!, status: status! });
 });
 
 document.addEventListener("htmx:beforeRequest", (e) => {

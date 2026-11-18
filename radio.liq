@@ -423,8 +423,8 @@ def show(f) =
       [fun () -> list.map(fun (p) -> {show = p.show, artists = p.artists, album = p.album}, pending())]
     )
   def started_now(m) =
-    file = list.assoc(default="", "filename", m)
-    match = list.filter(fun (p) -> p.file == file, pending())
+    filename = list.assoc(default="", "filename", m)
+    match = list.filter(fun (p) -> p.file == filename, pending())
     if match != [] then started := list.hd(match).seq end
   end
   def next_ok(r) =
@@ -534,9 +534,14 @@ end
 shows = file.ls(absolute=true, sorted=true, pattern="*.md", "/shows")
 
 # Each show's hours, by slug, re-read every minute so an edit applies without
-# a restart.
+# a restart. Not while the show files differ from the ones it started with: a
+# show added or removed needs a restart (scripts/reconcile.sh), and until then
+# the new hours could give an hour to a show it isn't running, or take one
+# from a show that went, and play silence (a deploy that stopped after syncing
+# shows/ did: 85 minutes of it). Keep the hours it has until the restart.
 read_hours = fun () -> list.map(fun (f) -> (slug_of(f), show_hours(f)), shows)
 schedule = ref(read_hours())
+shows_differ = ref(false)
 
 # A show's hours (show_hours) now.
 def hours_of(slug) =
@@ -590,12 +595,27 @@ thread.run(
   every=60.,
   fun () ->
     begin
-      now = read_hours()
       if
-        now != schedule()
+        file.ls(absolute=true, sorted=true, pattern="*.md", "/shows") != shows
       then
-        schedule := now
-        check_schedule()
+        if
+          not shows_differ()
+        then
+          shows_differ := true
+          log.severe(
+            "The shows on disk differ from the ones running: keeping their hours until a restart \
+             (scripts/reconcile.sh)"
+          )
+        end
+      else
+        shows_differ := false
+        now = read_hours()
+        if
+          now != schedule()
+        then
+          schedule := now
+          check_schedule()
+        end
       end
     end
 )

@@ -189,7 +189,7 @@ const NowPlaying = ({ play, status = true }: { play?: Play; status?: boolean }) 
         {status && (
           <span class="label np-status">
             <span class="dot" aria-hidden="true" />
-            <span data-status>Live</span>
+            <span data-live>Live</span>
           </span>
         )}
         <TrackLines play={play} cls="np" />
@@ -379,7 +379,6 @@ const ShowList = ({ shows, streams }: { shows: Show[]; streams: Set<string> }) =
         <h2 id="shows-heading" class="section-label">
           Shows
         </h2>
-        <p class="section-note">Each one's recent shows play on its own stream, around the clock.</p>
       </div>
       <ol class="item-list">
         {scheduled(shows).map((show) => (

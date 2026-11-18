@@ -6,6 +6,7 @@
   "scripts": {
     "format": "prettier --write --ignore-unknown .",
     "build": "esbuild app/main.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server.js && esbuild app/client.ts --bundle --minify --outfile=dist/public/app.js --loader:.woff=file --loader:.woff2=file --asset-names=fonts/[name]-[hash] && cp app/public/* dist/public/",
+    "dev": "sh scripts/dev.sh",
     "typecheck": "tsc",
     "lint": "eslint .",
     "test": "vitest run",

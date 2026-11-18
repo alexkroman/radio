@@ -65,8 +65,11 @@ describe("the schedule", () => {
     expect(scheduleProblems([])).toEqual(["00:00-24:00: no show on air"]);
   });
 
-  test("is in the order the shows start", () => {
-    expect(scheduled(SHOWS).map((s) => s.slug)).toEqual(["frequency", "drift", "gloaming"]);
+  test("is in the order the shows are on from now, the one on now first", () => {
+    const order = (h: number) => scheduled(SHOWS, at(h)).map((s) => s.slug);
+    expect(order(12)).toEqual(["frequency", "drift", "gloaming"]);
+    expect(order(18)).toEqual(["drift", "gloaming", "frequency"]);
+    expect(order(3)).toEqual(["gloaming", "frequency", "drift"]);
   });
 
   test.each([

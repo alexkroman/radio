@@ -37,7 +37,7 @@ test("a show's own stream names an archived track in UTF-8, as the station does"
 
 test("the player picks up the playing track for the lock screen", async ({ page }) => {
   await onAir("edge");
-  await page.goto("/edge");
+  await page.goto("/");
   await page.getByRole("main").getByRole("button", { name: "Play Mazes Radio" }).click();
   await expect
     .poll(() =>
@@ -60,7 +60,7 @@ test("quotes and backslashes survive the log, the page and the report", async ({
   await expect
     .poll(async () => (await loggedPlays()).find((p) => p.show === "odd"))
     .toMatchObject({ artist: ODD_ARTIST, title: ODD_TITLE });
-  await page.goto("/odd");
+  await page.goto("/");
   await expect(page.locator("#np .np-track")).toHaveText(ODD_TITLE);
   await expect(page.locator("#np .np-artist")).toHaveText(ODD_ARTIST);
   await expect
@@ -77,8 +77,10 @@ test.describe(() => {
     await onAir("long");
     for (const path of ["/", "/long", "/edge", "/reports"]) {
       await page.goto(path);
-      if (path === "/long")
-        await expect(page.locator("#np .np-track")).toContainText("Supercalifragilisticexpialidocious");
+      if (path === "/" || path === "/long")
+        await expect(page.locator(path === "/" ? "#np .np-track" : "#history")).toContainText(
+          "Supercalifragilisticexpialidocious",
+        );
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(overflow, path).toBeLessThanOrEqual(0);
     }

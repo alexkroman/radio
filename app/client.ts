@@ -64,7 +64,7 @@ function sync() {
     b.classList.toggle("playing", on);
     b.setAttribute("aria-label", `${on ? "Pause" : "Play"} ${b.dataset.title}`);
   });
-  document.querySelectorAll<HTMLElement>("[data-status]").forEach((el) => {
+  document.querySelectorAll<HTMLElement>("[data-live]").forEach((el) => {
     el.textContent = playing && live() ? "Listening live" : "Live";
   });
   document.body.classList.toggle("playing", playing);

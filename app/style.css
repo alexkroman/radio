@@ -82,8 +82,12 @@ button {
   gap: 48px;
 }
 
-.page-about {
+/* Prose reads as one column: closer sections than the listing pages (and on
+   phones too, hence .page twice over the phone rule's .page). */
+.page.page-about {
   --width: var(--width-prose);
+
+  gap: 32px;
 }
 
 /* ── Site header + logo lockup ── */
@@ -463,12 +467,6 @@ img.cover {
   color: var(--color-muted);
 }
 
-.next {
-  margin-block: 0;
-  font: var(--type-small);
-  color: var(--color-muted);
-}
-
 /* ── Home: the show on air, then the shows ── */
 .page-home {
   gap: 64px;
@@ -489,7 +487,7 @@ img.cover {
 }
 
 .hero .display {
-  font-size: clamp(64px, 12vw, 112px);
+  font-size: clamp(36px, 6vw, 56px);
   font-stretch: 80%;
   line-height: 0.95;
   letter-spacing: -0.02em;
@@ -517,10 +515,6 @@ img.cover {
 .on-air-label .time {
   width: auto;
   font: inherit;
-  color: var(--color-muted);
-}
-
-.until {
   color: var(--color-muted);
 }
 
@@ -570,10 +564,6 @@ img.cover {
 
 .page-home .hero-head {
   gap: 6px;
-}
-
-.page-home .hero .display {
-  font-size: clamp(36px, 6vw, 56px);
 }
 
 .section-head {
@@ -740,11 +730,6 @@ img.cover {
 
 .h-artist {
   color: var(--color-muted);
-}
-
-/* stylelint-disable-next-line no-descending-specificity -- unrelated times */
-.history .time {
-  width: calc(var(--col-time) + 8px);
 }
 
 /* ── DJ page ── */
@@ -1043,7 +1028,7 @@ img.cover {
     padding: 16px;
   }
 
-  .page-home .hero .display {
+  .hero .display {
     font-size: 36px;
   }
 

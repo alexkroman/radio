@@ -5,8 +5,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, describe, expect, test, vi } from "vitest";
 import type { Play } from "./plays.ts";
-import { showAt } from "./schedule.ts";
-import { getShows } from "./shows.ts";
 
 const now = Math.floor(Date.now() / 1000);
 const play = (p: Partial<Play>): Play => ({
@@ -162,9 +160,9 @@ describe("pages", () => {
     expect(html).toContain('<div id="player" data-title="Mazes Radio"></div>');
   });
 
-  test("a show page has its hours, and its track only while on air", async () => {
+  test("a show page has its hours and history, and plays only its own stream", async () => {
     // At 18:00 (UTC, the tests' TZ) today: default's hours (0-3) aren't due,
-    // so its page says when it's next on. (Night stays on air: the newest play.)
+    // so the hours are its next. (Night stays on air: the newest play.)
     const today = new Date();
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 18));
@@ -172,7 +170,6 @@ describe("pages", () => {
     expect(off).toMatch(
       /Daily <span class="hours"><time class="time" datetime="[^"]+">12:00 AM<\/time>–<time class="time" datetime="[^"]+">3:00 AM</,
     );
-    expect(off).toContain("Off air. Next on at");
     expect(off).not.toContain('class="np-track"');
     expect(off).toContain("Second Wind");
     expect(off).toContain("First Light");
@@ -180,10 +177,12 @@ describe("pages", () => {
     expect(off).not.toContain("Unheard");
     // Its own channel, around the clock.
     expect(off).toContain('href="/stream/default"');
-    expect(off).toMatch(/Fixture Default, 24\/7: <a class="url" href="\/stream\/default"/);
+    expect(off).toMatch(/Fixture Default Stream URL: <a class="url" href="\/stream\/default"/);
+    // On air or not, no track on air and no button for the station's stream.
     const on = await (await page("/night")).text();
-    expect(on).toMatch(/np-track">Midnight/);
-    expect(on).not.toContain("Off air");
+    expect(on).not.toContain('class="np-track"');
+    expect(on).not.toContain('data-play="/stream"');
+    expect(on).toContain('data-play="/stream/night"');
   });
 
   test("a DJ page lists their shows", async () => {
@@ -291,13 +290,6 @@ describe("channels and past shows", () => {
     expect((await page("/archive")).status).toBe(404);
     expect((await page("/archive/night-2026-11-14/now.json?t=0")).status).toBe(404);
     expect(await (await page("/")).text()).not.toContain("/archive");
-  });
-
-  test("while a show waits for the last one's track to end, its page says it starts after this track", async () => {
-    // Night is on air (the newest play); whichever show's hours it is now is due.
-    const due = showAt(await getShows(), new Date());
-    if (!due || due.slug === "night") return;
-    expect(await (await page(`/${due.slug}`)).text()).toContain("Starting after this track.");
   });
 });
 

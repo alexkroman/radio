@@ -157,6 +157,7 @@ npm ci              # once after cloning
 npm run typecheck   # tsc
 npm run lint        # eslint
 npm run build       # esbuild → dist/ (the Docker image does this too)
+npm run dev         # the site alone on http://localhost:3000/: your shows and covers, the server's play log; no audio
 ```
 
 ## End-to-end tests

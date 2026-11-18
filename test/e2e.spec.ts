@@ -149,14 +149,10 @@ test("a show on air has its track; one off air, when it's next on", async ({ pag
   await waitForTrack(page, "Midnight");
   await expect(page.locator("#np .np-artist")).toHaveText("Gamma");
 
-  // Off air: when it's next on, or, during its own hours (12-15 in the
-  // stack's time zone) with another show put on air by hand, that it starts
-  // after this track. app/server.test.ts pins each wording at a set time.
+  // Off air: no track over the history.
   await onAir("default");
   await page.goto("/night");
-  await expect(page.locator("#np")).toContainText(
-    /Off air\. Next on at \d{1,2}:00 [AP]M\.|Starting after this track\./,
-  );
+  await expect(page.locator("#np .np-track")).toHaveCount(0);
   await expect(page.locator("#history")).toContainText("Midnight");
   await page.goto("/default");
   await waitForTrack(page, /First Light|Second Wind/);
@@ -390,7 +386,7 @@ test("a refresh still in flight when you leave a show page isn't swapped into th
   await Promise.race([done, page.waitForTimeout(3000)]);
   await page.waitForTimeout(500); // htmx swaps and settles within ~20 ms of the response
   // Checked once: the default page's own refresh would soon put it right again.
-  expect(await page.locator("#np").textContent()).toContain("Off air");
+  expect(await page.locator("#np .np-track").count()).toBe(0);
   expect(await page.locator("#history").textContent()).not.toContain("Midnight");
 });
 

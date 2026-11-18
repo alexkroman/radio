@@ -5,8 +5,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, describe, expect, test, vi } from "vitest";
 import type { Play } from "./plays.ts";
-import { showAt } from "./schedule.ts";
-import { getShows } from "./shows.ts";
 
 const now = Math.floor(Date.now() / 1000);
 const play = (p: Partial<Play>): Play => ({
@@ -172,7 +170,6 @@ describe("pages", () => {
     expect(off).toMatch(
       /Daily <span class="hours"><time class="time" datetime="[^"]+">12:00 AM<\/time>–<time class="time" datetime="[^"]+">3:00 AM</,
     );
-    expect(off).toContain("Off air. Next on at");
     expect(off).not.toContain('class="np-track"');
     expect(off).toContain("Second Wind");
     expect(off).toContain("First Light");
@@ -183,7 +180,6 @@ describe("pages", () => {
     expect(off).toMatch(/Fixture Default Stream URL: <a class="url" href="\/stream\/default"/);
     const on = await (await page("/night")).text();
     expect(on).toMatch(/np-track">Midnight/);
-    expect(on).not.toContain("Off air");
   });
 
   test("a DJ page lists their shows", async () => {
@@ -291,13 +287,6 @@ describe("channels and past shows", () => {
     expect((await page("/archive")).status).toBe(404);
     expect((await page("/archive/night-2026-11-14/now.json?t=0")).status).toBe(404);
     expect(await (await page("/")).text()).not.toContain("/archive");
-  });
-
-  test("while a show waits for the last one's track to end, its page says it starts after this track", async () => {
-    // Night is on air (the newest play); whichever show's hours it is now is due.
-    const due = showAt(await getShows(), new Date());
-    if (!due || due.slug === "night") return;
-    expect(await (await page(`/${due.slug}`)).text()).toContain("Starting after this track.");
   });
 });
 

@@ -567,7 +567,6 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
   const stream = streams.has(show.slug);
   const isOn = on?.slug === show.slug;
   const now = new Date();
-  const next = nextSlot(show, now);
   return c.render(
     <main class="page page-station">
       <SiteHeader />
@@ -588,27 +587,7 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
           <Markdown class="subtitle" html={show.description} />
           <DjCredit djs={show.djs} class="title-credit" />
         </header>
-        <div id="np">
-          {isOn ? (
-            <NowPlaying play={play} />
-          ) : (
-            <p class="next off-air">
-              {next ? (
-                <>
-                  {next.start <= now ? (
-                    "Starting after this track."
-                  ) : (
-                    <>
-                      Off air. Next on at <Time at={next.start} />.
-                    </>
-                  )}
-                </>
-              ) : (
-                "Not on the schedule."
-              )}
-            </p>
-          )}
-        </div>
+        <div id="np">{isOn && <NowPlaying play={play} />}</div>
       </section>
       {stream && (
         <section class="past-shows" aria-labelledby="show-channel">

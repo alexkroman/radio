@@ -294,6 +294,9 @@ describe("about", () => {
     // Browsers that cached /about's old 301 to /manifesto still get the page.
     expect(await (await page("/manifesto")).text()).toContain('class="page page-about"');
     expect(await (await page("/about")).text()).toContain('href="https://github.com/alexkroman/radio"');
+    expect(await (await page("/about")).text()).toContain(
+      "A nonprofit alternative to Spotify&#39;s AI playlists.",
+    );
   });
 
   test("links each statute the station plays under, and answers questions about them", async () => {

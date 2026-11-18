@@ -849,10 +849,12 @@ list.iter(recorder, shows)
 # one after another, around the clock. These are the archived programs the
 # statutory license allows: at least five hours each (finish_block), and
 # none up two weeks (scripts/prune-archive.sh). Silence until the show has a
-# block. Each track in a block, from its sidecar, is its own request: the
-# block's file cut at the track's offset and the next's (liq_cue_in/out),
-# tagged with the track (annotate), so it's a track like the station's: in
-# the ICY title, and in the show's stream's play log,
+# block. A block plays whole, as one request, decoded straight through: an
+# MP3 decoder started mid-file (a request per track, cut at its offset)
+# makes its first frame silence or noise, a dropout at every track. Each
+# track in the block's sidecar starts a new track in the stream at its
+# offset (insert_metadata, new_track), tagged with it, so it's a track like
+# the station's: in the ICY title, and in the show's stream's play log,
 # /plays/YYYY-MM.<slug>.jsonl (play_log, as the station's), when it starts.
 # No autocue: a block plays as recorded, with the broadcast's levels and
 # crossfades.
@@ -862,92 +864,108 @@ def block_stream(f) =
   log_play = play_log(mount, ".#{slug}")
   last = ref("")
 
-  # The tracks of the block playing still to come, as request URIs.
-  queue = ref([])
-
-  # A block's tracks, as request URIs.
-  def segments(block) =
+  # A block's tracks, from its sidecar: each one's offset and tags.
+  def sidecar(block) =
     lines =
       try
         string.split(separator="\n", file.contents(sidecar_path(slug_of(block))))
       catch _ do
         []
       end
-    tracks =
-      list.filter_map(
-        fun (l) ->
-          try
-            let json.parse (o : {offset: float}) = l
-            let json.parse (t :
-              {title: string, artist: string, album: string, label: string, isrc: string, cover: string}
-            ) = l
-            (o.offset, t)
-          catch _ do
-            null
-          end,
-        lines
-      )
-    q = fun (v) -> "\"#{string.escape(encoding='ascii', v)}\""
+    list.filter_map(
+      fun (l) ->
+        try
+          let json.parse (o : {offset: float}) = l
+          let json.parse (t :
+            {title: string, artist: string, album: string, label: string, isrc: string, cover: string}
+          ) = l
+          (o.offset, t)
+        catch _ do
+          null
+        end,
+      lines
+    )
+  end
 
-    # Seek by the bitrate, not by reading the block up to the offset. A block
-    # is live-encoded constant 256 kbps with no seek header, so FFmpeg would
-    # otherwise read hundreds of MB, holding up the stream's clock (a pause
-    # at each track deep in a block), at each track's start; the offsets are
-    # bytes / 32000 already, so a seek by the bitrate lands right on them.
-    fastseek = "fflags=fastseek"
-
-    # Each track, cut at its offset and the next's (the last, to the end).
-    def rec uris(ts) =
-      if
-        ts == []
-      then
-        []
-      else
-        let (offset, t) = list.hd(ts)
-        rest = list.tl(ts)
-        cue_out = rest == [] ? "" : ",liq_cue_out=#{q(string(fst(list.hd(rest))))}"
-        "annotate:ffmpeg_options=#{q(fastseek)},liq_cue_in=#{q(string(offset))}#{cue_out},title=#{
-          q(t.title)
-        },artist=#{q(t.artist)},album=#{q(t.album)},label=#{q(t.label)},isrc=#{q(t.isrc)},archive_cover=#{
-          q(t.cover)
-        }:#{block}"::uris(rest)
-      end
-    end
-    uris(tracks)
+  # A track's tags, as track_info reads them back.
+  def tags(t) =
+    [
+      ("title", t.title),
+      ("artist", t.artist),
+      ("album", t.album),
+      ("label", t.label),
+      ("isrc", t.isrc),
+      ("archive_cover", t.cover)
+    ]
   end
 
   def next() =
-    # A block pruned while it plays: its tracks to come are gone too.
-    if not file.exists(last()) then queue := [] end
+    blocks =
+      list.filter(
+        fun (b) -> slug_of_block(b) == slug,
+        file.ls(absolute=true, sorted=true, pattern="*.mp3", archive_blocks)
+      )
+    others = list.filter(fun (b) -> b != last(), blocks)
+    pick = others == [] ? blocks : others
     if
-      queue() == []
-    then
-      blocks =
-        list.filter(
-          fun (b) -> slug_of_block(b) == slug,
-          file.ls(absolute=true, sorted=true, pattern="*.mp3", archive_blocks)
-        )
-      others = list.filter(fun (b) -> b != last(), blocks)
-      pick = others == [] ? blocks : others
-      if
-        pick != []
-      then
-        b = list.nth(pick, random.int(min=0, max=list.length(pick)))
-        last := b
-        queue := segments(b)
-      end
-    end
-    if
-      queue() == []
+      pick == []
     then
       null
     else
-      u = list.hd(queue())
-      queue := list.tl(queue())
-      request.create(excluded_metadata_resolvers=["autocue"], u)
+      b = list.nth(pick, random.int(min=0, max=list.length(pick)))
+      last := b
+      ts = sidecar(b)
+
+      # Tagged with its first track (at offset 0, as a block starts), and
+      # marked as a block's start for the block's track changes.
+      q = fun (v) -> "\"#{string.escape(encoding='ascii', v)}\""
+      first =
+        if
+          ts == []
+        then
+          ""
+        else
+          string.concat(list.map(fun (kv) -> "#{fst(kv)}=#{q(snd(kv))},", tags(snd(list.hd(ts)))))
+        end
+      request.create(excluded_metadata_resolvers=["autocue"], "annotate:#{first}block=#{q(b)}:#{b}")
     end
   end
   blocks = request.dynamic(id="blocks-#{slug}", retry_delay=60., next)
+
+  # The block playing: its tracks still to come, and how far into it the
+  # stream is (counted by frame: a new track resets the source's elapsed()).
+  to_come = ref([])
+  played = ref(0.)
+  frame_length = settings.frame.duration()
+  blocks.on_track(
+    synchronous=true,
+    fun (m) ->
+      begin
+        block = list.assoc(default="", "block", m)
+        if
+          block != ""
+        then
+          # The first is the block's own tags; the rest are to come.
+          ts = sidecar(block)
+          to_come := if ts == [] then [] else list.tl(ts) end
+          played := 0.
+        end
+      end
+  )
+  blocks.on_frame(
+    synchronous=true,
+    fun () ->
+      begin
+        played := played() + frame_length
+        if
+          to_come() != [] and played() >= fst(list.hd(to_come()))
+        then
+          t = snd(list.hd(to_come()))
+          to_come := list.tl(to_come())
+          blocks.insert_metadata(new_track=true, tags(t))
+        end
+      end
+  )
 
   # Asynchronous, so the listener count's HTTP call never holds up the stream.
   blocks.on_track(synchronous=false, fun (m) -> log_play(time(), slug, track_info(slug, m)))

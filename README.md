@@ -121,14 +121,14 @@ Not in code: filing the Notice of Use with the Copyright Office, paying SoundExc
 
 ## Where things are
 
-| URL                               | What's there                                                 |
-| --------------------------------- | ------------------------------------------------------------ |
-| `https://localhost/`              | What's on air, the player, schedule                          |
-| `https://localhost/<slug>`        | A show's hours, now playing, its stream, past shows, history |
-| `https://localhost/stream`        | The stream for apps and VLC                                  |
-| `https://localhost/stream/<slug>` | A show's own 24/7 stream (its archived blocks)               |
-| `https://localhost/djs/<dj>`      | A DJ's profile and shows                                     |
-| `https://localhost/reports`       | Monthly SoundExchange reports                                |
+| URL                               | What's there                                   |
+| --------------------------------- | ---------------------------------------------- |
+| `https://localhost/`              | What's on air, the player, schedule            |
+| `https://localhost/<slug>`        | A show's hours, its own stream, past shows     |
+| `https://localhost/stream`        | The stream for apps and VLC                    |
+| `https://localhost/stream/<slug>` | A show's own 24/7 stream (its archived blocks) |
+| `https://localhost/djs/<dj>`      | A DJ's profile and shows                       |
+| `https://localhost/reports`       | Monthly SoundExchange reports                  |
 
 Set `SITE_PASSWORD` in `.env` to put the show pages behind a login form; the stream stays public so apps can play it. After 10 wrong passwords from one address, logins are refused for 15 minutes. Nothing else is public.
 

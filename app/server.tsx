@@ -13,7 +13,7 @@ import { etag } from "hono/etag";
 import { createMiddleware } from "hono/factory";
 import { jsxRenderer } from "hono/jsx-renderer";
 import { login, throttle } from "./login.tsx";
-import { type Airing, latestPlay, pastAirings, type Play, recentPlays } from "./plays.ts";
+import { type Airing, latestPlay, pastAirings, type Play } from "./plays.ts";
 import { reports } from "./reports.tsx";
 import { nextSlot, scheduled, showAt } from "./schedule.ts";
 import { getDj, getShow, getShows, type Show, SLUG } from "./shows.ts";
@@ -104,7 +104,7 @@ declare module "hono" {
 
 // Track title, artist and album (the statutory license has us show all
 // three while a track plays); `cls` prefixes their classes (np-track,
-// h-artist, …).
+// st-artist, …).
 const TrackLines = ({ play, cls }: { play?: Play; cls: string }) => (
   <>
     {play && <span class={`${cls}-track`}>{play.title}</span>}
@@ -217,32 +217,6 @@ async function onAir(shows: Show[]) {
   return { show, play: play && play.show === show?.slug ? play : undefined };
 }
 
-// The tracks played before the one on air, newest first: when, the cover, and
-// title — artist.
-const History = ({ plays }: { plays: Play[] }) => (
-  <section id="history" class="history" aria-labelledby="recent-heading">
-    <h2 id="recent-heading" class="section-label">
-      Just played
-    </h2>
-    {plays.length === 0 ? (
-      <p class="muted">Nothing played yet.</p>
-    ) : (
-      <ol>
-        {plays.map((p) => (
-          <li>
-            <Time at={new Date(p.time * 1000)} />
-            <Cover play={p} size="cover-40" />
-            <span class="h-text">
-              <span class="h-track">{p.title}</span>
-              {p.artist && <span class="h-artist">{` — ${p.artist}`}</span>}
-            </span>
-          </li>
-        ))}
-      </ol>
-    )}
-  </section>
-);
-
 export const app = new Hono({ strict: false });
 
 // Every GET gets an ETag, so a repeat (the now-playing poll, the unhashed
@@ -315,11 +289,7 @@ app.route("/reports", reports);
 
 app.get("/", async (c) => {
   const shows = await getShows();
-  const [{ show, play }, recent, streams] = await Promise.all([
-    onAir(shows),
-    recentPlays(6),
-    archivedShows(),
-  ]);
+  const [{ show, play }, streams] = await Promise.all([onAir(shows), archivedShows()]);
   // What's playing on each show's own stream.
   const playing = new Map(
     await Promise.all([...streams].map(async (s) => [s, await latestPlay(s)] as const)),
@@ -348,9 +318,8 @@ app.get("/", async (c) => {
         </div>
       </section>
       <ShowList shows={shows} streams={streams} playing={playing} />
-      <History plays={recent.slice(1)} />
       <StreamUrl host={c.req.header("host") ?? ""} />
-      <Poll path="/" ids={["on-air", "np", "shows", "history"]} />
+      <Poll path="/" ids={["on-air", "np", "shows"]} />
     </main>,
   );
 });
@@ -401,16 +370,14 @@ const ShowList = ({
   );
 };
 
-// The track playing on a show's own stream: its cover, then title — artist ·
-// album (all three, as the statutory license has us show).
+// The track playing on a show's own stream: its cover, then its title over
+// artist · album (all three, as the statutory license has us show).
 const StreamTrack = ({ play }: { play?: Play }) =>
   play ? (
     <span class="stream-track">
       <Cover play={play} size="cover-40" />
-      <span class="h-text">
-        <span class="h-track">{play.title}</span>
-        {play.artist && <span class="h-artist">{` — ${play.artist}`}</span>}
-        {play.album && <span class="h-artist album">{` · ${play.album}`}</span>}
+      <span class="st-text">
+        <TrackLines play={play} cls="st" />
       </span>
     </span>
   ) : null;
@@ -568,7 +535,7 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
 
 app.get(`/:slug{${SLUG}}`, async (c) => {
   const slug = c.req.param("slug");
-  const [show, shows, recent] = await Promise.all([getShow(slug), getShows(), recentPlays(5, slug)]);
+  const [show, shows] = await Promise.all([getShow(slug), getShows()]);
   if (!show) return c.notFound();
   const [{ show: on }, past, streams] = await Promise.all([
     onAir(shows),
@@ -633,7 +600,6 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
           </ol>
         )}
       </section>
-      <History plays={recent} />
       {stream && (
         <StreamUrl
           host={c.req.header("host") ?? ""}
@@ -641,7 +607,7 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
           label={`${show.title} Stream URL`}
         />
       )}
-      <Poll path={`/${show.slug}`} ids={["past", "history"]} />
+      <Poll path={`/${show.slug}`} ids={["past"]} />
     </main>,
     { title: show.title },
   );

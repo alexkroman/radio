@@ -77,24 +77,12 @@ test.describe(() => {
     await onAir("long");
     for (const path of ["/", "/long", "/edge", "/reports"]) {
       await page.goto(path);
-      if (path === "/" || path === "/long")
-        await expect(page.locator(path === "/" ? "#np .np-track" : "#history")).toContainText(
-          "Supercalifragilisticexpialidocious",
-        );
+      if (path === "/")
+        await expect(page.locator("#np .np-track")).toContainText("Supercalifragilisticexpialidocious");
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(overflow, path).toBeLessThanOrEqual(0);
     }
   });
-});
-
-test("history is newest first with valid times", async ({ page }) => {
-  await page.goto("/default");
-  await expect.poll(() => page.locator("#history time").count()).toBeGreaterThan(0);
-  const times = await page
-    .locator("#history time")
-    .evaluateAll((els) => els.map((e) => Date.parse(e.getAttribute("datetime")!)));
-  expect(times.every((t) => !Number.isNaN(t))).toBe(true);
-  expect(times).toEqual([...times].sort((a, b) => b - a));
 });
 
 test("listener counts return to zero after listeners leave", async ({ request }) => {

@@ -72,7 +72,6 @@ test("a show with no music folder plays silence and renders", async ({ page }) =
   });
   await page.goto("/empty");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Empty");
-  await expect(page.locator("#history")).toContainText("Nothing played yet.");
 });
 
 test("a track is skipped after 10 s of silence", async () => {

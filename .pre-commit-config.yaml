@@ -112,6 +112,15 @@ repos:
         entry: savonet/liquidsoap:v2.4.6 --check
         files: \.liq$
 
+      # radio.liq's block_stream plays a show's archived blocks seamlessly,
+      # each track at its offset (a few minutes: it renders half an hour).
+      - id: block-stream
+        name: block_stream (show streams)
+        language: system
+        entry: bash test/block-stream.sh
+        files: ^(radio\.liq|test/block-stream\.)
+        pass_filenames: false
+
       - id: caddy-fmt
         name: caddy fmt
         language: docker_image

@@ -381,6 +381,8 @@ test("a refresh still in flight when you leave a show page isn't swapped into th
   await page.locator(".title-block .credit").getByRole("link", { name: "Ana Ruiz" }).click();
   await page.locator(".dj-shows").getByRole("link", { name: "Fixture Default", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Fixture Default");
+  // Once settled: client.ts puts the times in the listener's time zone then.
+  await expect(page.locator(".htmx-settling")).toHaveCount(0);
   const defaultPast = await page.locator("#past").innerHTML();
   const done = page.waitForEvent("requestfinished", (r) => r.url().endsWith("/night")).catch(() => {});
   release();

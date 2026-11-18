@@ -40,8 +40,8 @@ const widgets = (page: Page) =>
   });
 
 test("a track looks the same in the player on the station and on its show's stream", async ({ page }) => {
-  // Midnight by Gamma, live on the night show, and first in each of night's
-  // archived blocks (6 s of each 14 s), which night's stream loops.
+  // Midnight by Gamma, live on the night show, and the first 6 s of one of
+  // night's two archived blocks (14 s each), which night's stream loops.
   await onAir("night");
   await page.goto("/");
   const main = page.getByRole("main");
@@ -58,8 +58,19 @@ test("a track looks the same in the player on the station and on its show's stre
   await expect(page).toHaveURL(/\/night$/);
   await main.locator('button[data-play="/stream/night"]').click();
   await expect.poll(() => player(page)).toEqual({ src: "/stream/night", playing: true });
-  // The player asks every 15 s: in time it asks while Midnight plays.
-  await expect(page.locator("#bar-track")).toHaveText("Midnight · Gamma", { timeout: 120_000 });
+  // While Midnight plays (6 s of each of night's 28 s), the player asks
+  // (as it does every 15 s, which needn't ever land in those 6 s).
+  await expect
+    .poll(
+      async () => ((await (await page.request.get("/night/now.json")).json()) as { track: string }).track,
+      {
+        timeout: 60_000,
+        intervals: [250],
+      },
+    )
+    .toBe("Midnight");
+  await page.evaluate(() => (window as unknown as { poll: () => Promise<void> }).poll());
+  await expect(page.locator("#bar-track")).toHaveText("Midnight · Gamma");
   await expect(bar.locator("img")).toBeVisible();
   const channel = await widgets(page);
 

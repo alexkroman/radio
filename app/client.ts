@@ -124,6 +124,7 @@ async function poll() {
   if (changed && current) htmx.trigger(current, "refresh");
 }
 setInterval(() => void poll(), 15_000);
+(window as unknown as { poll: typeof poll }).poll = poll; // for the e2e tests
 
 function playSource() {
   const src = source.src;

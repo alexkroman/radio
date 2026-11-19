@@ -192,7 +192,7 @@ describe("pages", () => {
     expect(off).toMatch(
       /data-watch="\/now.json \/default\/now.json"[^>]*hx-select-oob="#show-hours,#channel,#past"/,
     );
-    expect(off).toMatch(/Fixture Default replay stream URL: <a class="url" href="\/stream\/default"/);
+    expect(off).toMatch(/<footer class="footer">Stream URL: <a class="url" href="\/stream\/default"/);
     // On air or not, no track on air and no button for the station's stream.
     const on = await (await page("/night")).text();
     expect(on).not.toContain('class="np-track"');
@@ -289,7 +289,7 @@ describe("channels and past shows", () => {
 
   test("a DJ page's shows play their channels", async () => {
     expect(await (await page("/djs/ana-ruiz")).text()).toMatch(
-      /class="station-play"><button[^>]*data-play="\/stream\//,
+      /id="dj-shows-list"[^]*<button[^>]*data-play="\/stream\//,
     );
   });
 

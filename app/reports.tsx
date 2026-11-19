@@ -2,7 +2,7 @@
 // last 12 months, each a Report of Use from the play log at /reports/<YYYY-MM>.
 import { Hono } from "hono";
 import { monthOf, monthPlays, type Track } from "./plays.ts";
-import { SiteHeader } from "./ui.tsx";
+import { Footer, SiteHeader } from "./ui.tsx";
 
 const SERVICE = "MAZES RADIO";
 const SHORT = "MAZESRADIO";
@@ -43,6 +43,10 @@ async function report(month: string): Promise<string> {
   return rows.map((r) => r.map(field).join("|")).join("\n") + "\n";
 }
 
+// "November 2026", for a report's YYYY-MM.
+const monthName = (m: string) =>
+  new Date(`${m}-01T12:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
 export const reports = new Hono();
 
 reports.get("/", (c) => {
@@ -51,26 +55,24 @@ reports.get("/", (c) => {
     monthOf(new Date(now.getFullYear(), now.getMonth() - i, 1)),
   );
   return c.render(
-    <main class="page page-reports">
+    <main class="page">
       <SiteHeader />
       <h1 class="display">Reports</h1>
       <p class="lead">
         Our monthly Reports of Use for SoundExchange: every song the station and the shows' own streams
         played, and how many people heard it.
       </p>
-      <table class="reports-table">
+      <ol class="item-list">
         {months.map((m) => (
-          <tr>
-            <td>{m}</td>
-            <td>
-              <a href={`/reports/${m}`} hx-boost="false" download>
-                Download
-              </a>
-            </td>
-          </tr>
+          <li class="item item-plain">
+            <span class="item-title">{monthName(m)}</span>
+            <a class="item-date" href={`/reports/${m}`} hx-boost="false" download>
+              Download
+            </a>
+          </li>
         ))}
-      </table>
-      <footer class="footer footer-rule">{c.req.header("host")}</footer>
+      </ol>
+      <Footer host={c.req.header("host") ?? ""} />
     </main>,
     { title: "Reports" },
   );

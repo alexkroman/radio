@@ -167,6 +167,14 @@ export const Time = ({ at: d }: { at: Date }) => {
   );
 };
 
+// Every page's foot: the address of its stream, for a radio app (the
+// station's; a show's page, its own).
+export const Footer = ({ host, path = "/stream" }: { host: string; path?: string }) => (
+  <footer class="footer">
+    Stream URL: <a class="url" href={path} hx-boost="false">{`${host}${path}`}</a>
+  </footer>
+);
+
 export const Markdown = ({ html, class: cls }: { html: string; class?: string }) => (
   <div class={cls} dangerouslySetInnerHTML={{ __html: html }} />
 );

@@ -9,14 +9,13 @@
   --color-ink: #111111; /* headings, primary text, filled buttons */
   --color-body: #333333; /* long-form paragraphs (About) */
   --color-muted: #6b6b6b; /* secondary text, labels, times (passes 4.5:1 on white) */
-  --color-hairline: #e6e6e6; /* row dividers, outlined secondary buttons */
-  --color-hairline-soft: #efefef; /* dividers inside the Recently played list */
+  --color-hairline: #e6e6e6; /* rules between rows and sections */
   --color-placeholder: #f2f2f2; /* empty album-art square */
   --color-link-underline: #b5b5b5;
-  --color-accent: #e8743b; /* ONLY: logo centre square, "Live" dot, player-bar dot */
+  --color-accent: #e8743b; /* ONLY: logo centre square, the "On air" dot */
   --color-on-ink-muted: #b5b5b5; /* secondary text on the black player bar */
   --color-link-hover: #555555;
-  --color-surface: #111111; /* mobile player bar background */
+  --color-surface: #111111; /* player bar background */
   --color-surface-text: #ffffff;
   --color-surface-border: transparent;
   --color-surface-outline: #4a4a4a; /* outlined buttons on the player bar */
@@ -25,46 +24,39 @@
 
   color-scheme: light dark;
 
-  /* Type family: one, Archivo, at two widths: condensed (font-stretch 68%)
-     for show names and page titles, like station signage; normal for
-     everything else, the wordmark and the stream address included. */
+  /* Type family: one, Archivo, at two widths: condensed for page titles and
+     show names, like station signage; normal for everything else. */
   --font-sans: "Archivo Variable", system-ui, -apple-system, sans-serif;
-  --stretch-display: 68%;
-  --stretch-heading: 82%;
+  --stretch-condensed: 80%;
 
-  /* Type scale (size / weight / line-height); set with font-stretch where noted */
-  --type-display: 800 88px/0.92 var(--font-sans); /* page titles, the show on air — condensed */
-  --type-heading: 650 22px/1.2 var(--font-sans); /* section headings — semi-condensed */
-  --type-station-name: 700 30px/1.1 var(--font-sans); /* show names in lists, now-playing title — condensed */
-  --type-lead: 400 22px/1.45 var(--font-sans); /* About lead paragraph */
-  --type-subtitle: 400 18px/1.45 var(--font-sans); /* show description, artist under now playing */
+  /* Type scale (size / weight / line-height). Condensed where noted. */
+  --type-display: 800 56px/0.95 var(--font-sans); /* page titles, the show on air — condensed */
+  --type-title: 700 22px/1.2 var(--font-sans); /* show names in lists — condensed */
+  --type-lead: 400 20px/1.45 var(--font-sans); /* a page's opening paragraph */
+  --type-subtitle: 400 18px/1.45 var(--font-sans); /* under a page title */
   --type-body: 400 17px/1.65 var(--font-sans); /* About paragraphs */
-  --type-track: 500 16px/1.35 var(--font-sans); /* track titles in Recently played */
-  --type-small: 400 15px/1.45 var(--font-sans); /* descriptions */
-  --type-nav: 400 15px/1.4 var(--font-sans);
-  --type-label: 500 13px/1.4 var(--font-sans); /* small status labels: On air, Live, Last show — sentence case */
-  --type-time: 400 14px/1.4 var(--font-sans); /* times, numbers — tabular figures */
-  --type-url: 400 14px/1.4 var(--font-sans); /* stream URLs */
-  --type-wordmark: 600 17px/1 var(--font-sans); /* "mazes radio", lowercase, tracking 0.01em */
-  --type-section: 600 13px/1.4 var(--font-sans); /* home section labels (Today, Just played): caps, tracking 0.08em */
+  --type-track: 600 17px/1.35 var(--font-sans); /* the track playing, beside a big play button */
+  --type-base: 400 15px/1.45 var(--font-sans); /* everything else */
+  --type-meta: 400 14px/1.4 var(--font-sans); /* nav, times, descriptions in lists, addresses */
+  --type-label: 500 13px/1.4 var(--font-sans); /* status words (On air, Replaying), the footer */
+  --type-section: 600 13px/1.4 var(--font-sans); /* section headings: caps, tracking 0.08em */
+  --type-wordmark: 600 17px/1 var(--font-sans); /* "mazes radio", lowercase */
 
   /* Layout */
   --page-pad-top: 72px;
   --page-pad-x: 32px;
   --page-pad-bottom: 96px;
-  --width-station: 880px; /* home, show and DJ pages */
+  --width-page: 880px;
   --width-prose: 640px; /* About */
 
   /* Radius */
-  --radius-art-sm: 3px; /* 40–44px covers */
-  --radius-art: 4px; /* 56–64px covers */
-  --radius-art-lg: 6px; /* 120px cover */
+  --radius-art: 4px; /* covers */
+  --radius-photo: 6px; /* DJ photos */
   --radius-pill: 999px;
 
   /* Sizes */
   --tap: 44px; /* minimum touch target; small play buttons */
-  --col-time: 136px; /* the times column of the schedule */
-  --play-lg: 72px; /* station page play button */
+  --play-lg: 64px; /* a big play button, and the cover beside it */
 }
 
 /* Dark mode: follows the OS setting. Same layout, type and sizes; only colors change.
@@ -76,11 +68,9 @@
     --color-body: #c8c8c8;
     --color-muted: #a3a3a3; /* 7.6:1 on #111111 */
     --color-hairline: #2a2a2a;
-    --color-hairline-soft: #222222;
     --color-placeholder: #1c1c1c;
     --color-link-underline: #555555;
     --color-link-hover: #bdbdbd;
-    --color-accent: #e8743b; /* unchanged */
     --color-on-ink-muted: #a3a3a3;
     --color-surface: #1a1a1a; /* player bar is a raised dark surface, NOT inverted */
     --color-surface-text: #f2f2f2;

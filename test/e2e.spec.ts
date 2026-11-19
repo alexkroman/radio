@@ -116,8 +116,8 @@ test("a DJ page has their profile, shows and links", async ({ page }) => {
   await expect(page.locator(".lead strong")).toHaveText("records");
   const img = page.getByRole("img", { name: "Photo of Ana Ruiz" });
   await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
-  const shows = page.locator(".dj-shows .station");
-  await expect(shows.locator(".station-name")).toHaveText(["Fixture Default", "Fixture Night"]);
+  const shows = page.locator(".dj-shows .item");
+  await expect(shows.locator(".item-title")).toHaveText(["Fixture Default", "Fixture Night"]);
   await expect(shows.locator(".hours")).toHaveCount(2);
   await expect(shows.locator(".credit")).toHaveCount(0);
   await expect(page.locator(".site-header nav a[aria-current]")).toHaveCount(0);
@@ -125,7 +125,7 @@ test("a DJ page has their profile, shows and links", async ({ page }) => {
     "href",
     "https://instagram.com/anaruiz",
   );
-  await expect(page.locator(".streams dt")).toHaveText(["Instagram"]);
+  await expect(page.locator(".links dt")).toHaveText(["Instagram"]);
 
   // Just a name: no photo, bio or links.
   await page.goto("/djs/zoe-nandu");
@@ -137,7 +137,10 @@ test("a DJ page has their profile, shows and links", async ({ page }) => {
 test("the About page has the stream", async ({ page }) => {
   await page.goto("/about");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("About");
-  await expect(page.getByRole("link", { name: /\/stream$/ })).toHaveAttribute("href", "/stream");
+  await expect(page.locator(".streams").getByRole("link", { name: /\/stream$/ })).toHaveAttribute(
+    "href",
+    "/stream",
+  );
   await expect(page.locator(".streams")).toContainText("MP3, 256 kbps");
 });
 

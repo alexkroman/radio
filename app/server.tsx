@@ -11,6 +11,7 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { etag } from "hono/etag";
 import { createMiddleware } from "hono/factory";
+import type { Child } from "hono/jsx";
 import { jsxRenderer } from "hono/jsx-renderer";
 import { login, throttle } from "./login.tsx";
 import { type Airing, latestPlay, pastAirings, type Play } from "./plays.ts";
@@ -21,6 +22,7 @@ import {
   Cover,
   nowTrack,
   DjCredit,
+  Footer,
   ICONS,
   Markdown,
   PlayButton,
@@ -127,80 +129,128 @@ const Hours = ({ show, now }: { show: Show; now: Date }) => {
   ) : null;
 };
 
-// A show as a row (a DJ's shows): its hours, name and mood on one line;
-// "On air" when it is, else (once it has an archived block) its own stream's
-// play button, so a listener can pick another show to suit the mood. (The
-// DJs are on the show's page.)
-const ShowRow = ({
+// A show in a list (the home page's, a DJ page's): its own stream's play
+// button (once it has an archived block) to the left of its name (linked to
+// its page) over its description and the track playing on its stream; then
+// its hours, after "On air" when it is.
+const ShowItem = ({
   show,
   now,
   onAir,
   stream,
+  playing,
 }: {
   show: Show;
   now: Date;
   onAir: boolean;
   stream: boolean;
+  playing?: Play;
 }) => (
-  <article class={onAir ? "station row row-on" : "station row"}>
-    <span class="station-hours">
-      <Hours show={show} now={now} />
-    </span>
-    <span class="station-info">
-      <a class="station-name" href={`/${show.slug}`}>
+  <li class="item">
+    {stream ? <ChannelButton show={show} /> : <span class="play-space" aria-hidden="true" />}
+    <span class="item-info">
+      <a class="item-title" href={`/${show.slug}`}>
         {show.title}
       </a>
-      <Markdown class="station-desc" html={show.description} />
+      <Markdown class="desc" html={show.description} />
+      <StreamTrack play={playing} />
     </span>
-    {onAir ? (
-      <span class="label on-air">
-        <span class="dot" aria-hidden="true" />
-        On air
-      </span>
-    ) : (
-      stream && (
-        <span class="station-play">
-          <ChannelButton show={show} />
-        </span>
-      )
-    )}
-  </article>
+    <span class="item-date">
+      {onAir && <OnAir />}
+      <Hours show={show} now={now} />
+    </span>
+  </li>
 );
 
-// The track on air: its cover and text, with the play button.
-// `status`: "Live" over the track (not on the home page, whose on-air line says it).
-const NowPlaying = ({ play, status = true }: { play?: Play; status?: boolean }) => (
-  <section class="np-block" aria-label="Now playing">
-    <PlayButton large />
-    <div class="np">
-      <Cover play={play} size="cover-120" labelled />
-      <div class="np-text">
-        {status && (
-          <span class="label np-status">
-            <span class="dot" aria-hidden="true" />
-            <span data-live>Live</span>
-          </span>
-        )}
-        <TrackLines play={play} cls="np" />
-      </div>
-    </div>
-  </section>
+const OnAir = () => (
+  <span class="on-air">
+    <span class="dot" aria-hidden="true" />
+    On air
+  </span>
 );
 
-// A stream's address, for a radio app, at the foot of the home page (the
-// station's) and a show's page (its own channel's, around the clock).
-const StreamUrl = ({
-  host,
-  path = "/stream",
-  label = "Mazes Stream URL",
+// The top of the home page (the show on air) and of a show's page: "On air"
+// when it is and its hours, its name, its description and its DJs.
+const ShowHead = ({
+  show,
+  now,
+  onAir,
+  page,
 }: {
-  host: string;
-  path?: string;
+  show: Show;
+  now: Date;
+  onAir: boolean;
+  page?: boolean; // the show's own page: its name is the <h1>, not a link
+}) => (
+  <>
+    <p id={page ? "show-hours" : undefined} class="label status">
+      {onAir && <OnAir />}
+      {onAir && show.hours && " · "}
+      {show.hours && (
+        <span>
+          Daily <Hours show={show} now={now} />
+        </span>
+      )}
+    </p>
+    {page ? (
+      <h1 class="display">{show.title}</h1>
+    ) : (
+      <h2 class="display">
+        <a href={`/${show.slug}`}>{show.title}</a>
+      </h2>
+    )}
+    <Markdown class="subtitle" html={show.description} />
+    <DjCredit djs={show.djs} class="subtitle" />
+  </>
+);
+
+// What a stream is playing: its big play button, then the track's cover and
+// text. The station's on the home page (`cls` np); a show's own on its page
+// (st, under "Replaying").
+const NowPlaying = ({
+  button,
+  play,
+  cls,
+  label,
+}: {
+  button: Child;
+  play?: Play;
+  cls: string;
   label?: string;
 }) => (
-  <footer class="footer">
-    {label}: <a class="url" href={path} hx-boost="false">{`${host}${path}`}</a>
-  </footer>
+  <div class="np-block">
+    {button}
+    <Cover play={play} size="cover-lg" labelled />
+    <div class="np-text">
+      {label && <span class={`label ${cls}-label`}>{label}</span>}
+      <TrackLines play={play} cls={cls} />
+    </div>
+  </div>
+);
+
+// A section: its heading and an optional note beside it, then its content.
+const Section = ({
+  id,
+  heading,
+  note,
+  class: cls,
+  children,
+}: {
+  id: string; // the section's (its heading's is <id>-heading)
+  heading: string;
+  note?: string;
+  class?: string;
+  children: Child;
+}) => (
+  <section id={id} class={cls ? `section ${cls}` : "section"} aria-labelledby={`${id}-heading`}>
+    <div class="section-head">
+      <h2 id={`${id}-heading`} class="heading">
+        {heading}
+      </h2>
+      {note && <p class="section-note">{note}</p>}
+    </div>
+    {children}
+  </section>
 );
 
 // A show's own stream: a replay of its past shows, one after another
@@ -208,8 +258,14 @@ const StreamUrl = ({
 // until then it's silence.
 const channel = (show: Show) => `/stream/${show.slug}`;
 const channelNow = (slug: string) => `/${slug}/now.json`;
-const ChannelButton = ({ show }: { show: Show }) => (
-  <PlayButton src={channel(show)} title={show.title} now={channelNow(show.slug)} status="Replay" />
+const ChannelButton = ({ show, large }: { show: Show; large?: boolean }) => (
+  <PlayButton
+    large={large}
+    src={channel(show)}
+    title={show.title}
+    now={channelNow(show.slug)}
+    status="Replay"
+  />
 );
 
 // The show on air: the newest play's (the schedule's until anything has played).
@@ -292,90 +348,45 @@ app.route("/reports", reports);
 app.get("/", async (c) => {
   const shows = await getShows();
   const [{ show, play }, streams] = await Promise.all([onAir(shows), archivedShows()]);
-  // What's playing on each show's own stream.
-  const playing = new Map(
-    await Promise.all([...streams].map(async (s) => [s, await latestPlay(s)] as const)),
-  );
+  const playing = await streamPlays(streams);
+  const now = new Date();
   return c.render(
-    <main class="page page-station page-home">
+    <main class="page page-home">
       <SiteHeader home />
       <section class="hero" aria-label="On air">
         <header id="on-air" class="hero-head">
-          {show ? (
-            <>
-              <h2 class="display">
-                <a href={`/${show.slug}`}>{show.title}</a>
-              </h2>
-              <div class="hero-sub">
-                <Markdown class="subtitle" html={show.description} />
-                <DjCredit djs={show.djs} class="subtitle" />
-              </div>
-            </>
-          ) : (
-            <h2 class="display">{SITE_TITLE}</h2>
-          )}
+          {show ? <ShowHead show={show} now={now} onAir /> : <h2 class="display">{SITE_TITLE}</h2>}
         </header>
         <div id="np">
-          <NowPlaying play={play} status={false} />
+          <NowPlaying button={<PlayButton large />} play={play} cls="np" />
         </div>
       </section>
-      <ShowList shows={shows} streams={streams} playing={playing} />
-      <StreamUrl host={c.req.header("host") ?? ""} />
+      <Section id="shows" heading="Shows" note="Play any show's past shows, back to back, any time.">
+        <ol class="item-list">
+          {scheduled(shows, now).map((s) => (
+            <ShowItem
+              show={s}
+              now={now}
+              onAir={s.slug === show?.slug}
+              stream={streams.has(s.slug)}
+              playing={playing.get(s.slug)}
+            />
+          ))}
+        </ol>
+      </Section>
+      <Footer host={c.req.header("host") ?? ""} />
       <Poll path="/" ids={["on-air", "np", "shows"]} watch={["/now.json", ...[...streams].map(channelNow)]} />
     </main>,
   );
 });
 
-// The shows, in the order they're on from now (the one on now first): each one's own stream's play
-// button (once it has an archived block) to the left of its name (linked to
-// its page) over its description and the track playing on its stream, then
-// its hours.
-const ShowList = ({
-  shows,
-  streams,
-  playing,
-}: {
-  shows: Show[];
-  streams: Set<string>;
-  playing: Map<string, Play | undefined>;
-}) => {
-  const now = new Date();
-  return (
-    <section id="shows" class="shows-list" aria-labelledby="shows-heading">
-      <div class="section-head">
-        <h2 id="shows-heading" class="section-label">
-          Shows
-        </h2>
-        <p class="section-note">Play any show's past shows, back to back, any time.</p>
-      </div>
-      <ol class="item-list">
-        {scheduled(shows, now).map((show) => (
-          <li class="item show-item">
-            {streams.has(show.slug) ? (
-              <ChannelButton show={show} />
-            ) : (
-              <span class="play-space" aria-hidden="true" />
-            )}
-            <span class="item-info">
-              <a class="item-title" href={`/${show.slug}`}>
-                {show.title}
-              </a>
-              <Markdown class="station-desc" html={show.description} />
-              <StreamTrack play={playing.get(show.slug)} />
-            </span>
-            <span class="item-date">
-              <Hours show={show} now={now} />
-            </span>
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
-};
+// What's playing on each of these shows' own streams.
+const streamPlays = async (slugs: Iterable<string>) =>
+  new Map(await Promise.all([...slugs].map(async (s) => [s, await latestPlay(s)] as const)));
 
-// The track playing on a show's own stream (a replay of a past show): its
-// cover, then "Replaying" over its title over artist · album (all three, as
-// the statutory license has us show).
+// The track playing on a show's own stream (a replay of a past show), in a
+// list: its cover, then "Replaying" over its title over artist · album (all
+// three, as the statutory license has us show).
 const StreamTrack = ({ play }: { play?: Play }) =>
   play ? (
     <span class="stream-track">
@@ -393,7 +404,7 @@ const day = (t: number) =>
 
 // A past airing in a list: its day, when it ran and how many tracks it played.
 const AiringRow = ({ airing }: { airing: Airing }) => (
-  <li class="item item-past">
+  <li class="item item-plain">
     <span class="item-title">{day(airing.start)}</span>
     <span class="item-date">
       <Time at={new Date(airing.start * 1000)} />–<Time at={new Date(airing.end * 1000)} />
@@ -421,7 +432,7 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
         </p>
       </section>
       <section class="prose" aria-labelledby="about-law-way">
-        <h2 id="about-law-way" class="label">
+        <h2 id="about-law-way" class="heading">
           Why a nonprofit can do this
         </h2>
         <p>
@@ -438,7 +449,7 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
         </p>
       </section>
       <section class="prose" aria-labelledby="about-money">
-        <h2 id="about-money" class="label">
+        <h2 id="about-money" class="heading">
           Every play pays the artist
         </h2>
         <p>
@@ -449,7 +460,7 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
         </p>
       </section>
       <section class="prose" aria-labelledby="about-channels">
-        <h2 id="about-channels" class="label">
+        <h2 id="about-channels" class="heading">
           Every show, around the clock
         </h2>
         <p>
@@ -459,7 +470,7 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
         </p>
       </section>
       <section class="prose" aria-labelledby="about-not">
-        <h2 id="about-not" class="label">
+        <h2 id="about-not" class="heading">
           The trade
         </h2>
         <p>The license only holds while the station stays radio, so there are things we don't do:</p>
@@ -477,7 +488,7 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
         </p>
       </section>
       <section class="prose" aria-labelledby="about-law">
-        <h2 id="about-law" class="label">
+        <h2 id="about-law" class="heading">
           The law
         </h2>
         <p>
@@ -493,7 +504,7 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
         </ul>
       </section>
       <section class="prose" aria-labelledby="about-listen">
-        <h2 id="about-listen" class="label">
+        <h2 id="about-listen" class="heading">
           Listening
         </h2>
         <p>
@@ -502,19 +513,19 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
         </p>
         <dl class="streams">
           <div>
-            <dt class="label">Stream</dt>
+            <dt>Stream</dt>
             <dd>
               <a class="url" href="/stream" hx-boost="false">{`${host}/stream`}</a>
             </dd>
           </div>
           <div>
-            <dt class="label">Format</dt>
+            <dt>Format</dt>
             <dd>{FORMAT}</dd>
           </div>
         </dl>
       </section>
       <section class="prose" aria-labelledby="about-yours">
-        <h2 id="about-yours" class="label">
+        <h2 id="about-yours" class="heading">
           Start your own
         </h2>
         <p>
@@ -524,7 +535,7 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
         </p>
       </section>
       <section class="prose" aria-labelledby="about-contact">
-        <h2 id="about-contact" class="label">
+        <h2 id="about-contact" class="heading">
           Contact
         </h2>
         <p>
@@ -532,7 +543,7 @@ app.on("GET", ["/about", "/manifesto"], (c) => {
           <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
         </p>
       </section>
-      <footer class="footer footer-rule">{host}</footer>
+      <Footer host={host} />
     </main>,
     { title: "About" },
   );
@@ -549,71 +560,39 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
     latestPlay(show.slug),
   ]);
   const stream = streams.has(show.slug);
-  const isOn = on?.slug === show.slug;
-  const now = new Date();
   return c.render(
-    <main class="page page-station">
+    <main class="page">
       <SiteHeader />
       <section class="hero" aria-label={show.title}>
-        <header class="title-block hero-head">
-          {show.hours && (
-            <p id="show-hours" class={isOn ? "label on-air-label" : "label"}>
-              {isOn && (
-                <>
-                  <span class="dot" aria-hidden="true" />
-                  On air ·{" "}
-                </>
-              )}
-              Daily <Hours show={show} now={now} />
-            </p>
-          )}
-          <h1 class="display">{show.title}</h1>
-          <Markdown class="subtitle" html={show.description} />
-          <DjCredit djs={show.djs} class="title-credit" />
+        <header class="hero-head title-block">
+          <ShowHead show={show} now={new Date()} onAir={on?.slug === show.slug} page />
         </header>
-      </section>
-      {stream && (
-        <section class="past-shows" aria-labelledby="show-channel">
-          <div class="section-head">
-            <h2 id="show-channel" class="label">
-              Replay
-            </h2>
-            <p class="section-note">Its past shows, as they aired, back to back, any time.</p>
+        {/* Its own stream: a replay of its past shows. */}
+        {stream && (
+          <div id="channel">
+            <NowPlaying
+              button={<ChannelButton show={show} large />}
+              play={playing}
+              cls="st"
+              label="Replaying"
+            />
           </div>
-          <ol id="channel" class="item-list">
-            <li class="item show-item">
-              <ChannelButton show={show} />
-              <span class="item-info">
-                <span class="item-title">{`${show.title} replay`}</span>
-                <StreamTrack play={playing} />
-              </span>
-            </li>
-          </ol>
-        </section>
-      )}
-      <section id="past" class="past-shows" aria-labelledby="show-past">
-        <div class="section-head">
-          <h2 id="show-past" class="label">
-            Past shows
-          </h2>
-        </div>
-        {past.length === 0 ? (
-          <p class="muted">Not on the station in the last two weeks.</p>
-        ) : (
-          <ol class="item-list">
-            {past.map((a) => (
-              <AiringRow airing={a} />
-            ))}
-          </ol>
         )}
       </section>
-      {stream && (
-        <StreamUrl
-          host={c.req.header("host") ?? ""}
-          path={channel(show)}
-          label={`${show.title} replay stream URL`}
-        />
-      )}
+      <Section id="past" heading="Past shows" note="When it was on the station, the last two weeks.">
+        <>
+          {past.length === 0 ? (
+            <p class="muted">Not on the station in the last two weeks.</p>
+          ) : (
+            <ol class="item-list">
+              {past.map((a) => (
+                <AiringRow airing={a} />
+              ))}
+            </ol>
+          )}
+        </>
+      </Section>
+      <Footer host={c.req.header("host") ?? ""} path={stream ? channel(show) : undefined} />
       <Poll
         path={`/${show.slug}`}
         ids={["show-hours", "channel", "past"]}
@@ -628,9 +607,11 @@ app.get(`/djs/:dj{${SLUG}}`, async (c) => {
   const [dj, shows] = await Promise.all([getDj(c.req.param("dj")), getShows()]);
   if (!dj) return c.notFound();
   const [{ show: on }, streams] = await Promise.all([onAir(shows), archivedShows()]);
+  const mine = dj.shows.filter((s) => streams.has(s.slug)).map((s) => s.slug);
+  const playing = await streamPlays(mine);
   const now = new Date();
   return c.render(
-    <main class="page page-dj">
+    <main class="page">
       <SiteHeader />
       <section class="profile" aria-label="Profile">
         {dj.photo && <img class="cover photo" src={`/djs/${dj.slug}/photo`} alt={`Photo of ${dj.name}`} />}
@@ -640,25 +621,25 @@ app.get(`/djs/:dj{${SLUG}}`, async (c) => {
         </div>
       </section>
       {dj.bio && <Markdown class="lead" html={dj.bio} />}
-      <section class="dj-shows" aria-labelledby="dj-shows">
-        <h2 id="dj-shows" class="label">
-          Shows
-        </h2>
-        <div id="dj-shows-list" class="rows">
+      <Section id="dj-shows" heading="Shows" class="dj-shows">
+        <ol id="dj-shows-list" class="item-list">
           {dj.shows.map((s) => (
-            <ShowRow show={s} now={now} onAir={s.slug === on?.slug} stream={streams.has(s.slug)} />
+            <ShowItem
+              show={s}
+              now={now}
+              onAir={s.slug === on?.slug}
+              stream={streams.has(s.slug)}
+              playing={playing.get(s.slug)}
+            />
           ))}
-        </div>
-      </section>
+        </ol>
+      </Section>
       {dj.links.length > 0 && (
-        <section class="prose" aria-labelledby="dj-links">
-          <h2 id="dj-links" class="label">
-            Elsewhere
-          </h2>
-          <dl class="streams links">
+        <Section id="dj-links" heading="Elsewhere">
+          <dl class="links">
             {dj.links.map((l) => (
               <div>
-                <dt class="label">{l.label}</dt>
+                <dt>{l.label}</dt>
                 <dd>
                   <a class="url" href={l.url} rel="me noopener" hx-boost="false">
                     {l.url.replace(/^https?:\/\//i, "").replace(/\/$/, "")}
@@ -667,10 +648,10 @@ app.get(`/djs/:dj{${SLUG}}`, async (c) => {
               </div>
             ))}
           </dl>
-        </section>
+        </Section>
       )}
-      <footer class="footer footer-rule">{c.req.header("host")}</footer>
-      <Poll path={`/djs/${dj.slug}`} ids={["dj-shows-list"]} watch={["/now.json"]} />
+      <Footer host={c.req.header("host") ?? ""} />
+      <Poll path={`/djs/${dj.slug}`} ids={["dj-shows-list"]} watch={["/now.json", ...mine.map(channelNow)]} />
     </main>,
     { title: dj.name },
   );

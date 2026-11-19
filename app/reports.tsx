@@ -43,6 +43,10 @@ async function report(month: string): Promise<string> {
   return rows.map((r) => r.map(field).join("|")).join("\n") + "\n";
 }
 
+// "November 2026", for a report's YYYY-MM.
+const monthName = (m: string) =>
+  new Date(`${m}-01T12:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
 export const reports = new Hono();
 
 reports.get("/", (c) => {
@@ -61,7 +65,7 @@ reports.get("/", (c) => {
       <ol class="item-list">
         {months.map((m) => (
           <li class="item item-plain">
-            <span class="item-title">{m}</span>
+            <span class="item-title">{monthName(m)}</span>
             <a class="item-date" href={`/reports/${m}`} hx-boost="false" download>
               Download
             </a>

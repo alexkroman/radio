@@ -231,8 +231,6 @@ button {
 /* stylelint-enable no-descending-specificity */
 
 .footer {
-  padding-top: 24px;
-  border-top: 1px solid var(--color-hairline);
   font: var(--type-label);
   color: var(--color-muted);
 }
@@ -446,6 +444,7 @@ img.cover {
 }
 
 .item-plain .item-date {
+  display: block;
   padding: 0;
 }
 
@@ -686,5 +685,10 @@ img.cover {
 
   .item-length {
     width: auto;
+  }
+
+  .photo {
+    width: 112px;
+    height: 112px;
   }
 }

@@ -131,20 +131,22 @@ const Hours = ({ show, now }: { show: Show; now: Date }) => {
 
 // A show in a list (the home page's, a DJ page's): its own stream's play
 // button (once it has an archived block) to the left of its name (linked to
-// its page) over its description and the track playing on its stream; then
-// its hours, after "On air" when it is.
+// its page) over its description, its DJs (on the home page) and the track
+// playing on its stream; then its hours, after "On air" when it is.
 const ShowItem = ({
   show,
   now,
   onAir,
   stream,
   playing,
+  credit,
 }: {
   show: Show;
   now: Date;
   onAir: boolean;
   stream: boolean;
   playing?: Play;
+  credit?: boolean; // "with" its DJs (not on a DJ's own page)
 }) => (
   <li class="item">
     {stream ? <ChannelButton show={show} /> : <span class="play-space" aria-hidden="true" />}
@@ -153,6 +155,7 @@ const ShowItem = ({
         {show.title}
       </a>
       <Markdown class="desc" html={show.description} />
+      {credit && <DjCredit djs={show.djs} class="desc" />}
       <StreamTrack play={playing} />
     </span>
     <span class="item-date">
@@ -370,6 +373,7 @@ app.get("/", async (c) => {
               onAir={s.slug === show?.slug}
               stream={streams.has(s.slug)}
               playing={playing.get(s.slug)}
+              credit
             />
           ))}
         </ol>

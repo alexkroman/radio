@@ -90,6 +90,11 @@ test("home page has what's on", async ({ page }) => {
     "data-play",
     "/stream/night",
   );
+  // Each show credits its DJs, like the one on air; a show without any, none.
+  await expect(page.locator('#shows .item:has(a[href="/night"]) .credit')).toHaveText(
+    "with Ana Ruiz, Ben Cho & Zoë Ñandú",
+  );
+  await expect(page.locator('#shows .item:has(a[href="/plain"]) .credit')).toHaveCount(0);
   // Plain has no archived block, so nothing to play on its own stream yet.
   await expect(page.locator('#shows button[data-play="/stream/plain"]')).toHaveCount(0);
   await expect(page.locator("footer").getByRole("link", { name: /\/stream$/ })).toHaveAttribute(

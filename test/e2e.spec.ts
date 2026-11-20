@@ -341,9 +341,9 @@ test("play plays the stream in the tap, on the phone's own output", async ({ pag
   await page.getByRole("link", { name: "About" }).first().click();
   await expect(page).toHaveURL(/\/about$/);
   await expect(page.locator("#bar-track")).toContainText(track);
-  // Pausing drops the connection.
+  // Pausing keeps the src, so iOS keeps the lock screen's controls working.
   await page.locator("#player").getByRole("button", { name: "Pause Mazes Radio" }).click();
-  await expect.poll(() => player(page)).toEqual({ src: null, playing: false });
+  await expect.poll(() => player(page)).toEqual({ src: "/stream", playing: false });
 });
 
 test("pausing and playing again at once keeps playing", async ({ page }) => {

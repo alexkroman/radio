@@ -18,8 +18,9 @@ x-hardening: &hardening
     - ALL
 
 # Docker keeps each container's console log forever unless told otherwise:
-# cap it at 3 files of 10 MB, rotated. (Icecast's and Caddy's own log files
-# under logs/ rotate themselves.)
+# cap it at 3 files of 10 MB, rotated. Every service logs its problems here
+# (`docker compose logs -f`); only the request logs, Caddy's and Icecast's
+# access.log, are files under logs/, which rotate themselves.
 x-logging: &logging
   logging:
     driver: json-file

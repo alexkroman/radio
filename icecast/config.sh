@@ -41,7 +41,6 @@ done
 prng='<prng-seed type="profile">linux</prng-seed>'
 sed \
   -e "s|<hostname>localhost</hostname>|<hostname>$DOMAIN</hostname>|" \
-  -e 's|<errorlog>-</errorlog>|<errorlog>error.log</errorlog>|' \
   -e "s|<webroot>[^<]*</webroot>|<webroot>$web</webroot>|" \
   -e "s|</security>|$prng</security>|" \
   -e "s|</icecast>|<mount type=\"default\"><charset>UTF-8</charset></mount>$mounts</icecast>|" \

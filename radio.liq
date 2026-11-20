@@ -678,22 +678,70 @@ radio = metadata.map(update=true, icy_song, radio)
 # would build its own "Artist - Title".
 settings.encoder.metadata.export := list.append(settings.encoder.metadata.export(), ["song"])
 
+# Sets the title (ICY StreamTitle) Icecast gives players of mount `mount`.
+# By POST: output.icecast's own update is a GET, which Icecast 2.5 warns about
+# on every track ("uses safe method GET on /admin/metadata"). Only "song"
+# ("Artist - Title (Album)"): sending artist and title too made Icecast warn
+# that it got "song" but also "artist" and/or "title".
+icecast_auth =
+  "Basic " ^
+    string.base64.encode("source:#{environment.get('PASSWORD')}")
+def set_title(mount, song) =
+  try
+    r =
+      http.post(
+        timeout=5.,
+        headers=[("Authorization", icecast_auth), ("Content-Type", "application/x-www-form-urlencoded")],
+        data="mode=updinfo&charset=UTF-8&mount=#{url.encode('/' ^ mount)}&song=#{url.encode(song)}",
+        "http://icecast:8000/admin/metadata"
+      )
+    if
+      r.status_code != 200
+    then
+      log.severe(
+        "Icecast /#{mount}: title update failed (#{r.status_code}): #{r}"
+      )
+    end
+  catch e do
+    log.severe(
+      "Icecast /#{mount}: title update failed: #{e}"
+    )
+  end
+end
+
 # A stream to Icecast mount `mount`. icecast/silence.mp3 (Icecast's fallback
 # while this restarts; see icecast/config.sh) is the same format: change
 # both together.
 def to_icecast((mount:string), s) =
-  output.icecast(
-    id=mount,
-    %mp3(bitrate = 256),
-    encoding="UTF-8",
-    # Only "song" ("Artist - Title"), which Icecast shows players as the
-    # StreamTitle. Sending artist and title too made Icecast warn on every
-    # track that it got "song" but also "artist" and/or "title".
-    icy_metadata=["song"],
-    host="icecast",
-    password=environment.get("PASSWORD"),
-    mount=mount,
-    s
+  # The title playing, for a reconnect (or a first connect after it started).
+  song = ref("")
+  s.on_metadata(
+    synchronous=false,
+    fun (m) ->
+      begin
+        title = list.assoc(default="", "song", m)
+        if
+          title != ""
+        then
+          song := title
+          set_title(mount, title)
+        end
+      end
+  )
+  o =
+    output.icecast(
+      id=mount,
+      %mp3(bitrate = 256),
+      encoding="UTF-8",
+      send_icy_metadata=false,
+      host="icecast",
+      password=environment.get("PASSWORD"),
+      mount=mount,
+      s
+    )
+  o.on_connect(
+    synchronous=false,
+    fun () -> thread.run(delay=1., fun () -> if song() != "" then set_title(mount, song()) end)
   )
 end
 to_icecast("stream", radio)

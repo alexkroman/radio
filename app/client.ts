@@ -151,10 +151,12 @@ function stop() {
   playing = false;
   session.playbackState = "paused";
   sync();
+  // Only pause, keeping the src: an emptied element (src removed, load())
+  // ends iOS's media session, and the lock screen's play then often did
+  // nothing (the page suspended). Icecast drops the paused connection once
+  // it's ~32 s behind (icecast/config.sh queue-size), and playing again sets
+  // the src afresh (playSource), so it resumes live.
   audio.pause();
-  // Drop the connection, rather than buffer audio nobody hears.
-  audio.removeAttribute("src");
-  audio.load();
 }
 
 const toggle = (to: Source) => (playing && source.src === to.src ? stop() : start(to));

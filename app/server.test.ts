@@ -163,7 +163,9 @@ describe("pages", () => {
       html.indexOf("</section>", html.indexOf('id="shows"')),
     );
     const row = (slug: string) => shows.slice(shows.indexOf(`href="/${slug}"`)).split("</li>")[0];
-    expect(row("default")).toMatch(/stream-track">.*st-track">Unheard<.*st-artist">Nobody</);
+    expect(row("default")).toMatch(
+      /stream-track">.*st-label">Replaying Fixture Default<.*st-track">Unheard<.*st-artist">Nobody</,
+    );
     expect(html.replace(shows, "")).not.toContain("Unheard");
     // Plain has no archived block, so no stream and nothing playing on it.
     expect(row("plain")).not.toContain("stream-track");

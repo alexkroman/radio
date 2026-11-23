@@ -108,6 +108,8 @@ services:
     environment:
       TZ: ${TZ:-America/Los_Angeles}
       PASSWORD: *password
+      # archive-prune's, so a show's stream doesn't pick a block about to go.
+      ARCHIVE_KEEP: ${ARCHIVE_KEEP:-1}
     volumes:
       - ./radio.liq:/radio.liq:ro
       - ./shows:/shows:ro

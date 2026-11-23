@@ -695,7 +695,17 @@ def set_title(mount, song) =
         data="mode=updinfo&charset=UTF-8&mount=#{url.encode('/' ^ mount)}&song=#{url.encode(song)}",
         "http://icecast:8000/admin/metadata"
       )
+
+    # 522 is http.post's own: no answer within the timeout. Icecast has
+    # sometimes taken the update (its log says the title changed) and then
+    # not answered, so that's only a warning.
     if
+      r.status_code == 522
+    then
+      log.important(
+        "Icecast /#{mount}: no answer to the title update in 5 s"
+      )
+    elsif
       r.status_code != 200
     then
       log.severe(
@@ -906,6 +916,25 @@ list.iter(recorder, shows)
 # /plays/YYYY-MM.<slug>.jsonl (play_log, as the station's), when it starts.
 # No autocue: a block plays as recorded, with the broadcast's levels and
 # crossfades.
+#
+# The stream picks the next block as one starts (request.dynamic queues it,
+# hours ahead), so it doesn't pick one scripts/prune-archive.sh will delete
+# before it plays (it would fail to open, "No such file or directory"), if
+# it has another: prune_soon.
+archive_keep = max(1, int_of_string(default=1, environment.get("ARCHIVE_KEEP")))
+
+# Which of a show's `blocks` (sorted by name: oldest first) prune-archive.sh
+# may delete within the next 8 h (a block plays about six): while the show
+# is on air or starts within the hour, its block will be done within that,
+# and then all but the newest ARCHIVE_KEEP go, so all but the newest
+# ARCHIVE_KEEP - 1 now; and any that'll be up 14 days less an hour by then.
+def prune_soon(slug, blocks) =
+  hour = time.local().hour
+  on = within(hour, hours_of(slug)) or within((hour + 1) mod 24, hours_of(slug))
+  oldest = list.prefix(on ? max(0, list.length(blocks) - archive_keep + 1) : 0, blocks)
+  list.filter(fun (b) -> list.mem(b, oldest) or file.mtime(b) < time() - (20100. * 60. - 8. * 3600.), blocks)
+end
+
 def block_stream(f) =
   slug = slug_of(f)
   mount = "stream/#{slug}"
@@ -953,6 +982,9 @@ def block_stream(f) =
         fun (b) -> slug_of_block(b) == slug,
         file.ls(absolute=true, sorted=true, pattern="*.mp3", archive_blocks)
       )
+    soon = prune_soon(slug, blocks)
+    lasting = list.filter(fun (b) -> not list.mem(b, soon), blocks)
+    blocks = lasting == [] ? blocks : lasting
     others = list.filter(fun (b) -> b != last(), blocks)
     pick = others == [] ? blocks : others
     if

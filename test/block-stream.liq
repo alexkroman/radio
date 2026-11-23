@@ -17,6 +17,11 @@ def play_log(_, _) =
   fun (_, _, _) -> ()
 end
 
+# No pruning here (radio.liq's reads the schedule and the clock).
+def prune_soon(_, _) =
+  []
+end
+
 # How much of each stream to compute, by slug, from its first track (before
 # it, the stream's fallback starts a silent one): its block once, and for
 # seams the next block's start (the same block again).

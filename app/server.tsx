@@ -156,7 +156,7 @@ const ShowItem = ({
       </a>
       <Markdown class="desc" html={show.description} />
       {credit && <DjCredit djs={show.djs} class="desc" />}
-      <StreamTrack play={playing} />
+      <StreamTrack show={show} play={playing} />
     </span>
     <span class="item-date">
       {onAir && <OnAir />}
@@ -209,7 +209,7 @@ const ShowHead = ({
 
 // What a stream is playing: its big play button, then the track's cover and
 // text. The station's on the home page (`cls` np); a show's own on its page
-// (st, under "Replaying").
+// (st, under "Replaying <show>").
 const NowPlaying = ({
   button,
   play,
@@ -389,14 +389,14 @@ const streamPlays = async (slugs: Iterable<string>) =>
   new Map(await Promise.all([...slugs].map(async (s) => [s, await latestPlay(s)] as const)));
 
 // The track playing on a show's own stream (a replay of a past show), in a
-// list: its cover, then "Replaying" over its title over artist · album (all
-// three, as the statutory license has us show).
-const StreamTrack = ({ play }: { play?: Play }) =>
+// list: its cover, then "Replaying <show>" over its title over artist · album
+// (all three, as the statutory license has us show).
+const StreamTrack = ({ show, play }: { show: Show; play?: Play }) =>
   play ? (
     <span class="stream-track">
       <Cover play={play} size="cover-40" />
       <span class="st-text">
-        <span class="label st-label">Replaying</span>
+        <span class="label st-label">{`Replaying ${show.title}`}</span>
         <TrackLines play={play} cls="st" />
       </span>
     </span>
@@ -578,7 +578,7 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
               button={<ChannelButton show={show} large />}
               play={playing}
               cls="st"
-              label="Replaying"
+              label={`Replaying ${show.title}`}
             />
           </div>
         )}

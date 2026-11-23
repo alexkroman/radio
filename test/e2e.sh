@@ -76,8 +76,8 @@ heard() {
 edit_files() { dc run --rm --no-deps -T seed sh -c "$1"; }
 # Times Icecast has moved listeners from the fallback back to the stream.
 returns() {
-  dc exec -T icecast grep -c 'passing [1-9][0-9]* listeners from "/fallback-stream.mp3" to "/stream"' \
-    /var/log/icecast/error.log || true
+  dc logs --no-log-prefix icecast |
+    grep -c 'passing [1-9][0-9]* listeners from "/fallback-stream.mp3" to "/stream"' || true
 }
 returned() { [ "$(returns)" -gt "$1" ]; }
 # When each long-running container started: unchanged means not restarted.

@@ -188,7 +188,7 @@ describe("pages", () => {
     const replay = off.slice(off.indexOf('id="channel"'), off.indexOf("</ol>", off.indexOf('id="channel"')));
     expect(replay).toContain('data-play="/stream/default"');
     expect(replay).toContain('data-status="Replay"');
-    expect(replay).toMatch(/st-label">Replaying<.*st-track">Unheard<.*st-artist">Nobody</);
+    expect(replay).toMatch(/st-label">Replaying Fixture Default<.*st-track">Unheard<.*st-artist">Nobody</);
     expect(off).toMatch(
       /data-watch="\/now.json \/default\/now.json"[^>]*hx-select-oob="#show-hours,#channel,#past"/,
     );

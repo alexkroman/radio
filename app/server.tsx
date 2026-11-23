@@ -209,7 +209,7 @@ const ShowHead = ({
 
 // What a stream is playing: its big play button, then the track's cover and
 // text. The station's on the home page (`cls` np); a show's own on its page
-// (st, under "Replaying").
+// (st, under "Replaying <show>").
 const NowPlaying = ({
   button,
   play,
@@ -578,7 +578,7 @@ app.get(`/:slug{${SLUG}}`, async (c) => {
               button={<ChannelButton show={show} large />}
               play={playing}
               cls="st"
-              label="Replaying"
+              label={`Replaying ${show.title}`}
             />
           </div>
         )}

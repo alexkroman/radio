@@ -57,6 +57,7 @@ services:
       ARCHIVE_TAIL: 5
       ARCHIVE_MIN_SECONDS: 150
       ARCHIVE_OVERRUN: 60
+      ARCHIVE_KEEP: 2
     volumes:
       - e2e-shows:/shows:ro
       - e2e-music:/music:ro

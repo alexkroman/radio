@@ -14,9 +14,9 @@
     "knip": "knip"
   },
   "dependencies": {
-    "@hono/node-server": "2.1.8",
-    "hono": "4.13.18",
-    "marked": "18.2.0",
+    "@hono/node-server": "2.1.9",
+    "hono": "4.13.19",
+    "marked": "18.2.1",
     "yaml": "2.9.1"
   },
   "knip": {
@@ -36,14 +36,14 @@
     "htmx.org": "2.0.11",
     "icecast-metadata-js": "1.2.9",
     "jiti": "2.7.0",
-    "knip": "6.45.1",
-    "liquidsoap-prettier": "1.9.0",
+    "knip": "6.46.0",
+    "liquidsoap-prettier": "1.9.1",
     "prettier": "3.10.1",
     "stylelint": "18.0.0",
     "stylelint-config-standard": "41.0.0",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
     "typescript-eslint": "8.73.0",
-    "vitest": "5.1.0"
+    "vitest": "5.1.1"
   },
   "allowScripts": {
     "esbuild@0.28.2": true
